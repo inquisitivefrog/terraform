@@ -1,0 +1,346 @@
+
+tim@Tims-MBP tfstate % terraform show
+# aws_dynamodb_table.terraform_locks:
+resource "aws_dynamodb_table" "terraform_locks" {
+    arn                         = "arn:aws:dynamodb:us-west-1:084375569056:table/terraform-locks"
+    billing_mode                = "PAY_PER_REQUEST"
+    deletion_protection_enabled = false
+    hash_key                    = "LockID"
+    id                          = "terraform-locks"
+    name                        = "terraform-locks"
+    read_capacity               = 0
+    stream_arn                  = null
+    stream_enabled              = false
+    stream_label                = null
+    stream_view_type            = null
+    table_class                 = "STANDARD"
+    tags                        = {}
+    tags_all                    = {}
+    write_capacity              = 0
+
+    attribute {
+        name = "LockID"
+        type = "S"
+    }
+
+    point_in_time_recovery {
+        enabled = false
+    }
+
+    ttl {
+        attribute_name = null
+        enabled        = false
+    }
+}
+
+# aws_s3_bucket.state_bucket:
+resource "aws_s3_bucket" "state_bucket" {
+    acceleration_status         = null
+    arn                         = "arn:aws:s3:::bluedragon-employer-prod"
+    bucket                      = "bluedragon-employer-prod"
+    bucket_domain_name          = "bluedragon-employer-prod.s3.amazonaws.com"
+    bucket_prefix               = null
+    bucket_regional_domain_name = "bluedragon-employer-prod.s3.us-west-1.amazonaws.com"
+    force_destroy               = false
+    hosted_zone_id              = "Z2F56UZL2M1ACD"
+    id                          = "bluedragon-employer-prod"
+    object_lock_enabled         = false
+    policy                      = null
+    region                      = "us-west-1"
+    request_payer               = "BucketOwner"
+    tags                        = {
+        "Environment" = "prod"
+        "Name"        = "Fireworks Inc"
+    }
+    tags_all                    = {
+        "Environment" = "prod"
+        "Name"        = "Fireworks Inc"
+    }
+
+    grant {
+        id          = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+        permissions = [
+            "FULL_CONTROL",
+        ]
+        type        = "CanonicalUser"
+        uri         = null
+    }
+
+    server_side_encryption_configuration {
+        rule {
+            bucket_key_enabled = false
+
+            apply_server_side_encryption_by_default {
+                kms_master_key_id = null
+                sse_algorithm     = "AES256"
+            }
+        }
+    }
+
+    versioning {
+        enabled    = true
+        mfa_delete = false
+    }
+}
+
+# aws_s3_bucket_acl.state_bucket_acl:
+resource "aws_s3_bucket_acl" "state_bucket_acl" {
+    acl                   = "private"
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod,private"
+
+    access_control_policy {
+        grant {
+            permission = "FULL_CONTROL"
+
+            grantee {
+                display_name  = "kerstarsoc"
+                email_address = null
+                id            = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+                type          = "CanonicalUser"
+                uri           = null
+            }
+        }
+        owner {
+            display_name = "kerstarsoc"
+            id           = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+        }
+    }
+}
+
+# aws_s3_bucket_ownership_controls.ownership:
+resource "aws_s3_bucket_ownership_controls" "ownership" {
+    bucket = "bluedragon-employer-prod"
+    id     = "bluedragon-employer-prod"
+
+    rule {
+        object_ownership = "ObjectWriter"
+    }
+}
+
+# aws_s3_bucket_public_access_block.block_public_access:
+resource "aws_s3_bucket_public_access_block" "block_public_access" {
+    block_public_acls       = false
+    block_public_policy     = true
+    bucket                  = "bluedragon-employer-prod"
+    id                      = "bluedragon-employer-prod"
+    ignore_public_acls      = false
+    restrict_public_buckets = true
+}
+
+# aws_s3_bucket_server_side_encryption_configuration.state_bucket_encryption:
+resource "aws_s3_bucket_server_side_encryption_configuration" "state_bucket_encryption" {
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod"
+
+    rule {
+        bucket_key_enabled = false
+
+        apply_server_side_encryption_by_default {
+            kms_master_key_id = null
+            sse_algorithm     = "AES256"
+        }
+    }
+}
+
+# aws_s3_bucket_versioning.state_bucket_versioning:
+resource "aws_s3_bucket_versioning" "state_bucket_versioning" {
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod"
+
+    versioning_configuration {
+        mfa_delete = null
+        status     = "Enabled"
+    }
+}
+tim@Tims-MBP tfstate % terraform show
+# aws_dynamodb_table.terraform_locks:
+resource "aws_dynamodb_table" "terraform_locks" {
+    arn                         = "arn:aws:dynamodb:us-west-1:084375569056:table/terraform-locks"
+    billing_mode                = "PAY_PER_REQUEST"
+    deletion_protection_enabled = false
+    hash_key                    = "LockID"
+    id                          = "terraform-locks"
+    name                        = "terraform-locks"
+    read_capacity               = 0
+    stream_arn                  = null
+    stream_enabled              = false
+    stream_label                = null
+    stream_view_type            = null
+    table_class                 = "STANDARD"
+    tags                        = {}
+    tags_all                    = {}
+    write_capacity              = 0
+
+    attribute {
+        name = "LockID"
+        type = "S"
+    }
+
+    point_in_time_recovery {
+        enabled = false
+    }
+
+    ttl {
+        attribute_name = null
+        enabled        = false
+    }
+}
+
+# aws_s3_bucket.state_bucket:
+resource "aws_s3_bucket" "state_bucket" {
+    acceleration_status         = null
+    arn                         = "arn:aws:s3:::bluedragon-employer-prod"
+    bucket                      = "bluedragon-employer-prod"
+    bucket_domain_name          = "bluedragon-employer-prod.s3.amazonaws.com"
+    bucket_prefix               = null
+    bucket_regional_domain_name = "bluedragon-employer-prod.s3.us-west-1.amazonaws.com"
+    force_destroy               = false
+    hosted_zone_id              = "Z2F56UZL2M1ACD"
+    id                          = "bluedragon-employer-prod"
+    object_lock_enabled         = false
+    policy                      = null
+    region                      = "us-west-1"
+    request_payer               = "BucketOwner"
+    tags                        = {
+        "Environment" = "prod"
+        "Name"        = "Fireworks Inc"
+    }
+    tags_all                    = {
+        "Environment" = "prod"
+        "Name"        = "Fireworks Inc"
+    }
+
+    grant {
+        id          = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+        permissions = [
+            "FULL_CONTROL",
+        ]
+        type        = "CanonicalUser"
+        uri         = null
+    }
+
+    server_side_encryption_configuration {
+        rule {
+            bucket_key_enabled = false
+
+            apply_server_side_encryption_by_default {
+                kms_master_key_id = null
+                sse_algorithm     = "AES256"
+            }
+        }
+    }
+
+    versioning {
+        enabled    = true
+        mfa_delete = false
+    }
+}
+
+# aws_s3_bucket_acl.state_bucket_acl:
+resource "aws_s3_bucket_acl" "state_bucket_acl" {
+    acl                   = "private"
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod,private"
+
+    access_control_policy {
+        grant {
+            permission = "FULL_CONTROL"
+
+            grantee {
+                display_name  = "kerstarsoc"
+                email_address = null
+                id            = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+                type          = "CanonicalUser"
+                uri           = null
+            }
+        }
+        owner {
+            display_name = "kerstarsoc"
+            id           = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+        }
+    }
+}
+
+# aws_s3_bucket_lifecycle_configuration.state_bucket_lifecycle:
+resource "aws_s3_bucket_lifecycle_configuration" "state_bucket_lifecycle" {
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod"
+
+    rule {
+        id     = "move_to_glacier"
+        prefix = null
+        status = "Enabled"
+
+        filter {
+            object_size_greater_than = null
+            object_size_less_than    = null
+            prefix                   = null
+        }
+
+        noncurrent_version_expiration {
+            newer_noncurrent_versions = null
+            noncurrent_days           = 365
+        }
+
+        noncurrent_version_transition {
+            newer_noncurrent_versions = null
+            noncurrent_days           = 1
+            storage_class             = "GLACIER"
+        }
+    }
+}
+
+# aws_s3_bucket_ownership_controls.ownership:
+resource "aws_s3_bucket_ownership_controls" "ownership" {
+    bucket = "bluedragon-employer-prod"
+    id     = "bluedragon-employer-prod"
+
+    rule {
+        object_ownership = "ObjectWriter"
+    }
+}
+
+# aws_s3_bucket_public_access_block.block_public_access:
+resource "aws_s3_bucket_public_access_block" "block_public_access" {
+    block_public_acls       = false
+    block_public_policy     = true
+    bucket                  = "bluedragon-employer-prod"
+    id                      = "bluedragon-employer-prod"
+    ignore_public_acls      = false
+    restrict_public_buckets = true
+}
+
+# aws_s3_bucket_server_side_encryption_configuration.state_bucket_encryption:
+resource "aws_s3_bucket_server_side_encryption_configuration" "state_bucket_encryption" {
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod"
+
+    rule {
+        bucket_key_enabled = false
+
+        apply_server_side_encryption_by_default {
+            kms_master_key_id = null
+            sse_algorithm     = "AES256"
+        }
+    }
+}
+
+# aws_s3_bucket_versioning.state_bucket_versioning:
+resource "aws_s3_bucket_versioning" "state_bucket_versioning" {
+    bucket                = "bluedragon-employer-prod"
+    expected_bucket_owner = null
+    id                    = "bluedragon-employer-prod"
+
+    versioning_configuration {
+        mfa_delete = null
+        status     = "Enabled"
+    }
+}
+

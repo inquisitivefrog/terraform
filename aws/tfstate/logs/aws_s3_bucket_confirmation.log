@@ -1,0 +1,59 @@
+
+tim@Tims-MBP refactored % aws s3 ls s3://bluedragon-employer-prod/./terraform.tfstate
+2025-01-23 11:37:20      30514 terraform.tfstate
+tim@Tims-MBP tfstate % aws s3api list-object-versions --bucket bluedragon-employer-prod --prefix ./terraform
+{
+    "Versions": [
+        {
+            "ETag": "\"ccbd0bbb4164ba58b3521b9a61103a8f\"",
+            "ChecksumAlgorithm": [
+                "SHA256"
+            ],
+            "Size": 30514,
+            "StorageClass": "STANDARD",
+            "Key": "./terraform.tfstate",
+            "VersionId": "ShWsRGqeSvwJlSrCI4L0aFrmaq_7yNhe",
+            "IsLatest": true,
+            "LastModified": "2025-01-23T19:37:20+00:00",
+            "Owner": {
+                "DisplayName": "kerstarsoc",
+                "ID": "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+            }
+        },
+        {
+            "ETag": "\"498a82696cfe4b2ee1a2489da82361cd\"",
+            "ChecksumAlgorithm": [
+                "SHA256"
+            ],
+            "Size": 18032,
+            "StorageClass": "STANDARD",
+            "Key": "./terraform.tfstate",
+            "VersionId": "xbEra83BdKQYrWfDciMhNA_.Tn4TSJZt",
+            "IsLatest": false,
+            "LastModified": "2025-01-23T19:37:04+00:00",
+            "Owner": {
+                "DisplayName": "kerstarsoc",
+                "ID": "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+            }
+        },
+        {
+            "ETag": "\"99e33e3f374385d7bee8f5cc27375319\"",
+            "ChecksumAlgorithm": [
+                "SHA256"
+            ],
+            "Size": 17113,
+            "StorageClass": "STANDARD",
+            "Key": "./terraform.tfstate",
+            "VersionId": "Sitq6woWFoRHH_gyIQs8SSzHTTwEVq.J",
+            "IsLatest": false,
+            "LastModified": "2025-01-23T19:35:33+00:00",
+            "Owner": {
+                "DisplayName": "kerstarsoc",
+                "ID": "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+            }
+        }
+    ],
+    "RequestCharged": null,
+    "Prefix": "./terraform"
+}
+

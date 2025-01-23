@@ -1,0 +1,7 @@
+
+tim@Tims-MBP tfstate % aws configure
+AWS Access Key ID [********************]: 
+AWS Secret Access Key [********************]: 
+Default region name [us-west-1]: 
+Default output format [json]: 
+

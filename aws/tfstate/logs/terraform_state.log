@@ -1,0 +1,70 @@
+
+tim@Tims-MBP tfstate % terraform state list  
+aws_dynamodb_table.terraform_locks
+aws_s3_bucket.state_bucket
+aws_s3_bucket_acl.state_bucket_acl
+aws_s3_bucket_ownership_controls.ownership
+aws_s3_bucket_public_access_block.block_public_access
+aws_s3_bucket_server_side_encryption_configuration.state_bucket_encryption
+aws_s3_bucket_versioning.state_bucket_versioning
+
+tim@Tims-MBP tfstate % terraform state list
+aws_dynamodb_table.terraform_locks
+aws_s3_bucket.state_bucket
+aws_s3_bucket_acl.state_bucket_acl
+aws_s3_bucket_lifecycle_configuration.state_bucket_lifecycle
+aws_s3_bucket_ownership_controls.ownership
+aws_s3_bucket_public_access_block.block_public_access
+aws_s3_bucket_server_side_encryption_configuration.state_bucket_encryption
+aws_s3_bucket_versioning.state_bucket_versioning
+tim@Tims-MBP tfstate % terraform state show aws_s3_bucket.state_bucket
+# aws_s3_bucket.state_bucket:
+resource "aws_s3_bucket" "state_bucket" {
+    acceleration_status         = null
+    arn                         = "arn:aws:s3:::bluedragon-employer-prod"
+    bucket                      = "bluedragon-employer-prod"
+    bucket_domain_name          = "bluedragon-employer-prod.s3.amazonaws.com"
+    bucket_prefix               = null
+    bucket_regional_domain_name = "bluedragon-employer-prod.s3.us-west-1.amazonaws.com"
+    force_destroy               = false
+    hosted_zone_id              = "Z2F56UZL2M1ACD"
+    id                          = "bluedragon-employer-prod"
+    object_lock_enabled         = false
+    policy                      = null
+    region                      = "us-west-1"
+    request_payer               = "BucketOwner"
+    tags                        = {
+        "Environment" = "prod"
+        "Name"        = "Fireworks Inc"
+    }
+    tags_all                    = {
+        "Environment" = "prod"
+        "Name"        = "Fireworks Inc"
+    }
+
+    grant {
+        id          = "d1cac264defe43a71aaf5902368dbc9bdf76433489b0071b47ff95ac321cb783"
+        permissions = [
+            "FULL_CONTROL",
+        ]
+        type        = "CanonicalUser"
+        uri         = null
+    }
+
+    server_side_encryption_configuration {
+        rule {
+            bucket_key_enabled = false
+
+            apply_server_side_encryption_by_default {
+                kms_master_key_id = null
+                sse_algorithm     = "AES256"
+            }
+        }
+    }
+
+    versioning {
+        enabled    = true
+        mfa_delete = false
+    }
+}
+

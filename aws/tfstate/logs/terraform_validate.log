@@ -1,0 +1,7 @@
+
+tim@Tims-MBP tfstate % terraform validate 
+Success! The configuration is valid.
+
+tim@Tims-MBP tfstate % terraform validate
+Success! The configuration is valid.
+
