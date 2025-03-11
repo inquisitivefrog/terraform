@@ -11,6 +11,7 @@ resource "aws_security_group" "elasticache" {
     to_port     = var.redis_port
     protocol    = "tcp"
     cidr_blocks = [var.vpc_subnet_private_cidr_block, var.vpc_subnet_public_cidr_block]
+    description = "Allow Redis traffic from VPC subnets"
   }
 
   egress {
@@ -18,6 +19,7 @@ resource "aws_security_group" "elasticache" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = [var.vpc_subnet_private_cidr_block, var.vpc_subnet_public_cidr_block]
+    description = "Allow all outbound traffic to VPC subnets"
   }
 }
 
@@ -32,6 +34,7 @@ resource "aws_security_group" "private_ec2" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.vpc_subnet_private_cidr_block, var.vpc_subnet_public_cidr_block]
+    description = "Allow SSH from VPC subnets"
   }
 
   # ICMP (ping) from anywhere
@@ -40,6 +43,7 @@ resource "aws_security_group" "private_ec2" {
     to_port     = -1
     protocol    = "icmp"
     cidr_blocks = [var.vpc_subnet_private_cidr_block, var.vpc_subnet_public_cidr_block]
+    description = "Allow ICMP (ping) fom VPC subnets"
   }
 
   egress {
@@ -47,6 +51,7 @@ resource "aws_security_group" "private_ec2" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.vpc_subnet_private_cidr_block, var.vpc_subnet_public_cidr_block]
+    description = "Allow SSH outbound to VPC subnets"
   }
 
   tags = {
@@ -65,6 +70,7 @@ resource "aws_security_group" "public_ec2" {
     to_port   = 22
     protocol  = "tcp"
     cidr_blocks = [var.my_laptop_cidr_block]
+    description = "Allow SSH from my laptop"
   }
 
   # ICMP (ping) from anywhere
@@ -73,6 +79,7 @@ resource "aws_security_group" "public_ec2" {
     to_port   = -1
     protocol  = "icmp"
     cidr_blocks = [var.my_laptop_cidr_block]
+    description = "Allow ICMP (ping) from my laptop"
   }
 
   # HTTP access from anywhere
@@ -81,6 +88,7 @@ resource "aws_security_group" "public_ec2" {
     to_port   = 80
     protocol  = "tcp"
     cidr_blocks = [var.my_laptop_cidr_block]
+    description = "Allow HTTP from my laptop"
   }
 
   # HTTPS access from anywhere
@@ -89,6 +97,7 @@ resource "aws_security_group" "public_ec2" {
     to_port   = 443
     protocol  = "tcp"
     cidr_blocks = [var.my_laptop_cidr_block]
+    description = "Allow HTTPS from my laptop"
   }
 
   # Allow all outbound traffic
@@ -96,8 +105,8 @@ resource "aws_security_group" "public_ec2" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    #cidr_blocks = ["0.0.0.0/0"]
     cidr_blocks = [var.my_laptop_cidr_block, var.vpc_subnet_private_cidr_block, var.vpc_subnet_public_cidr_block]
+    description = "Allow all outbound traffic to my laptop and VPC subnets"
   }
 
   tags = {
