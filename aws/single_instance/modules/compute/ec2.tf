@@ -21,6 +21,11 @@ resource "aws_instance" "public-ec2" {
     http_endpoint = "enabled"
     http_tokens   = "required" # Forces IMDSv2
   }
+  root_block_device {
+    encrypted = true
+    volume_size = 8
+    volume_type = "gp2"
+  }
   tags = {
     Name = "ubuntu-24.04"
   }
@@ -35,6 +40,11 @@ resource "aws_instance" "private-ec2" {
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
+  }
+  root_block_device {
+    encrypted = true
+    volume_size = 8
+    volume_type = "gp2"
   }
   tags = {
     Name = "ubuntu-24.04" }
