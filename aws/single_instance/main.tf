@@ -43,6 +43,7 @@ module "networking" {
 # Compute Module
 module "compute" {
   source                      = "./modules/compute"
+  ec2_instance_profile_name   = module.identity.ec2_instance_profile_name
   ec2_keypair                 = var.ec2_keypair
   ecs_task_execution_role_arn = module.identity.ecs_task_execution_role_arn
   instance_type               = var.instance_type

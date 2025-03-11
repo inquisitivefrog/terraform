@@ -1,6 +1,10 @@
 # File 13: modules/compute/variables.tf
 # https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-variables
 
+variable "ec2_instance_profile_name" {
+  description = "Name of the IAM instance profile for EC2 instances"
+  type        = string
+}
 variable "ec2_keypair" {
   type        = string
   default     = ""

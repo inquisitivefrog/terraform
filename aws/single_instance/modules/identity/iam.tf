@@ -57,6 +57,38 @@ resource "aws_iam_role" "developer_role" {
   })
 }
 
+resource "aws_iam_role" "ec2_role" {
+  name = "EC2Role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ec2_policy" {
+  name   = "EC2Policy"
+  role   = aws_iam_role.ec2_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action   = ["ssm:DescribeInstanceInformation", "ssm:GetConnectionStatus"]
+      Effect   = "Allow"
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "EC2Profile"
+  role = aws_iam_role.ec2_role.name
+}
+
 resource "aws_iam_policy" "developer_policy" {
   name        = "DeveloperPolicy"
   description = "Policy for developers"
