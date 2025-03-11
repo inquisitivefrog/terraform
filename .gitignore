@@ -1,0 +1,23 @@
+# Terraform state files
+terraform.tfstate
+terraform.tfstate.backup
+
+# Terraform plan files
+*.plan
+
+# Terraform variables with sensitive data
+terraform.tfvars
+*.tfvars.json
+
+# AWS credentials files
+.aws/
+credentials
+config
+
+# Local Terraform cache and lock files
+.terraform/
+.terraform.lock.hcl
+
+# Logs or temporary files
+*.log
+*.tmp
