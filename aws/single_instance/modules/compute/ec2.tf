@@ -17,6 +17,7 @@ resource "aws_instance" "public-ec2" {
   subnet_id              = var.vpc_subnet_public_id
   key_name               = var.ec2_keypair # AWS key pair name
   vpc_security_group_ids = [var.sg_public_ec2_id]
+  monitoring             = true
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required" # Forces IMDSv2
@@ -37,6 +38,7 @@ resource "aws_instance" "private-ec2" {
   subnet_id              = var.vpc_subnet_private_id
   key_name               = var.ec2_keypair # AWS key pair name
   vpc_security_group_ids = [var.sg_private_ec2_id]
+  monitoring             = true
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
