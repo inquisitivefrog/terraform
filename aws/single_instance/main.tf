@@ -63,7 +63,7 @@ module "cache" {
 
 # Identity Module
 module "identity" {
-  source                = "./modules/identity"
+  source = "./modules/identity"
 }
 
 data "aws_caller_identity" "current" {}
