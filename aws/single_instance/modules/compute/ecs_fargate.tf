@@ -48,8 +48,8 @@ resource "aws_ecs_service" "main" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = [var.vpc_subnet_public_id]
+    subnets          = [var.vpc_subnet_private_id]
     security_groups  = [var.sg_public_ec2_id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 }
