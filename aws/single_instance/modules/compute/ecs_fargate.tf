@@ -33,7 +33,8 @@ resource "aws_ecs_task_definition" "service" {
           containerPort = 80,
           hostPort      = 80
         }
-      ]
+      ],
+      readonlyRootFilesystem = true
     }
   ])
 }
