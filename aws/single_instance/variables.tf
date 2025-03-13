@@ -51,7 +51,7 @@ variable "redis_port" {
 
 variable "region" {
   type        = string
-  default     = ""
+  default     = "us-west-1"
   description = "AWS Region where resources deployed"
 }
 
