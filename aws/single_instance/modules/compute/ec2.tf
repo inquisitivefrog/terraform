@@ -32,6 +32,11 @@ resource "aws_instance" "public-ec2" {
   tags = {
     Name = "ubuntu-24.04"
   }
+  user_data = <<-EOF
+    #!/bin/bash
+    apt-get update
+    apt-get install -y amazon-cloudwatch-agent
+  EOF
 }
 
 resource "aws_instance" "private-ec2" {
@@ -53,6 +58,12 @@ resource "aws_instance" "private-ec2" {
     volume_type = "gp2"
   }
   tags = {
-    Name = "ubuntu-24.04" }
+    Name = "ubuntu-24.04"
+  }
+  user_data = <<-EOF
+    #!/bin/bash
+    apt-get update
+    apt-get install -y amazon-cloudwatch-agent
+  EOF
 }
 

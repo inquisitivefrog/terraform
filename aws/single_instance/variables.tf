@@ -63,7 +63,7 @@ variable "tfstate_bucket" {
 
 variable "vpc_cidr_block" {
   type        = string
-  default     = "10.0.0.0/17"
+  default     = "10.0.0.0/16"
   description = "IPv4 network address range"
 }
 
