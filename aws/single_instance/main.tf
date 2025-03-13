@@ -21,6 +21,15 @@ provider "aws" {
   region = var.region
 }
 
+resource "aws_s3_bucket" "dev_bucket" {
+  bucket = "bluedragon-dev-bucket-${random_string.suffix.result}" # Ensure uniqueness
+}
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false # AWS S3 Buckets must use lowercase
+}
+
 # VPC Module
 module "vpc" {
   source             = "./modules/vpc"
@@ -66,6 +75,8 @@ module "cache" {
 # Identity Module
 module "identity" {
   source = "./modules/identity"
+  ec2_arns       = [module.compute.public_ec2_arn, module.compute.private_ec2_arn]
+  s3_bucket_arn  = aws_s3_bucket.dev_bucket.arn
   public_ec2_arn  = module.compute.public_ec2_arn
   private_ec2_arn = module.compute.private_ec2_arn
 }

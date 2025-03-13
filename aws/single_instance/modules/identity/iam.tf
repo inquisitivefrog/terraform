@@ -101,13 +101,20 @@ resource "aws_iam_policy" "developer_policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        Action = ["ec2:Describe*"]
+        Effect   = "Allow"
+        Resource = var.ec2_arns
+      },
+      {
         Action = [
-          "ec2:Describe*",
-          "s3:List*",
-          "s3:Get*"
+          "s3:ListBucket",
+          "s3:GetObject"
         ]
         Effect   = "Allow"
-        Resource = "*"
+        Resource = [
+          var.s3_bucket_arn,
+          "${var.s3_bucket_arn}/*"
+        ]
       }
     ]
   })
