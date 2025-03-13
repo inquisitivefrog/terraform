@@ -77,9 +77,14 @@ resource "aws_iam_role_policy" "ec2_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action   = ["ssm:DescribeInstanceInformation", "ssm:GetConnectionStatus"]
+      Action   = ["ssm:DescribeInstanceInformation",
+                  "ssm:GetConnectionStatus"
+      ]
       Effect   = "Allow"
-      Resource = "*"
+      Resource = [
+        var.public_ec2_arn,
+        var.private_ec2_arn
+      ]
     }]
   })
 }

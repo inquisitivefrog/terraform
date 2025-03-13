@@ -66,6 +66,8 @@ module "cache" {
 # Identity Module
 module "identity" {
   source = "./modules/identity"
+  public_ec2_arn  = module.compute.public_ec2_arn
+  private_ec2_arn = module.compute.private_ec2_arn
 }
 
 data "aws_caller_identity" "current" {}

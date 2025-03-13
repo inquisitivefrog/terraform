@@ -34,6 +34,10 @@ resource "aws_instance" "public-ec2" {
   }
   user_data = <<-EOF
     #!/bin/bash
+    mkdir -p /home/ubuntu/.ssh
+    echo "${file("~/.aws/bluedragon.pem")}" > /home/ubuntu/.ssh/bluedragon.pem
+    chmod 400 /home/ubuntu/.ssh/bluedragon.pem
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/bluedragon.pem
     apt-get update
     apt-get install -y amazon-cloudwatch-agent
   EOF
@@ -64,6 +68,7 @@ resource "aws_instance" "private-ec2" {
     #!/bin/bash
     apt-get update
     apt-get install -y amazon-cloudwatch-agent
+    apt-get install -y redis-tools
   EOF
 }
 
