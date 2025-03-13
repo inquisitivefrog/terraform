@@ -1,6 +1,17 @@
 # File 15: modules/compute/outputs.tf
 # https://developer.hashicorp.com/terraform/language/values/outputs
 
+output "ecs_cluster_arn" {
+  value = aws_ecs_cluster.main.arn
+}
+output "ecs_service_arn" {
+  value = aws_ecs_service.main.id
+}
+
+output "ec2_arns" {
+  value = [aws_instance.public-ec2.arn, aws_instance.private-ec2.arn]
+}
+
 output "ec2_private_id" {
   value = aws_instance.private-ec2.id
 }

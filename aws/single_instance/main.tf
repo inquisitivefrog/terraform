@@ -75,10 +75,14 @@ module "cache" {
 # Identity Module
 module "identity" {
   source = "./modules/identity"
-  ec2_arns       = [module.compute.public_ec2_arn, module.compute.private_ec2_arn]
-  s3_bucket_arn  = aws_s3_bucket.dev_bucket.arn
-  public_ec2_arn  = module.compute.public_ec2_arn
+  ec2_arns        = module.compute.ec2_arns
+  ecs_cluster_arn = module.compute.ecs_cluster_arn
+  ecs_service_arn = module.compute.ecs_service_arn
+  elasticache_arn = module.cache.elasticache_arn
+  s3_bucket_arn   = aws_s3_bucket.dev_bucket.arn
+  sns_topic_arns  = module.messages.sns_topic_arns
   private_ec2_arn = module.compute.private_ec2_arn
+  public_ec2_arn  = module.compute.public_ec2_arn
 }
 
 data "aws_caller_identity" "current" {}

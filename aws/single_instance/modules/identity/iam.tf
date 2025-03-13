@@ -1,4 +1,4 @@
-# File 22: modules/identity/iam
+# File 22: modules/identity/iam.tf
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role.html
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy
@@ -165,9 +165,25 @@ resource "aws_iam_policy" "admin_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action   = "*"
+        Action   = [
+          "ec2:*",
+          "s3:*",
+          "elasticache:*",
+          "ecs:*",
+          "iam:*",
+          "kms:*",
+          "sns:*"
+        ]
         Effect   = "Allow"
-        Resource = "*"
+        Resource = concat(
+          var.ec2_arns,
+          [var.s3_bucket_arn, "${var.s3_bucket_arn}/*"],
+          [var.elasticache_arn],
+          [var.ecs_cluster_arn, var.ecs_service_arn],
+          ["arn:aws:iam::084375569056:role/*"],
+          ["arn:aws:kms:us-west-1:084375569056:key/*"],
+          var.sns_topic_arns
+        )
       }
     ]
   })
