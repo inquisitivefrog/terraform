@@ -199,34 +199,16 @@ resource "aws_iam_instance_profile" "operations_profile" {
   role = aws_iam_role.admin_role.name
 }
 
-resource "aws_iam_user_policy" "assume_profile" {
-  name = "AssumeProfilePolicy"
-  user = aws_iam_user.sre.name
-
+resource "aws_iam_group_policy" "operations_assume_role" {
+  name   = "OperationsAssumeRolePolicy"
+  group  = aws_iam_group.operations.name
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Action   = "sts:AssumeRole"
-        Effect   = "Allow"
-        Resource = aws_iam_role.admin_role.arn
-      }
-    ]
+    Statement = [{
+      Action   = "sts:AssumeRole"
+      Effect   = "Allow"
+      Resource = aws_iam_role.admin_role.arn
+    }]
   })
 }
 
-resource "aws_iam_user_policy" "assume_role" {
-  name = "AssumeRolePolicy"
-  user = aws_iam_user.dba.name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action   = "sts:AssumeRole"
-        Effect   = "Allow"
-        Resource = aws_iam_role.admin_role.arn
-      }
-    ]
-  })
-}
