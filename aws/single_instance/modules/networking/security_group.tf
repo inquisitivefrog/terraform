@@ -55,6 +55,14 @@ resource "aws_security_group" "private_ec2" {
     description = "Allow SSH outbound to VPC subnets"
   }
 
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow SSM Agent to reach AWS endpoints"
+  }
+
   tags = {
     Name = "private-ec2"
   }
@@ -99,6 +107,14 @@ resource "aws_security_group" "public_ec2" {
     protocol  = "tcp"
     cidr_blocks = [var.my_laptop_cidr_block]
     description = "Allow HTTPS from my laptop"
+  }
+
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow SSM Agent to reach AWS endpoints"
   }
 
   # Allow all outbound traffic

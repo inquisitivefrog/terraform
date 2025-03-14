@@ -20,7 +20,7 @@ resource "aws_instance" "public-ec2" {
   monitoring                  = true
   iam_instance_profile        = var.ec2_instance_profile_name 
   ebs_optimized               = true
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required" # Forces IMDSv2
@@ -41,6 +41,9 @@ resource "aws_instance" "public-ec2" {
     chown ubuntu:ubuntu /home/ubuntu/.ssh/bluedragon.pem
     apt-get update
     apt-get install -y amazon-cloudwatch-agent
+    apt-get install -y amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
   EOF
 }
 
@@ -71,6 +74,9 @@ resource "aws_instance" "private-ec2" {
     apt-get update
     apt-get install -y amazon-cloudwatch-agent
     apt-get install -y redis-tools
+    apt-get install -y amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
   EOF
 }
 

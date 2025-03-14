@@ -74,7 +74,7 @@ module "cache" {
 
 # Identity Module
 module "identity" {
-  source = "./modules/identity"
+  source          = "./modules/identity"
   ec2_arns        = module.compute.ec2_arns
   ecs_cluster_arn = module.compute.ecs_cluster_arn
   ecs_service_arn = module.compute.ecs_service_arn
