@@ -144,7 +144,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_log_bucket"
   }
 }
 
-# Add logging to state bucket
 resource "aws_s3_bucket_logging" "state_bucket_logging" {
   bucket        = aws_s3_bucket.state_bucket.id
   target_bucket = aws_s3_bucket.state_log_bucket.id
