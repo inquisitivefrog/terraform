@@ -1,4 +1,3 @@
-
 (py3) tim@Tims-MBP single_instance % aws --version
 
 aws-cli/2.18.10 Python/3.12.6 Darwin/22.6.0 exe/x86_64
