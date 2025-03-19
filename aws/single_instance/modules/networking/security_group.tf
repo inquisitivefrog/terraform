@@ -3,6 +3,7 @@
 resource "aws_security_group" "elasticache" {
   name        = "cache"
   description = "Allow inbound traffic for ElastiCache"
+  # checkov:skip=CKV2_AWS_5:Attached to redis-cluster in module.cache.aws_elasticache_cluster.example
   vpc_id      = var.vpc_id
 
   ingress {
@@ -25,6 +26,7 @@ resource "aws_security_group" "elasticache" {
 resource "aws_security_group" "private_ec2" {
   name        = "private-ec2"
   description = "Allow inbound traffic to EC2"
+  # checkov:skip=CKV2_AWS_5:Attached to private-ec2 in module.compute.aws_instance.private-ec2
   vpc_id      = var.vpc_id
 
   ingress {
@@ -67,6 +69,7 @@ resource "aws_security_group" "private_ec2" {
 resource "aws_security_group" "public_ec2" {
   name        = "public-ec2"
   description = "Allow SSH, ICMP, HTTP, and HTTPS access"
+  # checkov:skip=CKV2_AWS_5:Attached to public-ec2 in module.compute.aws_instance.public-ec2
   vpc_id      = var.vpc_id
 
   ingress {

@@ -11,12 +11,14 @@ resource "aws_iam_user" "sre" {
   # Site Reliability Engineers
   name = "sre"
   path = "/"
+  # checkov:skip=CKV_AWS_273:SSO not implemented yet, using IAM users temporarily
 }
 
 resource "aws_iam_user" "dba" {
   # Database Administrators
   name = "dba"
   path = "/"
+  # checkov:skip=CKV_AWS_273:SSO not implemented yet, using IAM users temporarily
 }
 
 resource "aws_iam_group" "operations" {
