@@ -10,6 +10,7 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "public-ec2" {
+  # checkov:skip=CKV_AWS_88:Public IP intentional for public-facing EC2 instance
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   subnet_id                   = var.vpc_subnet_public_id
