@@ -37,6 +37,15 @@ resource "aws_s3_bucket_notification" "dev_bucket_notification" {
   depends_on = [module.messages]
 }
 
+resource "aws_s3_bucket_public_access_block" "dev_bucket_access_block" {
+  bucket = aws_s3_bucket.dev_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "random_string" "suffix" {
   length  = 8
   special = false
