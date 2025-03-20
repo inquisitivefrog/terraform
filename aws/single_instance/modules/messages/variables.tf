@@ -1,4 +1,4 @@
-# File 4: modules/vpc/variables.tf
+# File 4: modules/messages/variables.tf
 # https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-variables
 
 variable "environment" {

@@ -21,35 +21,17 @@ provider "aws" {
   region = var.region
 }
 
-resource "aws_s3_bucket" "dev_bucket" {
-  bucket = "bluedragon-dev-bucket-${random_string.suffix.result}" # Ensure uniqueness
-}
-
-resource "aws_s3_bucket_notification" "dev_bucket_notification" {
-  bucket = aws_s3_bucket.dev_bucket.id
-
-  topic {
-    topic_arn     = module.messages.sns_topic_example_arn
-    events        = ["s3:ObjectCreated:*"] # Notify on object uploads
-    filter_prefix = "logs/"                # Optional: Only for "logs/" prefix
-  }
-
-  depends_on = [module.messages]
-}
-
-resource "aws_s3_bucket_public_access_block" "dev_bucket_access_block" {
-  bucket = aws_s3_bucket.dev_bucket.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
 resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false # AWS S3 Buckets must use lowercase
+}
+
+# Storage Module
+module "storage" {
+  source                = "./modules/storage"
+  random_suffix         = random_string.suffix.result
+  sns_topic_example_arn = module.messages.sns_topic_example_arn
 }
 
 # VPC Module
@@ -101,7 +83,7 @@ module "identity" {
   ecs_cluster_arn = module.compute.ecs_cluster_arn
   ecs_service_arn = module.compute.ecs_service_arn
   elasticache_arn = module.cache.elasticache_arn
-  s3_bucket_arn   = aws_s3_bucket.dev_bucket.arn
+  s3_bucket_arn   = module.storage.s3_bucket_arn
   sns_topic_arns  = module.messages.sns_topic_arns
   private_ec2_arn = module.compute.private_ec2_arn
   public_ec2_arn  = module.compute.public_ec2_arn
@@ -114,5 +96,5 @@ module "messages" {
   source        = "./modules/messages"
   environment   = var.env
   account_id    = data.aws_caller_identity.current.account_id
-  s3_bucket_arn = aws_s3_bucket.dev_bucket.arn
+  s3_bucket_arn = module.storage.s3_bucket_arn
 }
