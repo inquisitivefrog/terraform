@@ -37,7 +37,9 @@ module "storage" {
 # VPC Module
 module "vpc" {
   source             = "./modules/vpc"
+  account_id         = data.aws_caller_identity.current.account_id
   availability_zones = var.availability_zones
+  region             = var.region
   vpc_cidr_block     = var.vpc_cidr_block
 }
 
