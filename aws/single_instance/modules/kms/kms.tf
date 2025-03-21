@@ -1,18 +1,19 @@
-# File 21: modules/messages/kms.tf
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key
-# https://registry.terraform.io/providers/-/aws/latest/docs/resources/kms_alias
+# File 8: modules/kms/kms.tf
 
-resource "aws_kms_key" "custom_key" {
+resource "aws_kms_key" "sns_custom_key" {
   description             = "Custom key for SNS encryption"
   deletion_window_in_days = 7
   key_usage               = "ENCRYPT_DECRYPT"
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
-  enable_key_rotation = true
+  enable_key_rotation     = true
+  tags = {
+    Name = "sns-custom-key"
+  }
 }
 
-resource "aws_kms_alias" "custom_key_alias" {
+resource "aws_kms_alias" "sns_custom_key_alias" {
   name          = "alias/my-custom-sns-key"
-  target_key_id = aws_kms_key.custom_key.key_id
+  target_key_id = aws_kms_key.sns_custom_key.key_id
 }
 
 resource "aws_kms_key" "symmetric_key" {
@@ -28,7 +29,7 @@ resource "aws_kms_key" "symmetric_key" {
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
-        },
+        }
         Action   = "kms:*"
         Resource = "*"
       },
@@ -36,9 +37,8 @@ resource "aws_kms_key" "symmetric_key" {
         Sid    = "Allow administration of the key"
         Effect = "Allow"
         Principal = {
-          #AWS = "arn:aws:iam::${var.account_id}:root"
           AWS = "arn:aws:iam::${var.account_id}:user/bluedragon"
-        },
+        }
         Action = [
           "kms:ReplicateKey",
           "kms:Create*",
@@ -61,8 +61,7 @@ resource "aws_kms_key" "symmetric_key" {
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
-          #AWS = "arn:aws:iam::${var.account_id}:user/bluedragon"
-        },
+        }
         Action = [
           "kms:DescribeKey",
           "kms:Encrypt",
@@ -70,11 +69,14 @@ resource "aws_kms_key" "symmetric_key" {
           "kms:ReEncrypt*",
           "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext"
-        ],
+        ]
         Resource = "*"
       }
     ]
   })
+  tags = {
+    Name = "symmetric-key"
+  }
 }
 
 resource "aws_kms_key" "asymmetric_key" {
@@ -91,7 +93,7 @@ resource "aws_kms_key" "asymmetric_key" {
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
-        },
+        }
         Action   = "kms:*"
         Resource = "*"
       },
@@ -100,7 +102,7 @@ resource "aws_kms_key" "asymmetric_key" {
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:role/Admin"
-        },
+        }
         Action = [
           "kms:Create*",
           "kms:Describe*",
@@ -114,7 +116,7 @@ resource "aws_kms_key" "asymmetric_key" {
           "kms:Delete*",
           "kms:ScheduleKeyDeletion",
           "kms:CancelKeyDeletion"
-        ],
+        ]
         Resource = "*"
       },
       {
@@ -122,14 +124,61 @@ resource "aws_kms_key" "asymmetric_key" {
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:role/Developer"
-        },
+        }
         Action = [
           "kms:Sign",
           "kms:Verify",
           "kms:DescribeKey"
-        ],
+        ]
         Resource = "*"
       }
     ]
   })
+  tags = {
+    Name = "asymmetric-key"
+  }
+}
+
+# File: modules/kms/kms.tf
+resource "aws_kms_key" "vpc_flow_logs_key" {
+  description             = "KMS key for VPC Flow Logs encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action = "kms:*"
+        Resource = "*"
+        Sid = "Enable IAM User Permissions"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:EncryptionContext:LogGroupArn" = "arn:aws:logs:${var.region}:${var.account_id}:log-group:/aws/vpc/flow-logs/${var.vpc_id}"
+          }
+        }
+        Sid = "Allow CloudWatch Logs to use the key"
+      }
+    ]
+  })
+  tags = {
+    Name = "vpc-flow-logs-kms-key"
+  }
 }

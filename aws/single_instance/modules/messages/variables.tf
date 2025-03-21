@@ -10,3 +10,8 @@ variable "account_id" {
   description = "AWS Account ID for tagging purposes"
   type        = string
 }
+
+variable "sns_custom_key_arn" {
+  type        = string
+  description = "ARN of the custom KMS key for SNS encryption"
+}

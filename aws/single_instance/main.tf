@@ -13,7 +13,7 @@ terraform {
     key            = "single_instance_terraform.tfstate"
     region         = "us-west-1"
     dynamodb_table = "terraform-locks"
-    encrypt        = true # if you're using server-side encryption
+    encrypt        = true
   }
 }
 
@@ -21,10 +21,20 @@ provider "aws" {
   region = var.region
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false # AWS S3 Buckets must use lowercase
+}
+
+# Key Message Service Module
+module "kms" {
+  source     = "./modules/kms"
+  account_id = data.aws_caller_identity.current.account_id
+  region     = var.region
+  vpc_id     = module.vpc.vpc_id
 }
 
 # Storage Module
@@ -36,11 +46,13 @@ module "storage" {
 
 # VPC Module
 module "vpc" {
-  source             = "./modules/vpc"
-  account_id         = data.aws_caller_identity.current.account_id
-  availability_zones = var.availability_zones
-  region             = var.region
-  vpc_cidr_block     = var.vpc_cidr_block
+  source                = "./modules/vpc"
+  account_id            = data.aws_caller_identity.current.account_id
+  availability_zones    = var.availability_zones
+  region                = var.region
+  vpc_cidr_block        = var.vpc_cidr_block
+  vpc_flow_logs_key_arn = module.kms.vpc_flow_logs_key_arn
+  vpc_flow_logs_key_id  = module.kms.vpc_flow_logs_key_id
 }
 
 # Networking Module
@@ -91,12 +103,11 @@ module "identity" {
   public_ec2_arn  = module.compute.public_ec2_arn
 }
 
-data "aws_caller_identity" "current" {}
-
 # Messages Module
 module "messages" {
-  source        = "./modules/messages"
-  environment   = var.env
-  account_id    = data.aws_caller_identity.current.account_id
-  s3_bucket_arn = module.storage.s3_bucket_arn
+  source             = "./modules/messages"
+  environment        = var.env
+  account_id         = data.aws_caller_identity.current.account_id
+  s3_bucket_arn      = module.storage.s3_bucket_arn
+  sns_custom_key_arn = module.kms.sns_custom_key_arn
 }

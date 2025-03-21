@@ -66,7 +66,7 @@ resource "aws_sns_topic" "custom" {
   fifo_topic                  = true
   content_based_deduplication = true
   # At Rest Encryption with AWS Key Management Service (KMS) custom key
-  kms_master_key_id = aws_kms_alias.custom_key_alias.arn
+  kms_master_key_id           = var.sns_custom_key_arn
 }
 
 # In Transit Encryption with HTTPS

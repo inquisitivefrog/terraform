@@ -23,3 +23,13 @@ variable "vpc_cidr_block" {
   default     = ""
   description = "IPv4 address range"
 }
+
+variable "vpc_flow_logs_key_arn" {
+  type        = string
+  description = "ARN of the KMS key for VPC Flow Logs encryption"
+}
+
+variable "vpc_flow_logs_key_id" {
+  type        = string
+  description = "ID of the KMS key for VPC Flow Logs encryption"
+}
