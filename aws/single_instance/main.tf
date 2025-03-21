@@ -42,6 +42,8 @@ module "storage" {
   source                = "./modules/storage"
   random_suffix         = random_string.suffix.result
   sns_topic_example_arn = module.messages.sns_topic_example_arn
+  sns_custom_key_arn    = module.kms.sns_custom_key_arn               # Pass KMS key
+  account_id            = data.aws_caller_identity.current.account_id # Pass account ID
 }
 
 # VPC Module
