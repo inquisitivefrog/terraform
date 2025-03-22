@@ -20,3 +20,8 @@ variable "sns_topic_example_arn" {
   description = "ARN of the SNS topic for bucket notifications"
   type        = string
 }
+
+variable "sns_topic_example_policy_arn" {
+  type        = string
+  description = "ARN of the example SNS topic policy"
+}

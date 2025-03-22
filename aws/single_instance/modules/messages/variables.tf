@@ -11,6 +11,16 @@ variable "account_id" {
   type        = string
 }
 
+variable "log_bucket_arn" {
+  type        = string
+  description = "ARN of the log bucket for SNS notifications"
+}
+
+variable "s3_bucket_arn" {
+  type        = string
+  description = "ARN of the developer S3 bucket"
+}
+
 variable "sns_custom_key_arn" {
   type        = string
   description = "ARN of the custom KMS key for SNS encryption"

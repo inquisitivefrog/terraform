@@ -69,6 +69,21 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "log_bucket_encryp
   }
 }
 
+resource "aws_s3_bucket_notification" "log_bucket_notification" {
+  bucket = aws_s3_bucket.log_bucket.id
+
+  topic {
+    topic_arn     = var.sns_topic_example_arn 
+    events        = ["s3:ObjectCreated:*"] 
+    filter_prefix = "logs/" 
+  }
+
+  depends_on = [
+    aws_s3_bucket_policy.log_bucket_policy,
+    var.sns_topic_example_policy_arn
+  ]
+}
+
 resource "aws_s3_bucket" "dev_bucket" {
   bucket = "bluedragon-dev-bucket-${var.random_suffix}"
 

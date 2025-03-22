@@ -2,11 +2,6 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic_subscription
 
-variable "s3_bucket_arn" {
-  type    = string
-  default = ""
-}
-
 resource "aws_sns_topic" "example" {
   name              = "example-topic"
   tags = {
@@ -43,15 +38,25 @@ resource "aws_sns_topic_policy" "example_policy" {
   arn = aws_sns_topic.example.arn
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = var.s3_bucket_arn != "" ? [
+    Statement = [
       {
         Effect    = "Allow"
         Principal = { Service = "s3.amazonaws.com" }
         Action    = "SNS:Publish"
         Resource  = aws_sns_topic.example.arn
-        Condition = { ArnLike = { "aws:SourceArn" = var.s3_bucket_arn } }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = [
+              var.s3_bucket_arn,
+              var.log_bucket_arn
+            ]
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
       }
-    ] : []
+    ]
   })
 }
 

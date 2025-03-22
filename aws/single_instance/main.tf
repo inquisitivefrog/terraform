@@ -39,11 +39,12 @@ module "kms" {
 
 # Storage Module
 module "storage" {
-  source                = "./modules/storage"
-  random_suffix         = random_string.suffix.result
-  sns_topic_example_arn = module.messages.sns_topic_example_arn
-  sns_custom_key_arn    = module.kms.sns_custom_key_arn               # Pass KMS key
-  account_id            = data.aws_caller_identity.current.account_id # Pass account ID
+  source                       = "./modules/storage"
+  account_id                   = data.aws_caller_identity.current.account_id
+  random_suffix                = random_string.suffix.result
+  sns_topic_example_arn        = module.messages.sns_topic_example_arn
+  sns_topic_example_policy_arn = module.messages.sns_topic_example_policy_arn
+  sns_custom_key_arn           = module.kms.sns_custom_key_arn
 }
 
 # VPC Module
@@ -108,8 +109,9 @@ module "identity" {
 # Messages Module
 module "messages" {
   source             = "./modules/messages"
-  environment        = var.env
   account_id         = data.aws_caller_identity.current.account_id
+  environment        = var.env
+  log_bucket_arn     = module.storage.log_bucket_arn
   s3_bucket_arn      = module.storage.s3_bucket_arn
   sns_custom_key_arn = module.kms.sns_custom_key_arn
 }
