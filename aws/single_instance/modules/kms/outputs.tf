@@ -30,3 +30,7 @@ output "vpc_flow_logs_key_id" {
   value       = aws_kms_key.vpc_flow_logs_key.id
   description = "ID of the KMS key for VPC Flow Logs"
 }
+
+output "vpc_flow_logs_key_resource" {
+  value       = aws_kms_key.vpc_flow_logs_key
+}

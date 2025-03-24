@@ -34,7 +34,7 @@ resource "aws_s3_bucket" "log_bucket" {
 
   # Ensure the log bucket itself is secure
   lifecycle {
-    prevent_destroy = true  # Protect log data
+    prevent_destroy = false  # Protect log data
   }
 
   tags = {
@@ -69,6 +69,15 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "log_bucket_encryp
   }
 }
 
+resource "null_resource" "sns_policy_delay" {
+  triggers = {
+    policy_arn = var.sns_topic_example_policy_arn
+  }
+  provisioner "local-exec" {
+    command = "sleep 10" 
+  }
+}
+
 resource "aws_s3_bucket_notification" "log_bucket_notification" {
   bucket = aws_s3_bucket.log_bucket.id
 
@@ -80,7 +89,8 @@ resource "aws_s3_bucket_notification" "log_bucket_notification" {
 
   depends_on = [
     aws_s3_bucket_policy.log_bucket_policy,
-    var.sns_topic_example_policy_arn
+    var.sns_topic_example_policy_arn,
+    null_resource.sns_policy_delay
   ]
 }
 

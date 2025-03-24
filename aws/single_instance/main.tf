@@ -52,6 +52,7 @@ module "vpc" {
   source                = "./modules/vpc"
   account_id            = data.aws_caller_identity.current.account_id
   availability_zones    = var.availability_zones
+  kms_key_resource      = module.kms.vpc_flow_logs_key_resource
   region                = var.region
   vpc_cidr_block        = var.vpc_cidr_block
   vpc_flow_logs_key_arn = module.kms.vpc_flow_logs_key_arn

@@ -12,6 +12,11 @@ variable "availability_zones" {
   description = "AWS Availability Zones within Region where resources deployed"
 }
 
+variable "kms_key_resource" {
+  description = "The KMS key resource for VPC Flow Logs encryption"
+  type        = any
+}
+
 variable "region" {
   type        = string
   default     = "us-west-1"
