@@ -34,7 +34,7 @@ resource "aws_s3_bucket" "log_bucket" {
 
   # Ensure the log bucket itself is secure
   lifecycle {
-    prevent_destroy = false  # Protect log data
+    prevent_destroy = false
   }
 
   tags = {
@@ -92,6 +92,19 @@ resource "aws_s3_bucket_notification" "log_bucket_notification" {
     var.sns_topic_example_policy_arn,
     null_resource.sns_policy_delay
   ]
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
+  bucket = aws_s3_bucket.log_bucket.id
+
+  rule {
+    id     = "log-expiration"
+    status = "Enabled"
+
+    expiration {
+      days = 365  # Delete logs after 365 days
+    }
+  }
 }
 
 resource "aws_s3_bucket" "dev_bucket" {
@@ -156,3 +169,5 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev_bucket_lifecycle" {
     }
   }
 }
+
+
