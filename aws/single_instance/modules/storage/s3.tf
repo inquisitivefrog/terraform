@@ -104,6 +104,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
     expiration {
       days = 365  # Delete logs after 365 days
     }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7  # Abort failed uploads after 7 days
+    }
   }
 }
 
