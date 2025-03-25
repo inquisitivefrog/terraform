@@ -11,18 +11,11 @@ terraform {
       version = "~> 3.2"
     }
     random = {
-      source = "hashicorp/random"
+      source  = "hashicorp/random"
       version = "~> 3.7"
     }
   }
-  backend "s3" {
-    # variables cannot be used in this block
-    bucket         = "bluedragon-employer-prod"
-    key            = "single_instance_terraform.tfstate"
-    region         = "us-west-1"
-    dynamodb_table = "terraform-locks"
-    encrypt        = true
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
