@@ -43,12 +43,6 @@ variable "region" {
   description = "AWS Region where resources deployed"
 }
 
-variable "tfstate_bucket" {
-  type        = string
-  default     = ""
-  description = "AWS S3 bucket for terraform.tfstate"
-}
-
 variable "vpc_cidr_block" {
   type        = string
   default     = "10.0.0.0/16"
