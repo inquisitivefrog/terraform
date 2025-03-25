@@ -6,6 +6,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 4.6"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
+    random = {
+      source = "hashicorp/random"
+      version = "~> 3.7"
+    }
   }
   backend "s3" {
     # variables cannot be used in this block
