@@ -117,9 +117,20 @@ resource "aws_iam_policy" "admin_policy" {
           "s3:*",
           "elasticache:*",
           "ecs:*",
-          "iam:*",
           "kms:*",
-          "sns:*"
+          "sns:*",
+          "iam:List*",
+          "iam:Get*",
+          "iam:Describe*",
+          "iam:CreateRole",
+          "iam:UpdateRole",
+          "iam:DeleteRole",
+          "iam:CreatePolicy",
+          "iam:UpdatePolicy",
+          "iam:DeletePolicy",
+          "iam:AttachRolePolicy",
+          "iam:DetachRolePolicy",
+          "iam:PassRole"
         ]
         Effect   = "Allow"
         Resource = concat(
@@ -158,4 +169,3 @@ resource "aws_iam_group_policy" "operations_assume_role" {
     }]
   })
 }
-
