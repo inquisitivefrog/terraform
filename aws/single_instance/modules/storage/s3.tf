@@ -9,20 +9,12 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
     Statement = [
       {
         Effect = "Allow"
-        Principal = {
-          Service = "logging.s3.amazonaws.com"
-        }
-        Action = [
-          "s3:PutObject"
-        ]
+        Principal = {Service = "logging.s3.amazonaws.com"}
+        Action = ["s3:PutObject"]
         Resource = "${aws_s3_bucket.log_bucket.arn}/logs/*"
         Condition = {
-          ArnLike = {
-            "aws:SourceArn" = aws_s3_bucket.dev_bucket.arn
-          }
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
+          ArnLike = {"aws:SourceArn" = aws_s3_bucket.dev_bucket.arn}
+          StringEquals = {"aws:SourceAccount" = var.account_id}
         }
       }
     ]
@@ -33,12 +25,24 @@ resource "aws_s3_bucket" "log_bucket" {
   bucket = "bluedragon-log-bucket-${var.random_suffix}"
 
   # Ensure the log bucket itself is secure
+  # checkov:skip=CKV_AWS_144:Single-region setup, CRR not required
   lifecycle {
     prevent_destroy = false
   }
 
   tags = {
     Name = "bluedragon-log-bucket"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "log_bucket_encryption" {
+  bucket = aws_s3_bucket.log_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = var.sns_custom_key_arn
+    }
   }
 }
 
@@ -56,17 +60,6 @@ resource "aws_s3_bucket_public_access_block" "log_bucket_public_access_block" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "log_bucket_encryption" {
-  bucket = aws_s3_bucket.log_bucket.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
-      kms_master_key_id = var.sns_custom_key_arn 
-    }
-  }
 }
 
 resource "null_resource" "sns_policy_delay" {
@@ -106,7 +99,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
     }
 
     abort_incomplete_multipart_upload {
-      days_after_initiation = 7  # Abort failed uploads after 7 days
+      days_after_initiation = 7
     }
   }
 }
@@ -114,8 +107,25 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
 resource "aws_s3_bucket" "dev_bucket" {
   bucket = "bluedragon-dev-bucket-${var.random_suffix}"
 
+  # Ensure the log bucket itself is secure
+  # checkov:skip=CKV_AWS_144:Single-region setup, CRR not required
+  lifecycle {
+    prevent_destroy = false
+  }
+
   tags = {
     Name = "bluedragon-dev-bucket"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "dev_bucket_encryption" {
+  bucket = aws_s3_bucket.dev_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = var.sns_custom_key_arn
+    }
   }
 }
 
@@ -169,9 +179,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev_bucket_lifecycle" {
     }
 
     filter {
-      prefix = "" # Applies to all objects
+      prefix = ""
     }
   }
 }
-
-

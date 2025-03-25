@@ -6,6 +6,44 @@ resource "aws_kms_key" "sns_custom_key" {
   key_usage               = "ENCRYPT_DECRYPT"
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
   enable_key_rotation     = true
+  policy                  = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Enable IAM User Permissions"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "Allow SNS to use the key"
+        Effect    = "Allow"
+        Principal = { Service = "sns.amazonaws.com" }
+        Action    = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+     {
+        Sid       = "Allow S3 to use the key"
+        Effect    = "Allow"
+        Principal = { Service = "s3.amazonaws.com" }
+        Action    = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
   tags = {
     Name = "sns-custom-key"
   }
@@ -139,7 +177,6 @@ resource "aws_kms_key" "asymmetric_key" {
   }
 }
 
-# File: modules/kms/kms.tf
 resource "aws_kms_key" "vpc_flow_logs_key" {
   description             = "KMS key for VPC Flow Logs encryption"
   enable_key_rotation     = true
