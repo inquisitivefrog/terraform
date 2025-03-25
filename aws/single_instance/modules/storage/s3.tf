@@ -129,6 +129,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "dev_bucket_encryp
   }
 }
 
+resource "aws_s3_bucket_versioning" "dev_bucket_versioning" {
+  bucket = aws_s3_bucket.dev_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 resource "aws_s3_bucket_logging" "dev_bucket_logging" {
   bucket = aws_s3_bucket.dev_bucket.id
   target_bucket = aws_s3_bucket.log_bucket.id
