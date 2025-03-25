@@ -1,12 +1,6 @@
 # File 2: variables.tf
 # https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-variables
 
-variable "ami" {
-  type        = string
-  default     = ""
-  description = "AWS AMI root disk image"
-}
-
 variable "availability_zones" {
   type        = list(string)
   default     = []
@@ -17,12 +11,6 @@ variable "ec2_keypair" {
   type        = string
   default     = "nobody"
   description = "AWS EC2 keypair name"
-}
-
-variable "employer" {
-  type        = string
-  default     = "ACME"
-  description = "Employer Business Name"
 }
 
 variable "env" {

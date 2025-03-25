@@ -1,9 +1,7 @@
 # File 1: terraform.tfvars
 
-ami                  = "ami-07d2649d67dbe8900" # region-locked
 availability_zones   = ["us-west-1b", "us-west-1c"]
 ec2_keypair          = "bluedragon"
-employer             = "Fireworks Inc"
 env                  = "prod"
 instance_type        = "t3.micro"
 my_laptop_cidr_block = "23.93.84.244/32" # https://ipv4.icanhazip.com/
