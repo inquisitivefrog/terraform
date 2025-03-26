@@ -8,16 +8,16 @@ aws-cli/2.18.10 Python/3.12.6 Darwin/22.6.0 exe/x86_64
 (py3) tim@Tims-MBP single_instance % unzip sessionmanager-bundle.zip
 Archive:  sessionmanager-bundle.zip
    creating: sessionmanager-bundle/
-  inflating: sessionmanager-bundle/seelog.xml.template  
-  inflating: sessionmanager-bundle/THIRD-PARTY  
-  inflating: sessionmanager-bundle/LICENSE  
-  inflating: sessionmanager-bundle/RELEASENOTES.md  
-  inflating: sessionmanager-bundle/NOTICE  
-  inflating: sessionmanager-bundle/install  
+  inflating: sessionmanager-bundle/seelog.xml.template
+  inflating: sessionmanager-bundle/THIRD-PARTY
+  inflating: sessionmanager-bundle/LICENSE
+  inflating: sessionmanager-bundle/RELEASENOTES.md
+  inflating: sessionmanager-bundle/NOTICE
+  inflating: sessionmanager-bundle/install
    creating: sessionmanager-bundle/bin/
-  inflating: sessionmanager-bundle/bin/session-manager-plugin  
-  inflating: sessionmanager-bundle/README.md  
- extracting: sessionmanager-bundle/VERSION  
+  inflating: sessionmanager-bundle/bin/session-manager-plugin
+  inflating: sessionmanager-bundle/README.md
+ extracting: sessionmanager-bundle/VERSION
 (py3) tim@Tims-MBP single_instance % sudo ./sessionmanager-bundle/install -i /usr/local/sessionmanagerplugin -b /usr/local/bin/session-manager-plugin
 Password:
 Creating install directories: /usr/local/sessionmanagerplugin/bin
@@ -53,12 +53,12 @@ module.compute.aws_instance.public-ec2
 
 Starting session with SessionId: bluedragon-nnbtt3ro5kp3frfg8l843o7fby
 $ hostname -I
-10.0.0.45 
+10.0.0.45
 $ ss -altp
-State           Recv-Q          Send-Q                     Local Address:Port                       Peer Address:Port          Process          
-LISTEN          0               4096                       127.0.0.53%lo:domain                          0.0.0.0:*                              
-LISTEN          0               128                              0.0.0.0:ssh                             0.0.0.0:*                              
-LISTEN          0               128                                 [::]:ssh                                [::]:*                              
+State           Recv-Q          Send-Q                     Local Address:Port                       Peer Address:Port          Process
+LISTEN          0               4096                       127.0.0.53%lo:domain                          0.0.0.0:*
+LISTEN          0               128                              0.0.0.0:ssh                             0.0.0.0:*
+LISTEN          0               128                                 [::]:ssh                                [::]:*
 $ whoami
 ssm-user
 $ exit
@@ -66,7 +66,7 @@ $ exit
 
 Exiting session with sessionId: bluedragon-nnbtt3ro5kp3frfg8l843o7fby.
 
-(py3) tim@Tims-MBP single_instance % terraform state list | grep aws_instance                                                    
+(py3) tim@Tims-MBP single_instance % terraform state list | grep aws_instance
 module.compute.aws_instance.private-ec2
 module.compute.aws_instance.public-ec2
 (py3) tim@Tims-MBP single_instance % terraform state show module.compute.aws_instance.private-ec2 | grep 'i-'
@@ -100,10 +100,10 @@ Starting session with SessionId: bluedragon-bpaibi5rb4d6dyoa8vzzpsnbg8
 $ whoami
 ssm-user
 $ ss -atlp
-State           Recv-Q          Send-Q                     Local Address:Port                       Peer Address:Port          Process          
-LISTEN          0               4096                       127.0.0.53%lo:domain                          0.0.0.0:*                              
-LISTEN          0               128                              0.0.0.0:ssh                             0.0.0.0:*                              
-LISTEN          0               128                                 [::]:ssh                                [::]:*                              
+State           Recv-Q          Send-Q                     Local Address:Port                       Peer Address:Port          Process
+LISTEN          0               4096                       127.0.0.53%lo:domain                          0.0.0.0:*
+LISTEN          0               128                              0.0.0.0:ssh                             0.0.0.0:*
+LISTEN          0               128                                 [::]:ssh                                [::]:*
 $ exit
 
 
