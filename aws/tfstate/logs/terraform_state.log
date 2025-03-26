@@ -1,5 +1,5 @@
 
-tim@Tims-MBP tfstate % terraform state list  
+tim@Tims-MBP tfstate % terraform state list
 aws_dynamodb_table.terraform_locks
 aws_s3_bucket.state_bucket
 aws_s3_bucket_acl.state_bucket_acl
@@ -67,4 +67,3 @@ resource "aws_s3_bucket" "state_bucket" {
         mfa_delete = false
     }
 }
-

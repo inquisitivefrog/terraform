@@ -1,5 +1,5 @@
 
-tim@Tims-MBP tfstate % pwd         
+tim@Tims-MBP tfstate % pwd
 /Users/tim/Documents/workspace/sre/terraform/aws/tfstate
 tim@Tims-MBP tfstate % terraform init
 Initializing the backend...
@@ -389,5 +389,3 @@ tim@Tims-MBP tfstate % aws s3api get-public-access-block --bucket bluedragon-emp
         "RestrictPublicBuckets": true
     }
 }
-
-

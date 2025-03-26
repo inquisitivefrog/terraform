@@ -176,4 +176,3 @@ Saved the plan to: backup
 
 To perform exactly these actions, run the following command to apply:
     terraform apply "backup"
-

@@ -24,4 +24,3 @@ variable "tfstate_bucket" {
   default     = ""
   description = "AWS S3 bucket for terraform.tfstate"
 }
-

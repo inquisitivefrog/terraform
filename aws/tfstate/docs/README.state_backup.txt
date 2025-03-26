@@ -1,5 +1,5 @@
 
-Great! It looks like adding the aws_s3_bucket_ownership_controls resource resolved the issue with setting the S3 bucket ACL. Your Terraform configuration has successfully applied all the resources including the bucket, its ACL, versioning, encryption, public access block, and the DynamoDB table for state locking. 
+Great! It looks like adding the aws_s3_bucket_ownership_controls resource resolved the issue with setting the S3 bucket ACL. Your Terraform configuration has successfully applied all the resources including the bucket, its ACL, versioning, encryption, public access block, and the DynamoDB table for state locking.
 
 Here are a few next steps you might consider:
 

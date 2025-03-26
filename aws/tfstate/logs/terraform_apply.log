@@ -17,7 +17,7 @@ aws_dynamodb_table.terraform_locks: Creation complete after 7s [id=terraform-loc
 
 Apply complete! Resources: 7 added, 0 changed, 0 destroyed.
 
-tim@Tims-MBP tfstate % terraform apply backup    
+tim@Tims-MBP tfstate % terraform apply backup
 aws_s3_bucket.state_bucket: Modifying... [id=bluedragon-employer-prod]
 aws_s3_bucket.state_bucket: Modifications complete after 1s [id=bluedragon-employer-prod]
 
@@ -31,4 +31,3 @@ aws_s3_bucket_lifecycle_configuration.state_bucket_lifecycle: Still creating... 
 aws_s3_bucket_lifecycle_configuration.state_bucket_lifecycle: Creation complete after 31s [id=bluedragon-employer-prod]
 
 Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
-

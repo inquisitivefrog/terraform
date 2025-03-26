@@ -46,10 +46,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "state_bucket_lifecycle" {
   }
 }
 
-Explanation: 
+Explanation:
 After 30 days, old versions move to Glacier for long-term archival.
 After 365 days, these versions expire. Adjust these times based on how long you need to keep state history.
-Manual Snapshots: 
+Manual Snapshots:
 For critical points in your project (like before major releases or upgrades), you might manually copy the state file to another secure location or another S3 bucket configured for long-term storage.
 Security and Access Control:
 Ensure that access to both the S3 bucket for current use and the Glacier archive is tightly controlled. Only necessary personnel should have access to these resources.
@@ -169,7 +169,7 @@ Go to the AWS Management Console and select S3.
 Find and click on your bucket (bluedragon-employer-prod or whatever you named it).
 Check Object Details:
 Look for the objects that you expect to have been transitioned to Glacier. You might need to navigate through your folder structure if you're using one.
-Click on an object to see its details. 
+Click on an object to see its details.
 Storage Class: If it says "GLACIER", the object has been transitioned.
 Versioning: If versioning is enabled, you can see different versions of an object. Check if older versions have been moved to Glacier.
 Check Lifecycle Rules:

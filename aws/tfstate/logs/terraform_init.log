@@ -14,7 +14,7 @@ If you ever set or change modules or backend configuration for Terraform,
 rerun this command to reinitialize your working directory. If you forget, other
 commands will detect it and remind you to do so if necessary.
 
-tim@Tims-MBP tfstate % vi create_s3_bucket.tf 
+tim@Tims-MBP tfstate % vi create_s3_bucket.tf
 tim@Tims-MBP tfstate % terraform init
 Initializing the backend...
 Initializing provider plugins...
@@ -30,4 +30,3 @@ should now work.
 If you ever set or change modules or backend configuration for Terraform,
 rerun this command to reinitialize your working directory. If you forget, other
 commands will detect it and remind you to do so if necessary.
-
