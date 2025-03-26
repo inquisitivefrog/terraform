@@ -1,0 +1,5 @@
+---
+min_required_version: v1.1.2
+minimum_severity: LOW
+exclude:
+  - aws-iam-enforce-group-mfa
