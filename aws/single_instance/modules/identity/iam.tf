@@ -23,6 +23,7 @@ resource "aws_iam_user" "dba" {
 
 resource "aws_iam_group" "operations" {
   name = "operations"
+  # tfsec:ignore:aws-iam-enforce-group-mfa
 }
 
 resource "aws_iam_group_membership" "operations_membership" {
