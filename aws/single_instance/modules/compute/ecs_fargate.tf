@@ -1,13 +1,13 @@
 # File 17: modules/compute/ecs.tf
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_cluster
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_service  
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_service
 # https://registry.terraform.io/providers/-/aws/4.57.0/docs/resources/ecs_task_definition
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "ecs-cluster"
   setting {
-    name = "containerInsights"
+    name  = "containerInsights"
     value = "enabled"
   }
 }
@@ -24,7 +24,7 @@ resource "aws_ecs_task_definition" "service" {
   container_definitions = jsonencode([
     {
       name      = "nginx",
-      image     = "nginx:latest",  # Replace with your Docker image
+      image     = "nginx:latest", # Replace with your Docker image
       cpu       = 256,
       memory    = 512,
       essential = true,

@@ -35,7 +35,7 @@ variable "s3_bucket_arn" {
   description = "ARN of the developer S3 bucket"
 }
 
-variable "sns_topic_arns" { 
-  type        = list(string) 
+variable "sns_topic_arns" {
+  type        = list(string)
   description = "ARNs of the SNS Topics"
 }

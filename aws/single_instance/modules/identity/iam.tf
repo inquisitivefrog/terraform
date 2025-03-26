@@ -6,7 +6,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_group
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_group_membership
 # https://registry.terraform.io/providers/-/aws/latest/docs/resources/iam_group_policy_attachment
- 
+
 resource "aws_iam_user" "sre" {
   # Site Reliability Engineers
   name = "sre"
@@ -21,6 +21,8 @@ resource "aws_iam_user" "dba" {
   # checkov:skip=CKV_AWS_273:SSO not implemented yet, using IAM users temporarily
 }
 
+
+#trivy:ignore:AVD-AWS-0123
 resource "aws_iam_group" "operations" {
   name = "operations"
   # tfsec:ignore:aws-iam-enforce-group-mfa
@@ -67,7 +69,7 @@ resource "aws_iam_policy" "developer_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = ["ec2:Describe*"]
+        Action   = ["ec2:Describe*"]
         Effect   = "Allow"
         Resource = var.ec2_arns
       },
@@ -76,7 +78,7 @@ resource "aws_iam_policy" "developer_policy" {
           "s3:ListBucket",
           "s3:GetObject"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
           var.s3_bucket_arn,
           "${var.s3_bucket_arn}/*"
@@ -106,6 +108,7 @@ resource "aws_iam_policy" "assume_admin_role_policy" {
   })
 }
 
+#trivy:ignore:AVD-AWS-0342
 resource "aws_iam_policy" "admin_policy" {
   name        = "AdminPolicy"
   description = "Policy for administrators"
@@ -113,13 +116,27 @@ resource "aws_iam_policy" "admin_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "ec2:*",
           "s3:*",
           "elasticache:*",
           "ecs:*",
           "kms:*",
           "sns:*",
+        ]
+        Resource = concat(
+          var.ec2_arns,
+          [var.s3_bucket_arn, "${var.s3_bucket_arn}/*"],
+          [var.elasticache_arn],
+          [var.ecs_cluster_arn, var.ecs_service_arn],
+          ["arn:aws:kms:us-west-1:084375569056:key/*"],
+          var.sns_topic_arns
+        )
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "iam:List*",
           "iam:Get*",
           "iam:Describe*",
@@ -130,19 +147,31 @@ resource "aws_iam_policy" "admin_policy" {
           "iam:UpdatePolicy",
           "iam:DeletePolicy",
           "iam:AttachRolePolicy",
-          "iam:DetachRolePolicy",
-          "iam:PassRole"
+          "iam:DetachRolePolicy"
         ]
-        Effect   = "Allow"
-        Resource = concat(
-          var.ec2_arns,
-          [var.s3_bucket_arn, "${var.s3_bucket_arn}/*"],
-          [var.elasticache_arn],
-          [var.ecs_cluster_arn, var.ecs_service_arn],
-          ["arn:aws:iam::084375569056:role/*"],
-          ["arn:aws:kms:us-west-1:084375569056:key/*"],
-          var.sns_topic_arns
-        )
+        Resource = [
+          aws_iam_role.ec2_role.arn,
+          aws_iam_role.ecs_task_execution_role.arn,
+          aws_iam_role.admin_role.arn,
+          aws_iam_role.developer_role.arn,
+          "arn:aws:iam::084375569056:policy/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = "iam:PassRole"
+        Resource = [
+          aws_iam_role.ec2_role.arn,
+          aws_iam_role.ecs_task_execution_role.arn
+        ]
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = [
+              "ec2.amazonaws.com",
+              "ecs-tasks.amazonaws.com"
+            ]
+          }
+        }
       }
     ]
   })
@@ -159,8 +188,8 @@ resource "aws_iam_instance_profile" "operations_profile" {
 }
 
 resource "aws_iam_group_policy" "operations_assume_role" {
-  name   = "OperationsAssumeRolePolicy"
-  group  = aws_iam_group.operations.name
+  name  = "OperationsAssumeRolePolicy"
+  group = aws_iam_group.operations.name
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

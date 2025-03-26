@@ -24,4 +24,3 @@ variable "vpc_subnet_public_id" {
   default     = ""
   description = "AWS vpc_subnet ID"
 }
-

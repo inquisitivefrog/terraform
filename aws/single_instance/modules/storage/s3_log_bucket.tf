@@ -8,13 +8,13 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Principal = {Service = "logging.s3.amazonaws.com"}
-        Action = ["s3:PutObject"]
-        Resource = "${aws_s3_bucket.log_bucket.arn}/logs/*"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.log_bucket.arn}/logs/*"
         Condition = {
-          ArnLike = {"aws:SourceArn" = aws_s3_bucket.dev_bucket.arn}
-          StringEquals = {"aws:SourceAccount" = var.account_id}
+          ArnLike      = { "aws:SourceArn" = aws_s3_bucket.dev_bucket.arn }
+          StringEquals = { "aws:SourceAccount" = var.account_id }
         }
       }
     ]
@@ -67,7 +67,7 @@ resource "null_resource" "sns_policy_delay" {
     policy_arn = var.sns_topic_example_policy_arn
   }
   provisioner "local-exec" {
-    command = "sleep 10" 
+    command = "sleep 10"
   }
 }
 
@@ -75,9 +75,9 @@ resource "aws_s3_bucket_notification" "log_bucket_notification" {
   bucket = aws_s3_bucket.log_bucket.id
 
   topic {
-    topic_arn     = var.sns_topic_example_arn 
-    events        = ["s3:ObjectCreated:*"] 
-    filter_prefix = "logs/" 
+    topic_arn     = var.sns_topic_example_arn
+    events        = ["s3:ObjectCreated:*"]
+    filter_prefix = "logs/"
   }
 
   depends_on = [
@@ -95,7 +95,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
     status = "Enabled"
 
     expiration {
-      days = 365  # Delete logs after 365 days
+      days = 365 # Delete logs after 365 days
     }
 
     abort_incomplete_multipart_upload {
@@ -106,6 +106,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
 
 resource "aws_s3_bucket_logging" "log_bucket_logging" {
   bucket        = aws_s3_bucket.log_bucket.id
-  target_bucket = aws_s3_bucket.log_bucket.id  # Self-logging (simple but circular)
+  target_bucket = aws_s3_bucket.log_bucket.id # Self-logging (simple but circular)
   target_prefix = "self-logs/"
 }

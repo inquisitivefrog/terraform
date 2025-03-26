@@ -19,4 +19,3 @@ output "sns_topic_custom_arn" {
   description = "The ARN of the SNS topic"
   value       = aws_sns_topic.custom.arn
 }
-

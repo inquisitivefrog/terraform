@@ -21,17 +21,17 @@ resource "aws_instance" "public-ec2" {
   ebs_optimized               = true
   associate_public_ip_address = true
   metadata_options {
-    http_endpoint = "enabled"
-    http_tokens   = "required"
-    http_put_response_hop_limit = 1 
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
   }
   root_block_device {
-    encrypted = true
+    encrypted   = true
     volume_size = 8
     volume_type = "gp2"
   }
   tags = {
-    Name = "ubuntu-24.04"
+    Name     = "ubuntu-24.04"
     Redeploy = "20250314-18"
   }
   user_data = <<-EOF
@@ -59,17 +59,17 @@ resource "aws_instance" "private-ec2" {
   ebs_optimized               = true
   associate_public_ip_address = false
   metadata_options {
-    http_endpoint = "enabled"
-    http_tokens   = "required"
-    http_put_response_hop_limit = 1 
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
   }
   root_block_device {
-    encrypted = true
+    encrypted   = true
     volume_size = 8
     volume_type = "gp2"
   }
   tags = {
-    Name = "ubuntu-24.04"
+    Name  = "ubuntu-24.04"
     Debug = "redeploy-20250314-16"
   }
   user_data = <<-EOF

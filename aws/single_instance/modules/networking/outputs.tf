@@ -1,4 +1,4 @@
-# File 12: modules/networking/outputs.tf 
+# File 12: modules/networking/outputs.tf
 # https://developer.hashicorp.com/terraform/language/values/outputs
 
 output "sg_public_ec2_id" {

@@ -34,7 +34,7 @@ resource "aws_s3_bucket_versioning" "dev_bucket_versioning" {
 }
 
 resource "aws_s3_bucket_logging" "dev_bucket_logging" {
-  bucket = aws_s3_bucket.dev_bucket.id
+  bucket        = aws_s3_bucket.dev_bucket.id
   target_bucket = aws_s3_bucket.log_bucket.id
   target_prefix = "logs/"
 }
@@ -44,8 +44,8 @@ resource "aws_s3_bucket_notification" "dev_bucket_notification" {
 
   topic {
     topic_arn     = var.sns_topic_example_arn
-    events        = ["s3:ObjectCreated:*"] 
-    filter_prefix = "logs/"               
+    events        = ["s3:ObjectCreated:*"]
+    filter_prefix = "logs/"
   }
 }
 
@@ -66,7 +66,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev_bucket_lifecycle" {
     status = "Enabled"
 
     expiration {
-      days = 90 
+      days = 90
     }
 
     filter {

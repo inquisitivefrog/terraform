@@ -6,7 +6,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_group
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_group_membership
 # https://registry.terraform.io/providers/-/aws/latest/docs/resources/iam_group_policy_attachment
- 
+
 resource "aws_iam_role" "ec2_role" {
   name = "EC2Role"
   assume_role_policy = jsonencode({
@@ -22,15 +22,15 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name   = "EC2Policy"
-  role   = aws_iam_role.ec2_role.id
+  name = "EC2Policy"
+  role = aws_iam_role.ec2_role.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action   = ["ssm:DescribeInstanceInformation",
-                  "ssm:GetConnectionStatus"
+      Action = ["ssm:DescribeInstanceInformation",
+        "ssm:GetConnectionStatus"
       ]
-      Effect   = "Allow"
+      Effect = "Allow"
       Resource = [
         var.public_ec2_arn,
         var.private_ec2_arn
@@ -66,4 +66,3 @@ resource "aws_iam_role" "admin_role" {
     ]
   })
 }
-

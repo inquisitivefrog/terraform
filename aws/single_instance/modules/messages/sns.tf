@@ -3,7 +3,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic_subscription
 
 resource "aws_sns_topic" "example" {
-  name              = "example-topic"
+  name = "example-topic"
   tags = {
     Name        = "example-topic-${var.environment}"
     Environment = var.environment
@@ -62,16 +62,16 @@ resource "aws_sns_topic_policy" "example_policy" {
 
 resource "aws_sns_topic" "custom" {
   # First In, First Out Policy
-  name                        = "custom-topic.fifo"
-  tags                        = {
-    Name                      = "custom-topic-${var.environment}"
-    Environment               = var.environment
-    AccountID                 = var.account_id
+  name = "custom-topic.fifo"
+  tags = {
+    Name        = "custom-topic-${var.environment}"
+    Environment = var.environment
+    AccountID   = var.account_id
   }
   fifo_topic                  = true
   content_based_deduplication = true
   # At Rest Encryption with AWS Key Management Service (KMS) custom key
-  kms_master_key_id           = var.sns_custom_key_arn
+  kms_master_key_id = var.sns_custom_key_arn
 }
 
 # In Transit Encryption with HTTPS

@@ -10,7 +10,7 @@ resource "aws_elasticache_subnet_group" "private_only" {
 resource "aws_elasticache_cluster" "example" {
   cluster_id               = "redis-cluster-2"
   engine                   = "redis"
-  node_type                = "cache.t3.micro" 
+  node_type                = "cache.t3.micro"
   num_cache_nodes          = 1
   parameter_group_name     = "default.redis6.x"
   engine_version           = "6.x"
@@ -22,4 +22,3 @@ resource "aws_elasticache_cluster" "example" {
     Name = "Redis 6.x"
   }
 }
-

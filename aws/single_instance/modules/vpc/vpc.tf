@@ -90,13 +90,13 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flow-logs/${aws_vpc.main.id}"
   retention_in_days = 365
   kms_key_id        = var.vpc_flow_logs_key_arn
-  depends_on        = [var.kms_key_resource] 
+  depends_on        = [var.kms_key_resource]
 }
 
 resource "aws_flow_log" "vpc_flow_logs" {
   iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"  # Options: ACCEPT, REJECT, ALL
+  traffic_type    = "ALL" # Options: ACCEPT, REJECT, ALL
   vpc_id          = aws_vpc.main.id
 
   tags = {
