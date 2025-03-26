@@ -10,8 +10,8 @@ resource "aws_sns_topic" "example" {
     AccountID   = var.account_id
   }
 
-  # At Rest Encryption with AWS Key Management Service (KMS) default key
-  kms_master_key_id = "alias/aws/sns"
+  # At Rest Encryption with AWS Key Management Service (KMS) custom key
+  kms_master_key_id = var.sns_custom_key_arn
 
   delivery_policy = <<EOF
 {
