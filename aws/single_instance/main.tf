@@ -66,6 +66,7 @@ module "networking" {
   igw_id                        = module.vpc.igw_id
   my_laptop_cidr_block          = var.my_laptop_cidr_block
   nat_id                        = module.vpc.nat_id
+  vpc_cidr_block                = var.vpc_cidr_block
   vpc_id                        = module.vpc.vpc_id
   vpc_subnet_private_cidr_block = module.vpc.vpc_subnet_private_cidr_block
   vpc_subnet_private_id         = module.vpc.vpc_subnet_private_id

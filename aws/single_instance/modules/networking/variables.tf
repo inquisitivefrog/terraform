@@ -31,6 +31,12 @@ variable "vpc_id" {
   description = "resource ID"
 }
 
+variable "vpc_cidr_block" {
+  type        = string
+  default     = ""
+  description = "IPv4 address range"
+}
+
 variable "vpc_subnet_private_cidr_block" {
   type        = string
   default     = ""

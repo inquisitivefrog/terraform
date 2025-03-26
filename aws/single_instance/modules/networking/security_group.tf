@@ -49,7 +49,7 @@ resource "aws_security_group" "private_ec2" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.vpc_cidr_block]
     description = "Allow SSH outbound to VPC subnets"
   }
 
@@ -57,7 +57,7 @@ resource "aws_security_group" "private_ec2" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.vpc_cidr_block]
     description = "Allow SSM Agent to reach AWS endpoints"
   }
 
