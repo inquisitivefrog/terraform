@@ -1,0 +1,16 @@
+misconf:
+  scanners:
+    - terraform
+report: "all"
+severity:
+  - MEDIUM
+scan:
+  compliance: ""
+  scanners:
+    - vuln
+    - secret
+vulnerability:
+  type:
+    - os
+    - secret
+  ignore-unfixed: true
