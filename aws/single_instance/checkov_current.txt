@@ -6,9 +6,9 @@
  | (__| | | |  __/ (__|   < (_) \ V /
   \___|_| |_|\___|\___|_|\_\___/ \_/
 
-By Prisma Cloud | version: 3.2.383 
+By Prisma Cloud | version: 3.2.383
 Update available 3.2.383 -> 3.2.392
-Run pip3 install -U checkov to update 
+Run pip3 install -U checkov to update
 
 
 terraform scan results:
@@ -934,4 +934,3 @@ Check: CKV_AWS_144: "Ensure that S3 bucket has cross-region replication enabled"
 	Suppress comment: Single-region setup, CRR not required
 	File: /modules/storage/s3.tf:107-119
 	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/aws-policies/aws-general-policies/ensure-that-s3-bucket-has-cross-region-replication-enabled
-

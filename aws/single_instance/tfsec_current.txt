@@ -1,4 +1,4 @@
-(py3) tim@Tims-MBP single_instance % cat tfsec.yml  
+(py3) tim@Tims-MBP single_instance % cat tfsec.yml
 ---
 min_required_version: v1.1.2
 minimum_severity: LOW
@@ -9,13 +9,12 @@ exclude:
 ======================================================
 tfsec is joining the Trivy family
 
-tfsec will continue to remain available 
-for the time being, although our engineering 
+tfsec will continue to remain available
+for the time being, although our engineering
 attention will be directed at Trivy going forward.
 
-You can read more here: 
+You can read more here:
 https://github.com/aquasecurity/tfsec/discussions/1994
 ======================================================
 
 No problems detected!
-

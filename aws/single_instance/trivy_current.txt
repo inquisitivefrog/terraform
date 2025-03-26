@@ -1,0 +1,20 @@
+2025-03-26T14:33:54-07:00	INFO	Loaded	file_path="trivy.yaml"
+2025-03-26T14:33:54-07:00	INFO	[misconfig] Misconfiguration scanning is enabled
+2025-03-26T14:33:55-07:00	INFO	[terraform scanner] Scanning root module	file_path="."
+2025-03-26T14:33:56-07:00	INFO	[terraform executor] Ignore finding	rule="aws-iam-enforce-group-mfa" range="modules/identity/iam.tf:26-29"
+2025-03-26T14:33:56-07:00	INFO	[terraform executor] Ignore finding	rule="aws-iam-filter-passrole-access" range="modules/identity/iam.tf:115-177"
+2025-03-26T14:33:57-07:00	INFO	Detected config files	num=2
+
+Report Summary
+
+┌─────────────────────────┬───────────┬───────────────────┐
+│         Target          │   Type    │ Misconfigurations │
+├─────────────────────────┼───────────┼───────────────────┤
+│ .                       │ terraform │         0         │
+├─────────────────────────┼───────────┼───────────────────┤
+│ modules/identity/iam.tf │ terraform │         0         │
+└─────────────────────────┴───────────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+

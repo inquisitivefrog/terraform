@@ -1,0 +1,2 @@
+(py3) tim@Tims-MBP single_instance % tflint --format=compact
+No issues found
