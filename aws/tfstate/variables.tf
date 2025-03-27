@@ -13,12 +13,6 @@ variable "env" {
   description = "Environment where resources are deployed"
 }
 
-variable "region" {
-  type        = string
-  default     = ""
-  description = "AWS Region where resources deployed"
-}
-
 variable "tfstate_bucket" {
   type        = string
   default     = ""

@@ -1,0 +1,12 @@
+(py3) tim@Tims-MBP single_instance % python3 -V
+Python 3.11.6
+(py3) tim@Tims-MBP single_instance % pip3 -V
+pip 25.0.1 from /Users/tim/Desktop/Work/Python_Practice/py3/lib/python3.11/site-packages/pip (python 3.11)
+(py3) tim@Tims-MBP single_instance % terraform --version
+Terraform v1.11.2
+on darwin_amd64
++ provider registry.terraform.io/hashicorp/aws v4.67.0
++ provider registry.terraform.io/hashicorp/null v3.2.3
++ provider registry.terraform.io/hashicorp/random v3.7.1
+(py3) tim@Tims-MBP single_instance % yamllint --version
+yamllint 1.37.0

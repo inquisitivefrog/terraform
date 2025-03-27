@@ -10,10 +10,10 @@ checkov===3.2.383
 3.2.383
 
 (py3) tim@Tims-MBP single_instance % checkov -d . --soft-fail > checkov_current.txt
-(py3) tim@Tims-MBP single_instance % grep Fail checkov_current.txt 
+(py3) tim@Tims-MBP single_instance % grep Fail checkov_current.txt
 Passed checks: 185, Failed checks: 0, Skipped checks: 8
 
-(py3) tim@Tims-MBP single_instance % grep -A 5 CKV2_AWS_40 checkov_current.txt 
+(py3) tim@Tims-MBP single_instance % grep -A 5 CKV2_AWS_40 checkov_current.txt
 Check: CKV2_AWS_40: "Ensure AWS IAM policy does not allow full IAM privileges"
     PASSED for resource: module.identity.aws_iam_policy.assume_admin_role_policy
     File: /modules/identity/iam.tf:93-106
@@ -31,5 +31,3 @@ Check: CKV_AWS_273: "Ensure access is controlled through SSO and not AWS IAM def
 	Suppress comment: SSO not implemented yet, using IAM users temporarily
 	File: /modules/identity/iam.tf:17-22
 	Calling File: /main.tf:98-108
-
-

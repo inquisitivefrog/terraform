@@ -1,7 +1,7 @@
 
 Docs
 ----
-1. https://aquasecurity.github.io/tfsec/v1.28.13/checks/aws/api-gateway/enable-access-logging/ 
+1. https://aquasecurity.github.io/tfsec/v1.28.13/checks/aws/api-gateway/enable-access-logging/
 2. https://aquasecurity.github.io/tfsec/v1.28.13/guides/trivy/
 3. https://aquasecurity.github.io/tfsec/v1.28.13/
 
@@ -20,11 +20,11 @@ tim@Tims-MBP single_instance % tfsec --version
 ======================================================
 tfsec is joining the Trivy family
 
-tfsec will continue to remain available 
-for the time being, although our engineering 
+tfsec will continue to remain available
+for the time being, although our engineering
 attention will be directed at Trivy going forward.
 
-You can read more here: 
+You can read more here:
 https://github.com/aquasecurity/tfsec/discussions/1994
 ======================================================
 v1.28.13
@@ -33,11 +33,11 @@ tim@Tims-MBP single_instance % tfsec --update
 ======================================================
 tfsec is joining the Trivy family
 
-tfsec will continue to remain available 
-for the time being, although our engineering 
+tfsec will continue to remain available
+for the time being, although our engineering
 attention will be directed at Trivy going forward.
 
-You can read more here: 
+You can read more here:
 https://github.com/aquasecurity/tfsec/discussions/1994
 ======================================================
 You are already running the latest version.
@@ -45,7 +45,7 @@ You are already running the latest version.
 Configuration
 -------------
 tim@Tims-MBP single_instance % vi tfsec.yml
-tim@Tims-MBP single_instance % cat tfsec.yml 
+tim@Tims-MBP single_instance % cat tfsec.yml
 ---
 min_required_version: v1.1.2
 minimum_severity: CRITICAL
@@ -73,16 +73,16 @@ tim@Tims-MBP single_instance % tfsec . --tfvars-file=terraform.tfvars --concise-
 tim@Tims-MBP single_instance % tfsec . --tfvars-file=terraform.tfvars --concise-output --minimum-severity CRITICAL
 ...
 
-tim@Tims-MBP single_instance % tfsec . --tfvars-file=terraform.tfvars --concise-output --config-file tfsec.yml    
+tim@Tims-MBP single_instance % tfsec . --tfvars-file=terraform.tfvars --concise-output --config-file tfsec.yml
 
 ======================================================
 tfsec is joining the Trivy family
 
-tfsec will continue to remain available 
-for the time being, although our engineering 
+tfsec will continue to remain available
+for the time being, although our engineering
 attention will be directed at Trivy going forward.
 
-You can read more here: 
+You can read more here:
 https://github.com/aquasecurity/tfsec/discussions/1994
 ======================================================
 
@@ -91,7 +91,7 @@ No problems detected!
 (py3) tim@Tims-MBP single_instance % terraform apply plan
 ╷
 │ Warning: Deprecated Parameter
-│ 
+│
 │ The parameter "dynamodb_table" is deprecated. Use parameter "use_lockfile" instead.
 ╵
 
@@ -104,26 +104,25 @@ sns_topic_example_arn = "arn:aws:sns:us-west-1:084375569056:example-topic"
 {
     "MessageId": "5a6538fe-51b4-57b7-bd6f-58a3081d7092"
 }
-(py3) tim@Tims-MBP single_instance % cat tfsec.yml 
+(py3) tim@Tims-MBP single_instance % cat tfsec.yml
 ---
 min_required_version: v1.1.2
 minimum_severity: LOW
 exclude:
   - aws-iam-enforce-group-mfa
-(py3) tim@Tims-MBP single_instance % tfsec . --tfvars-file=terraform.tfvars --concise-output --config-file tfsec.yml       
+(py3) tim@Tims-MBP single_instance % tfsec . --tfvars-file=terraform.tfvars --concise-output --config-file tfsec.yml
 
 ======================================================
 tfsec is joining the Trivy family
 
-tfsec will continue to remain available 
-for the time being, although our engineering 
+tfsec will continue to remain available
+for the time being, although our engineering
 attention will be directed at Trivy going forward.
 
-You can read more here: 
+You can read more here:
 https://github.com/aquasecurity/tfsec/discussions/1994
 ======================================================
 
 No problems detected!
 
-(py3) tim@Tims-MBP single_instance % 
-
+(py3) tim@Tims-MBP single_instance %

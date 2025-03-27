@@ -27,7 +27,7 @@ plugin "aws" {
   source  = "github.com/terraform-linters/tflint-ruleset-aws"
 }
 EOF
-tim@Tims-MBP single_instance % cat .tflint.hcl 
+tim@Tims-MBP single_instance % cat .tflint.hcl
 plugin "aws" {
   enabled = true
   version = "0.33.0"
@@ -38,8 +38,8 @@ Installing "aws" plugin...
 Installed "aws" (source: github.com/terraform-linters/tflint-ruleset-aws, version: 0.33.0)
 
 tim@Tims-MBP single_instance % vi tflint-wrapper.sh
-tim@Tims-MBP single_instance % chmod 755 tflint-wrapper.sh 
-tim@Tims-MBP single_instance % cat tflint-wrapper.sh 
+tim@Tims-MBP single_instance % chmod 755 tflint-wrapper.sh
+tim@Tims-MBP single_instance % cat tflint-wrapper.sh
 tflint_output=$(tflint 2>&1); if [ -z "$tflint_output" ]; then echo "No issues found"; else echo "$tflint_output"; fi
 tim@Tims-MBP single_instance % echo 'alias tflint="$HOME/Documents/workspace/sre/terraform/aws/single_instance/tflint-wrapper.sh"' >> ~/.zshrc
 tim@Tims-MBP single_instance % source ~/.zshrc
@@ -87,17 +87,16 @@ tim@Tims-MBP single_instance % TFLINT_LOG=debug tflint
 15:07:43 config.go:338: [DEBUG]   ForceSet: false
 15:07:43 config.go:339: [DEBUG]   DisabledByDefault: false
 15:07:43 config.go:340: [DEBUG]   DisabledByDefaultSet: false
-15:07:43 config.go:341: [DEBUG]   PluginDir: 
+15:07:43 config.go:341: [DEBUG]   PluginDir:
 15:07:43 config.go:342: [DEBUG]   PluginDirSet: false
-15:07:43 config.go:343: [DEBUG]   Format: 
+15:07:43 config.go:343: [DEBUG]   Format:
 15:07:43 config.go:344: [DEBUG]   FormatSet: false
-15:07:43 config.go:345: [DEBUG]   Varfiles: 
-15:07:43 config.go:346: [DEBUG]   Variables: 
-15:07:43 config.go:347: [DEBUG]   Only: 
+15:07:43 config.go:345: [DEBUG]   Varfiles:
+15:07:43 config.go:346: [DEBUG]   Variables:
+15:07:43 config.go:347: [DEBUG]   Only:
 15:07:43 config.go:348: [DEBUG]   IgnoreModules:
 15:07:43 config.go:352: [DEBUG]   Rules:
 15:07:43 config.go:356: [DEBUG]   Plugins:
 15:07:43 config.go:358: [DEBUG]     aws: enabled=true, version=0.33.0, source=github.com/terraform-linters/tflint-ruleset-aws
 15:07:43 config.go:463: [INFO] The "terraform" plugin block is not found. Enable the plugin "terraform" automatically
 ...
-

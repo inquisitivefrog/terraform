@@ -1,42 +1,59 @@
+---
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-repos:
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.5.0
-  hooks:
-  - id: trailing-whitespace
-  - id: end-of-file-fixer
-  - id: check-added-large-files
-  - id: check-merge-conflict
-  - id: no-commit-to-branch
-    args: ['--branch', 'master']
-  - id: detect-aws-credentials
-  - id: detect-private-key
 
-- repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.88.4
-  hooks:
-  - id: terraform_fmt
-  - id: terraform_docs
-    name: Generate tf documents for modules
-    files: ^modules/
-    args:
-    - --hook-config=--path-to-file=README.md        # Valid UNIX path. I.e. ../TFDOC.md or docs/README.md etc.
-    - --hook-config=--add-to-existing-file=true     # Boolean. true or false
-    - --hook-config=--create-file-if-not-exist=true # Boolean. true or false
-  - id: terraform_docs
-    name: Generate tf documents for environments
-    files: ^environments/
-    args:
-    - --hook-config=--path-to-file=README.md        # Valid UNIX path. I.e. ../TFDOC.md or docs/README.md etc.
-    - --hook-config=--add-to-existing-file=true     # Boolean. true or false
-    - --hook-config=--create-file-if-not-exist=true # Boolean. true or false
-  - id: terraform_validate
-    files: ^environments/
-    args:
-      - --tf-init-args=-backend=false
-  - id: terraform_tflint
-  - id: terraform_trivy
-    args:
-      - --args=--format=json
-      - --args=--skip-dirs="**/.terraform"
+repos:
+
+  # General-purpose pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: no-commit-to-branch
+        args: ['--branch', 'master']
+      - id: detect-aws-credentials
+      - id: detect-private-key
+
+  # Terraform-specific hooks
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.88.4
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_docs
+        name: Generate tf documents for modules
+        files: ^modules/
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+      - id: terraform_docs
+        name: Generate tf documents for environments
+        files: ^environments/
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+      - id: terraform_validate
+        files: ^environments/
+        args:
+          - --tf-init-args=-backend=false
+      - id: terraform_tflint
+      - id: terraform_trivy
+        args:
+          - --args=--format=json
+          - --args=--skip-dirs="**/.terraform"
+
+  # Security scanning with TFSec
+  - repo: https://github.com/aquasecurity/tfsec
+    rev: v1.28.1
+    hooks:
+      - id: tfsec
+
+  # Security scanning with Checkov
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.2.0
+    hooks:
+      - id: checkov

@@ -27,10 +27,15 @@ tim@Tims-MBP single_instance % which pre-commit
 /usr/local/bin/pre-commit
 tim@Tims-MBP single_instance % pre-commit --version
 pre-commit 4.2.0
+(py3) tim@Tims-MBP single_instance % pre-commit autoupdate --repo https://github.com/pre-commit/pre-commit-hooks
+[https://github.com/pre-commit/pre-commit-hooks] updating v4.5.0 -> v5.0.0
+(py3) tim@Tims-MBP single_instance % pre-commit --version
+pre-commit 4.2.0
+
 
 Configuration
 -------------
-tim@Tims-MBP single_instance % cat .pre-commit-config.yaml 
+tim@Tims-MBP single_instance % cat .pre-commit-config.yaml
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
@@ -73,6 +78,63 @@ repos:
     args:
       - --args=--format=json
       - --args=--skip-dirs="**/.terraform"
+(py3) tim@Tims-MBP single_instance % rm -rf ~/.cache/pre-commit/*
+zsh: sure you want to delete all the files in /Users/tim/.cache/pre-commit [yn]? y
+(py3) tim@Tims-MBP single_instance % pre-commit install
+pre-commit installed at .git/hooks/pre-commit
+(py3) tim@Tims-MBP single_instance % pre-commit --version
+pre-commit 4.2.0
+(py3) tim@Tims-MBP single_instance % pre-commit run --all-files
+[INFO] Initializing environment for https://github.com/pre-commit/pre-commit-hooks.
+[INFO] Initializing environment for https://github.com/antonbabenko/pre-commit-terraform.
+[INFO] Initializing environment for https://github.com/aquasecurity/tfsec.
+[INFO] Initializing environment for https://github.com/bridgecrewio/checkov.
+[INFO] Installing environment for https://github.com/pre-commit/pre-commit-hooks.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/aquasecurity/tfsec.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/bridgecrewio/checkov.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+trim trailing whitespace.................................................Failed
+- hook id: trailing-whitespace
+- exit code: 1
+- files were modified by this hook
+
+Fixing aws/single_instance/docs/README.Terraform_tflint.txt
+Fixing aws/single_instance/docs/README.Terraform_tfsec.txt
+Fixing aws/single_instance/docs/README.Terraform_checkov.txt
+Fixing aws/single_instance/docs/README.Terraform_precommit.txt
+
+fix end of files.........................................................Failed
+- hook id: end-of-file-fixer
+- exit code: 1
+- files were modified by this hook
+
+Fixing aws/single_instance/docs/README.Terraform_tflint.txt
+Fixing aws/single_instance/docs/README.Terraform_tfsec.txt
+Fixing aws/single_instance/docs/README.Terraform_checkov.txt
+Fixing aws/single_instance/docs/README.Terraform_precommit.txt
+Fixing aws/single_instance/trivy_current.txt
+
+check for added large files..............................................Passed
+check for merge conflicts................................................Passed
+don't commit to branch...................................................Passed
+detect aws credentials...................................................Passed
+detect private key.......................................................Passed
+Terraform fmt............................................................Passed
+Generate tf documents for modules....................(no files to check)Skipped
+Generate tf documents for environments...............(no files to check)Skipped
+Terraform validate...................................(no files to check)Skipped
+Terraform validate with tflint...........................................Failed
+- hook id: terraform_tflint
+- exit code: 2
+
+Command 'tflint --init' successfully done:
+All plugins are already installed
+
 
 Execution
 ---------
@@ -201,6 +263,5 @@ tim@Tims-MBP single_instance % grep trivy:ignore modules/identity/iam.tf
 tim@Tims-MBP single_instance % pre-commit run -a > commit.txt
 tim@Tims-MBP single_instance % grep -A 10 AVD-AWS-0342 commit.txt
 tim@Tims-MBP single_instance % grep -A 10 avd-aws-0342 commit.txt
-tim@Tims-MBP single_instance % wc -l commit.txt 
+tim@Tims-MBP single_instance % wc -l commit.txt
      821 commit.txt
-
