@@ -29,9 +29,9 @@
 2025-03-26 13:46:08        664 logs/2025-03-26-20-46-07-5672AF46E72079C7
 2025-03-26 14:45:04      15936 logs/2025-03-26-21-45-02-943D0E3183B2FAF9
 (py3) tim@Tims-MBP single_instance % aws s3api list-object-versions --bucket bluedragon-log-bucket-qt386gvs > versions.txt
-(py3) tim@Tims-MBP single_instance % wc -l versions.txt 
+(py3) tim@Tims-MBP single_instance % wc -l versions.txt
      470 versions.txt
-(py3) tim@Tims-MBP single_instance % cat versions.txt 
+(py3) tim@Tims-MBP single_instance % cat versions.txt
 {
     "Versions": [
         {
@@ -723,12 +723,12 @@ random_string.suffix: Destroying... [id=qt386gvs]
 random_string.suffix: Destruction complete after 0s
 
 Destroy complete! Resources: 2 destroyed.
-(py3) tim@Tims-MBP single_instance % 
+(py3) tim@Tims-MBP single_instance %
 
 (py3) tim@Tims-MBP single_instance % aws s3 ls
 2025-03-14 13:13:46 bluedragon-employer-prod
 2025-03-14 12:58:11 bluedragon-employer-prod-logs
-(py3) tim@Tims-MBP single_instance % 
+(py3) tim@Tims-MBP single_instance %
 (py3) tim@Tims-MBP single_instance % aws s3 ls s3://bluedragon-employer-prod --recursive
 2025-01-23 12:57:52        180 ./terraform.tfstate
 2025-03-27 08:52:57        183 single_instance_terraform.tfstate
@@ -896,7 +896,7 @@ delete: s3://bluedragon-employer-prod/./terraform.tfstate
         },
 etc
 
-(py3) tim@Tims-MBP single_instance % aws s3 ls                                          
+(py3) tim@Tims-MBP single_instance % aws s3 ls
 2025-03-14 13:13:46 bluedragon-employer-prod
 2025-03-14 12:58:11 bluedragon-employer-prod-logs
 (py3) tim@Tims-MBP single_instance % aws s3 rm s3://bluedragon-employer-prod --recursive
@@ -904,17 +904,17 @@ etc
 
 Parameter validation failed:
 Invalid type for parameter Delete.Objects, value: None, type: <class 'NoneType'>, valid types: <class 'list'>, <class 'tuple'>
-(py3) tim@Tims-MBP single_instance % aws s3 ls                                          
+(py3) tim@Tims-MBP single_instance % aws s3 ls
 2025-03-14 13:13:46 bluedragon-employer-prod
 2025-03-14 12:58:11 bluedragon-employer-prod-logs
 
 (py3) tim@Tims-MBP single_instance % aws s3 ls s3://bluedragon-employer-prod --recursive
-(py3) tim@Tims-MBP single_instance % 
+(py3) tim@Tims-MBP single_instance %
 
 (py3) tim@Tims-MBP single_instance % aws s3 ls s3://bluedragon-employer-prod --recursive
 (py3) tim@Tims-MBP single_instance % aws s3 rm s3://bluedragon-employer-prod-logs --recursive
-(py3) tim@Tims-MBP single_instance % aws s3 rm s3://bluedragon-employer-prod --recursive 
-(py3) tim@Tims-MBP single_instance % 
+(py3) tim@Tims-MBP single_instance % aws s3 rm s3://bluedragon-employer-prod --recursive
+(py3) tim@Tims-MBP single_instance %
 
 (py3) tim@Tims-MBP single_instance % aws s3 ls
 2025-03-14 13:13:46 bluedragon-employer-prod
@@ -928,7 +928,7 @@ stored in DynamoDB.
 
 Bucket: bluedragon-employer-prod
 Key:    single_instance_terraform.tfstate
-Calculated checksum: 
+Calculated checksum:
 Stored checksum:     502a3cd7cb541d411b17406b34c709aa
 
 This may be caused by unusually long delays in S3 processing a previous state
@@ -941,9 +941,9 @@ value stored in the DynamoDB table
 (py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod-logs --force
 remove_bucket: bluedragon-employer-prod-logs
 
-(py3) tim@Tims-MBP single_instance % aws s3 ls                                           
+(py3) tim@Tims-MBP single_instance % aws s3 ls
 2025-03-14 13:13:46 bluedragon-employer-prod
-(py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod --force     
+(py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod --force
 remove_bucket failed: s3://bluedragon-employer-prod An error occurred (BucketNotEmpty) when calling the DeleteBucket operation: The bucket you tried to delete is not empty. You must delete all versions in the bucket.
 
 (py3) tim@Tims-MBP single_instance % aws s3api list-object-versions --bucket bluedragon-employer-prod
@@ -1005,10 +1005,10 @@ remove_bucket failed: s3://bluedragon-employer-prod An error occurred (BucketNot
 
 Parameter validation failed:
 Invalid type for parameter Delete.Objects, value: None, type: <class 'NoneType'>, valid types: <class 'list'>, <class 'tuple'>
-(py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod --force                 
+(py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod --force
 
 remove_bucket failed: s3://bluedragon-employer-prod An error occurred (BucketNotEmpty) when calling the DeleteBucket operation: The bucket you tried to delete is not empty. You must delete all versions in the bucket.
-(py3) tim@Tims-MBP single_instance % 
+(py3) tim@Tims-MBP single_instance %
 (py3) tim@Tims-MBP single_instance % aws s3api list-object-versions --bucket bluedragon-employer-prod
 {
     "DeleteMarkers": [
@@ -1059,7 +1059,7 @@ remove_bucket failed: s3://bluedragon-employer-prod An error occurred (BucketNot
     "RequestCharged": null,
     "Prefix": ""
 }
-(py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod --force                 
+(py3) tim@Tims-MBP single_instance % aws s3 rb s3://bluedragon-employer-prod --force
 remove_bucket: bluedragon-employer-prod
 
 (py3) tim@Tims-MBP single_instance % cd ../tfstate
@@ -1082,7 +1082,7 @@ should now work.
 If you ever set or change modules or backend configuration for Terraform,
 rerun this command to reinitialize your working directory. If you forget, other
 commands will detect it and remind you to do so if necessary.
-(py3) tim@Tims-MBP tfstate % vi create_s3_bucket.tf 
+(py3) tim@Tims-MBP tfstate % vi create_s3_bucket.tf
 (py3) tim@Tims-MBP tfstate % terraform destroy
 aws_kms_key.dynamodb_key: Refreshing state... [id=d16e2125-c3d9-4887-815b-ca83f400ed9d]
 aws_kms_key.state_bucket_key: Refreshing state... [id=ba900911-142d-4b8c-b1bc-28e4fdf9a6b0]
@@ -1099,4 +1099,3 @@ aws_s3_bucket_public_access_block.block_public_access: Refreshing state... [id=b
 aws_s3_bucket_versioning.state_bucket_versioning: Refreshing state... [id=bluedragon-employer-prod]
 aws_s3_bucket_lifecycle_configuration.state_bucket_lifecycle: Refreshing state... [id=bluedragon-employer-prod]
 aws_s3_bucket_acl.state_bucket_acl: Refreshing state... [id=bluedragon-employer-prod,private]
-

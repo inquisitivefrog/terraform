@@ -1,0 +1,87 @@
+cache:
+    backend: memory
+    dir: /Users/tim/Library/Caches/trivy
+    redis:
+        ca: ""
+        cert: ""
+        key: ""
+        tls: false
+    ttl: 0s
+config: trivy.yaml
+debug: false
+exit-code: 0
+format: table
+ignore-policy: ""
+ignorefile: .trivyignore
+insecure: false
+kubernetes:
+    k8s-version: ""
+misconf:
+    scanners:
+        - terraform
+misconfiguration:
+    checks-bundle-repository: mirror.gcr.io/aquasec/trivy-checks:1
+    cloudformation:
+        params: []
+    config-file-schemas: []
+    helm:
+        api-versions: []
+        kube-version: ""
+        set: []
+        set-file: []
+        set-string: []
+        values: []
+    include-non-failures: false
+    render-cause: []
+    scanners:
+        - azure-arm
+        - cloudformation
+        - dockerfile
+        - helm
+        - kubernetes
+        - terraform
+        - terraformplan-json
+        - terraformplan-snapshot
+    terraform:
+        exclude-downloaded-modules: false
+        vars: []
+module:
+    dir: /Users/tim/.trivy/modules
+    enable-modules: []
+output: ""
+output-plugin-arg: ""
+quiet: false
+registry:
+    mirrors: {}
+    password: []
+    password-stdin: false
+    token: ""
+    username: []
+rego:
+    check: []
+    data: []
+    include-deprecated-checks: false
+    namespaces: []
+    skip-check-update: false
+    trace: false
+report: all
+scan:
+    file-patterns: []
+    scanners:
+        - vuln
+        - secret
+    skip-dirs: []
+    skip-files: []
+severity:
+    - MEDIUM
+table-mode:
+    - summary
+    - detailed
+template: ""
+timeout: 5m0s
+version: false
+vulnerability:
+    ignore-unfixed: true
+    type:
+        - os
+        - secret

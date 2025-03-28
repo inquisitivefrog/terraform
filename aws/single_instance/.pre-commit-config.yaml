@@ -19,7 +19,7 @@ repos:
 
   # Terraform-specific hooks
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.88.4
+    rev: v1.98.0
     hooks:
       - id: terraform_fmt
       - id: terraform_docs
@@ -42,18 +42,18 @@ repos:
           - --tf-init-args=-backend=false
       - id: terraform_tflint
       - id: terraform_trivy
-        args:
-          - --args=--format=json
-          - --args=--skip-dirs="**/.terraform"
+        args: 
+          - --args=--config=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/trivy-default.yaml
+          - --args=--ignorefile=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/.trivyignore
 
   # Security scanning with TFSec
   - repo: https://github.com/aquasecurity/tfsec
-    rev: v1.28.1
+    rev: v1.28.13
     hooks:
       - id: tfsec
 
   # Security scanning with Checkov
   - repo: https://github.com/bridgecrewio/checkov
-    rev: 3.2.0
+    rev: 3.2.394
     hooks:
       - id: checkov
