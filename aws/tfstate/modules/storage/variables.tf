@@ -56,4 +56,3 @@ variable "tfstate_bucket" {
   type        = string
   description = "AWS S3 bucket name for storage of terraform.tfstate file"
 }
-

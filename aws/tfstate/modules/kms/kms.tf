@@ -64,4 +64,3 @@ resource "aws_kms_key" "sns_logging_key" {
     Name = "sns-custom-key"
   }
 }
-
