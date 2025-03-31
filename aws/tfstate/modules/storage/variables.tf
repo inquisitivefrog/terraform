@@ -6,11 +6,6 @@ variable "account_id" {
   description = "AWS Account ID"
 }
 
-variable "dynamodb_key_arn" {
-  type        = string
-  description = "ARN of the DynamoDB KMS key for encryption"
-}
-
 variable "employer" {
   type        = string
   description = "Employer that owns environment deployed"

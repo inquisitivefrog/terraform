@@ -64,3 +64,75 @@ resource "aws_kms_key" "sns_logging_key" {
     Name = "sns-custom-key"
   }
 }
+
+resource "aws_kms_key" "state_bucket_key_dev" {
+  provider            = aws.us-west-2
+  description         = "KMS key for S3 state bucket dev"
+  enable_key_rotation = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Enable IAM User Permissions"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_kms_key" "sns_logging_key_dev" {
+  provider            = aws.us-west-2
+  description         = "Custom key for SNS encryption in dev"
+  enable_key_rotation = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowRoot"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowSNS"
+        Effect    = "Allow"
+        Principal = { Service = "sns.amazonaws.com" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowS3"
+        Effect    = "Allow"
+        Principal = { Service = "s3.amazonaws.com" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Resource  = "*"
+      }
+    ]
+  })
+  tags = {
+    Name = "sns-custom-key-dev"
+  }
+}
+
+resource "aws_kms_key" "log_bucket_key_dev" {
+  provider            = aws.us-west-2
+  description         = "KMS key for S3 state log bucket dev"
+  enable_key_rotation = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Enable IAM User Permissions"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      }
+    ]
+  })
+}
+

@@ -5,7 +5,6 @@
 # https://registry.terraform.io/providers/hashicorp/aws/5.83.1/docs/resources/s3_bucket_replication_configuration
 # https://registry.terraform.io/providers/aaronfeng/aws/latest/docs/resources/s3_bucket_public_access_block
 # https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/s3_bucket_server_side_encryption_configuration.html.markdown
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/dynamodb_table
 
 resource "aws_s3_bucket" "state_log_bucket" {
   bucket        = "${var.tfstate_bucket}-logs-${var.random_suffix}"

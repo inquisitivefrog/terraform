@@ -1,4 +1,4 @@
-# File 2: variables.tf
+# File 2: tfstate/variables.tf
 # https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-variables
 
 variable "employer" {
