@@ -7,7 +7,7 @@
 # https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/s3_bucket_server_side_encryption_configuration.html.markdown
 
 resource "aws_s3_bucket" "state_log_bucket" {
-  bucket        = "${var.tfstate_bucket}-logs-${var.random_suffix}"
+  bucket        = var.random_suffix != "" ? "${var.tfstate_bucket}-logs-${var.random_suffix}" : "${var.tfstate_bucket}-logs"
   force_destroy = false
   tags = {
     Name        = "${var.employer}-logs"
@@ -27,7 +27,7 @@ resource "aws_s3_bucket_policy" "state_log_bucket_policy" {
         Action    = ["s3:PutObject"]
         Resource  = "${aws_s3_bucket.state_log_bucket.arn}/state-logs/*"
         Condition = {
-          ArnLike      = { "aws:SourceArn" = "arn:aws:s3:::${var.tfstate_bucket}-${var.random_suffix}" }
+          ArnLike      = { "aws:SourceArn" = var.random_suffix != "" ? "arn:aws:s3:::${var.tfstate_bucket}-${var.random_suffix}" : "arn:aws:s3:::${var.tfstate_bucket}" }
           StringEquals = { "aws:SourceAccount" = var.account_id }
         }
       }
@@ -54,6 +54,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_log_bucket"
 }
 
 resource "aws_s3_bucket_notification" "state_log_bucket_notification" {
+  count  = var.enable_notifications ? 1 : 0
   bucket = aws_s3_bucket.state_log_bucket.id
 
   topic {

@@ -12,16 +12,11 @@ terraform {
       version = "~> 3.7"
     }
   }
-  backend "s3" {} # see backend.hcl
+  backend "s3" {}
 }
 
 provider "aws" {
-  region = var.region
-}
-
-provider "aws" {
-  alias  = "us-west-2"
-  region = "us-west-2" # Temp for state cleanup
+  region = var.region  # us-west-1 from terraform.tfvars
 }
 
 data "aws_caller_identity" "current" {}
@@ -38,7 +33,7 @@ module "kms" {
   env        = var.env
   region     = var.region
   providers = {
-    aws = aws.us-west-2
+    aws = aws  # Default provider (us-west-1)
   }
 }
 
@@ -63,4 +58,5 @@ module "storage" {
   state_bucket_key_arn         = module.kms.state_bucket_key_arn
   state_log_bucket_key_arn     = module.kms.state_log_bucket_key_arn
   tfstate_bucket               = var.tfstate_bucket
+  enable_notifications         = true
 }

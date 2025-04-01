@@ -7,7 +7,7 @@
 # https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/s3_bucket_server_side_encryption_configuration.html.markdown
 
 resource "aws_s3_bucket" "state_bucket" {
-  bucket        = "${var.tfstate_bucket}-${var.random_suffix}"
+  bucket        = var.random_suffix != "" ? "${var.tfstate_bucket}-${var.random_suffix}" : var.tfstate_bucket
   force_destroy = false
   tags = {
     Name        = var.employer
@@ -24,7 +24,6 @@ resource "aws_s3_bucket_public_access_block" "block_public_access" {
   restrict_public_buckets = true
 }
 
-# Add this new resource before the ACL resource
 resource "aws_s3_bucket_ownership_controls" "ownership" {
   bucket = aws_s3_bucket.state_bucket.id
 
@@ -75,7 +74,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state_bucket_lifecycle" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "state_bucket_encryption" {
-  bucket = aws_s3_bucket.state_bucket.id
+  bucket              = aws_s3_bucket.state_bucket.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -86,6 +85,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_bucket_encr
 }
 
 resource "aws_s3_bucket_notification" "state_bucket_notification" {
+  count  = var.enable_notifications ? 1 : 0
   bucket = aws_s3_bucket.state_bucket.id
 
   topic {
