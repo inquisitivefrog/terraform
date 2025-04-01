@@ -16,7 +16,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region  # us-west-1 from terraform.tfvars
+  region = var.region
 }
 
 data "aws_caller_identity" "current" {}
@@ -32,9 +32,6 @@ module "kms" {
   account_id = data.aws_caller_identity.current.account_id
   env        = var.env
   region     = var.region
-  providers = {
-    aws = aws  # Default provider (us-west-1)
-  }
 }
 
 module "messages" {

@@ -19,11 +19,6 @@ provider "aws" {
   region = var.region
 }
 
-provider "aws" {
-  alias  = "us-west-2"
-  region = "us-west-2"
-}
-
 data "aws_caller_identity" "current" {}
 
 resource "random_string" "suffix" {
@@ -37,9 +32,6 @@ module "kms" {
   account_id = data.aws_caller_identity.current.account_id
   env        = var.env
   region     = var.region
-  providers = {
-    aws = aws.us-west-2
-  }
 }
 
 module "messages" {
@@ -63,4 +55,5 @@ module "storage" {
   state_bucket_key_arn         = module.kms.state_bucket_key_arn
   state_log_bucket_key_arn     = module.kms.state_log_bucket_key_arn
   tfstate_bucket               = var.tfstate_bucket
+  enable_notifications         = true
 }
