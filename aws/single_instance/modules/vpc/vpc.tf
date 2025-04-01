@@ -89,8 +89,8 @@ resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flow-logs/${aws_vpc.main.id}"
   retention_in_days = 365
-  kms_key_id        = var.vpc_flow_logs_key_arn
-  depends_on        = [var.kms_key_resource]
+  #kms_key_id        = var.vpc_flow_logs_key_id
+  depends_on = [var.kms_key_resource]
 }
 
 resource "aws_flow_log" "vpc_flow_logs" {

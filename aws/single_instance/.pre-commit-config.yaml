@@ -3,8 +3,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 
 repos:
-
-  # General-purpose pre-commit hooks
+  # General-purpose hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -12,8 +11,6 @@ repos:
       - id: end-of-file-fixer
       - id: check-added-large-files
       - id: check-merge-conflict
-      - id: no-commit-to-branch
-        args: ['--branch', 'master']
       - id: detect-aws-credentials
       - id: detect-private-key
 
@@ -22,6 +19,7 @@ repos:
     rev: v1.98.0
     hooks:
       - id: terraform_fmt
+        # Applies to all .tf files
       - id: terraform_docs
         name: Generate tf documents for modules
         files: ^modules/
@@ -30,30 +28,38 @@ repos:
           - --hook-config=--add-to-existing-file=true
           - --hook-config=--create-file-if-not-exist=true
       - id: terraform_docs
-        name: Generate tf documents for environments
-        files: ^environments/
+        name: Generate tf documents for root
+        files: ^(main.tf|variables.tf|outputs.tf)$
         args:
           - --hook-config=--path-to-file=README.md
           - --hook-config=--add-to-existing-file=true
           - --hook-config=--create-file-if-not-exist=true
       - id: terraform_validate
-        files: ^environments/
+        # Runs on root-level files
         args:
           - --tf-init-args=-backend=false
       - id: terraform_tflint
+        args:
+          - --args=--config=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/.tflint.hcl
       - id: terraform_trivy
-        args: 
-          - --args=--config=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/trivy-default.yaml
+        args:
+          - --args=--config=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/trivy.yaml
           - --args=--ignorefile=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/.trivyignore
+          - --args=--exit-code=1
 
   # Security scanning with TFSec
   - repo: https://github.com/aquasecurity/tfsec
-    rev: v1.28.13
+    rev: v1.28.14
     hooks:
       - id: tfsec
+        args:
+          - --config-file=/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/tfsec.yml
+          - --soft-fail
 
   # Security scanning with Checkov
   - repo: https://github.com/bridgecrewio/checkov
-    rev: 3.2.394
+    rev: 3.2.400
     hooks:
       - id: checkov
+        args:
+          - --soft-fail

@@ -94,6 +94,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
     id     = "log-expiration"
     status = "Enabled"
 
+    filter {
+      prefix = "" # Applies to all objects
+    }
+
     expiration {
       days = 365 # Delete logs after 365 days
     }

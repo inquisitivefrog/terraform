@@ -1,5 +1,5 @@
-bucket         = "bluedragon-employer-prod"
-key            = "single_instance_terraform.tfstate"
+bucket         = "bluedragon-tfstate-admin-prod" # Match tfstate
+key            = "terraform.tfstate"
 region         = "us-west-1"
-dynamodb_table = "terraform-locks"
+use_lockfile   = true
 encrypt        = true

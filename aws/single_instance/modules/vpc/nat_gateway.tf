@@ -3,7 +3,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/nat_gateway
 
 resource "aws_eip" "eip" {
-  vpc = true
+  domain = "vpc"
   tags = {
     Name = "nat-eip"
   }
