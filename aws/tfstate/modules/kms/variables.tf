@@ -7,6 +7,11 @@ variable "account_id" {
   description = "AWS Account ID"
 }
 
+variable "env" {
+  type = string
+  description = "environment: prod, dev"
+}
+
 variable "region" {
   type        = string
   description = "AWS Region"

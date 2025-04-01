@@ -19,6 +19,11 @@ provider "aws" {
   region = var.region
 }
 
+provider "aws" {
+  alias  = "us-west-2"
+  region = "us-west-2"
+}
+
 data "aws_caller_identity" "current" {}
 
 resource "random_string" "suffix" {
@@ -30,7 +35,11 @@ resource "random_string" "suffix" {
 module "kms" {
   source     = "../../modules/kms"
   account_id = data.aws_caller_identity.current.account_id
+  env        = var.env
   region     = var.region
+  providers = {
+    aws = aws.us-west-2
+  }
 }
 
 module "messages" {
@@ -38,7 +47,7 @@ module "messages" {
   account_id          = data.aws_caller_identity.current.account_id
   environment         = var.env
   random_suffix       = random_string.suffix.result
-  sns_logging_key_arn = module.kms.sns_logging_key_dev_arn
+  sns_logging_key_arn = module.kms.sns_logging_key_arn
   tfstate_bucket      = var.tfstate_bucket
 }
 
@@ -51,7 +60,7 @@ module "storage" {
   region                       = var.region
   sns_topic_logging_arn        = module.messages.sns_topic_logging_arn
   sns_topic_logging_policy_arn = module.messages.sns_topic_logging_policy_arn
-  state_bucket_key_arn         = module.kms.state_bucket_key_dev_arn
-  state_log_bucket_key_arn     = module.kms.log_bucket_key_dev_arn
+  state_bucket_key_arn         = module.kms.state_bucket_key_arn
+  state_log_bucket_key_arn     = module.kms.state_log_bucket_key_arn
   tfstate_bucket               = var.tfstate_bucket
 }
