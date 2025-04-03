@@ -1,4 +1,4 @@
-# File 1: create_bucket.tf
+# File 1: modules/storage/s3_state_bucket.tf
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_acl
 # https://registry.terraform.io/providers/PixarV/r4/latest/docs/resources/s3_bucket_versioning
@@ -50,6 +50,7 @@ resource "aws_s3_bucket_versioning" "state_bucket_versioning" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "state_bucket_lifecycle" {
   bucket = aws_s3_bucket.state_bucket.id
+  depends_on = [aws_s3_bucket.state_bucket]
 
   rule {
     id     = "move_to_glacier"

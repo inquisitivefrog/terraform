@@ -46,6 +46,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_iam_role" "vpc_flow_logs" {
+  count = var.create_iam_resources ? 1 : 0
   name = "vpc-flow-logs-role"
 
   assume_role_policy = jsonencode({
@@ -62,9 +63,13 @@ resource "aws_iam_role" "vpc_flow_logs" {
   })
 }
 
+data "aws_iam_role" "vpc_flow_logs" {
+  name = "vpc-flow-logs-role"
+}
+
 resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
   name = "vpc-flow-logs-policy"
-  role = aws_iam_role.vpc_flow_logs.id
+  role = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].id : data.aws_iam_role.vpc_flow_logs.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -78,9 +83,10 @@ resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Resource = [
-          "arn:aws:logs:${var.region}:${var.account_id}:log-group:/aws/vpc/flow-logs/${aws_vpc.main.id}:*"
-        ]
+        Resource = "*"
+        #[
+        #  "arn:aws:logs:${var.region}:${var.account_id}:log-group:/aws/vpc/flow-logs/${aws_vpc.main.id}:*"
+        #]
       }
     ]
   })
@@ -94,7 +100,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "vpc_flow_logs" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  iam_role_arn    = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].arn : data.aws_iam_role.vpc_flow_logs.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
   traffic_type    = "ALL" # Options: ACCEPT, REJECT, ALL
   vpc_id          = aws_vpc.main.id

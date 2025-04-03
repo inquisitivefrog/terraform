@@ -8,46 +8,58 @@
 # https://registry.terraform.io/providers/-/aws/latest/docs/resources/iam_group_policy_attachment
 
 resource "aws_iam_user" "sre" {
-  # Site Reliability Engineers
-  name = "sre"
-  path = "/"
+  count = var.create_iam_resources ? 1 : 0
+  name  = "sre"
+  path  = "/"
   # checkov:skip=CKV_AWS_273:SSO not implemented yet, using IAM users temporarily
 }
 
 resource "aws_iam_user" "dba" {
-  # Database Administrators
-  name = "dba"
-  path = "/"
+  count = var.create_iam_resources ? 1 : 0
+  name  = "dba"
+  path  = "/"
   # checkov:skip=CKV_AWS_273:SSO not implemented yet, using IAM users temporarily
 }
 
-
-#trivy:ignore:AVD-AWS-0123
 resource "aws_iam_group" "operations" {
-  name = "operations"
+  count = var.create_iam_resources ? 1 : 0
+  name  = "operations"
   # tfsec:ignore:aws-iam-enforce-group-mfa
+}
+
+data "aws_iam_user" "sre" {
+  user_name = "sre"
+}
+
+data "aws_iam_user" "dba" {
+  user_name = "dba"
+}
+
+data "aws_iam_group" "operations" {
+  group_name = "operations"
 }
 
 resource "aws_iam_group_membership" "operations_membership" {
   name = "operations-membership"
-
   users = [
-    aws_iam_user.sre.name,
-    aws_iam_user.dba.name,
+    var.create_iam_resources ? aws_iam_user.sre[0].name : data.aws_iam_user.sre.user_name,
+    var.create_iam_resources ? aws_iam_user.dba[0].name : data.aws_iam_user.dba.user_name,
   ]
+  group = var.create_iam_resources ? aws_iam_group.operations[0].name : data.aws_iam_group.operations.group_name
+}
 
-  group = aws_iam_group.operations.name
+data "aws_iam_policy" "assume_admin_role_policy" {
+  name = "AssumeAdminRolePolicy"
 }
 
 resource "aws_iam_group_policy_attachment" "attach_assume_admin_policy" {
-  group      = aws_iam_group.operations.name
-  policy_arn = aws_iam_policy.assume_admin_role_policy.arn
+  group      = var.create_iam_resources ? aws_iam_group.operations[0].name : data.aws_iam_group.operations.group_name
+  policy_arn = var.create_iam_resources ? aws_iam_policy.assume_admin_role_policy[0].arn : data.aws_iam_policy.assume_admin_role_policy.arn
 }
 
 resource "aws_iam_role" "developer_role" {
-  name = "Developer"
-
-  # The policy below allows EC2 to assume this role
+  count = var.create_iam_resources ? 1 : 0
+  name  = "Developer"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -62,7 +74,16 @@ resource "aws_iam_role" "developer_role" {
   })
 }
 
+data "aws_iam_role" "developer_role" {
+  name = "Developer"
+}
+
+data "aws_iam_policy" "developer_policy" {
+  name = "DeveloperPolicy"
+}
+
 resource "aws_iam_policy" "developer_policy" {
+  count       = var.create_iam_resources ? 1 : 0
   name        = "DeveloperPolicy"
   description = "Policy for developers"
   policy = jsonencode({
@@ -89,11 +110,33 @@ resource "aws_iam_policy" "developer_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "developer_attach" {
-  role       = aws_iam_role.developer_role.name
-  policy_arn = aws_iam_policy.developer_policy.arn
+  role       = var.create_iam_resources ? aws_iam_role.developer_role[0].name : data.aws_iam_role.developer_role.name
+  policy_arn = var.create_iam_resources ? aws_iam_policy.developer_policy[0].arn : data.aws_iam_policy.developer_policy.arn
+}
+
+resource "aws_iam_role" "admin_role" {
+  count = var.create_iam_resources ? 1 : 0
+  name  = "Admin"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+data "aws_iam_role" "admin_role" {
+  name = "Admin"
 }
 
 resource "aws_iam_policy" "assume_admin_role_policy" {
+  count       = var.create_iam_resources ? 1 : 0
   name        = "AssumeAdminRolePolicy"
   description = "Policy to allow assuming Admin role"
   policy = jsonencode({
@@ -102,14 +145,18 @@ resource "aws_iam_policy" "assume_admin_role_policy" {
       {
         Action   = "sts:AssumeRole"
         Effect   = "Allow"
-        Resource = aws_iam_role.admin_role.arn
+        Resource = var.create_iam_resources ? aws_iam_role.admin_role[0].arn : data.aws_iam_role.admin_role.arn
       }
     ]
   })
 }
 
-#trivy:ignore:AVD-AWS-0342
+data "aws_iam_policy" "admin_policy" {
+  name = "AdminPolicy"
+}
+
 resource "aws_iam_policy" "admin_policy" {
+  count       = var.create_iam_resources ? 1 : 0
   name        = "AdminPolicy"
   description = "Policy for administrators"
   policy = jsonencode({
@@ -150,10 +197,10 @@ resource "aws_iam_policy" "admin_policy" {
           "iam:DetachRolePolicy"
         ]
         Resource = [
-          aws_iam_role.ec2_role.arn,
-          aws_iam_role.ecs_task_execution_role.arn,
-          aws_iam_role.admin_role.arn,
-          aws_iam_role.developer_role.arn,
+          var.create_iam_resources ? aws_iam_role.ec2_role[0].arn : data.aws_iam_role.ec2_role.arn,
+          var.create_iam_resources ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.ecs_task_execution_role.arn,
+          var.create_iam_resources ? aws_iam_role.admin_role[0].arn : data.aws_iam_role.admin_role.arn,
+          var.create_iam_resources ? aws_iam_role.developer_role[0].arn : data.aws_iam_role.developer_role.arn,
           "arn:aws:iam::084375569056:policy/*"
         ]
       },
@@ -161,8 +208,8 @@ resource "aws_iam_policy" "admin_policy" {
         Effect = "Allow"
         Action = "iam:PassRole"
         Resource = [
-          aws_iam_role.ec2_role.arn,
-          aws_iam_role.ecs_task_execution_role.arn
+          var.create_iam_resources ? aws_iam_role.ec2_role[0].arn : data.aws_iam_role.ec2_role.arn,
+          var.create_iam_resources ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.ecs_task_execution_role.arn
         ]
         Condition = {
           StringEquals = {
@@ -178,24 +225,25 @@ resource "aws_iam_policy" "admin_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "admin_attach" {
-  role       = aws_iam_role.admin_role.name
-  policy_arn = aws_iam_policy.admin_policy.arn
+  role       = var.create_iam_resources ? aws_iam_role.admin_role[0].name : data.aws_iam_role.admin_role.name
+  policy_arn = var.create_iam_resources ? aws_iam_policy.admin_policy[0].arn : data.aws_iam_policy.admin_policy.arn
 }
 
 resource "aws_iam_instance_profile" "operations_profile" {
-  name = "operations_profile"
-  role = aws_iam_role.admin_role.name
+  count = var.create_iam_resources ? 1 : 0
+  name  = "operations_profile"
+  role  = var.create_iam_resources ? aws_iam_role.admin_role[0].name : data.aws_iam_role.admin_role.name
 }
 
 resource "aws_iam_group_policy" "operations_assume_role" {
   name  = "OperationsAssumeRolePolicy"
-  group = aws_iam_group.operations.name
+  group = var.create_iam_resources ? aws_iam_group.operations[0].name : data.aws_iam_group.operations.group_name
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action   = "sts:AssumeRole"
       Effect   = "Allow"
-      Resource = aws_iam_role.admin_role.arn
+      Resource = var.create_iam_resources ? aws_iam_role.admin_role[0].arn : data.aws_iam_role.admin_role.arn
     }]
   })
 }

@@ -12,6 +12,12 @@ variable "availability_zones" {
   description = "AWS Availability Zones within Region where resources deployed"
 }
 
+variable "create_iam_resources" {
+  type        = bool
+  default     = true
+  description = "Whether to create IAM resources or reference existing ones"
+}
+
 variable "kms_key_resource" {
   description = "The KMS key resource for VPC Flow Logs encryption"
   type        = any

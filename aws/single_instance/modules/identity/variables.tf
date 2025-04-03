@@ -1,5 +1,11 @@
 # File 24: modules/identity/variables.tf
 
+variable "create_iam_resources" {
+  type        = bool
+  default     = true
+  description = "Whether to create IAM resources or reference existing ones"
+}
+
 variable "ec2_arns" {
   type        = list(string)
   description = "List of EC2 instance ARNs"

@@ -55,7 +55,7 @@ module "compute" {
 # Identity Module
 module "identity" {
   source               = "../../modules/identity"
-  create_iam_resources = true
+  create_iam_resources = false
   ec2_arns             = module.compute.ec2_arns
   ecs_cluster_arn      = module.compute.ecs_cluster_arn
   ecs_service_arn      = module.compute.ecs_service_arn
@@ -113,6 +113,7 @@ module "vpc" {
   source                = "../../modules/vpc"
   account_id            = data.aws_caller_identity.current.account_id
   availability_zones    = var.availability_zones
+  create_iam_resources = false
   kms_key_resource      = module.kms.vpc_flow_logs_key_resource
   region                = var.region
   vpc_cidr_block        = var.vpc_cidr_block
