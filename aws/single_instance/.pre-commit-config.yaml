@@ -63,3 +63,15 @@ repos:
       - id: checkov
         args:
           - --soft-fail
+
+  # Drift detection with driftctl
+  - repo: local
+    hooks:
+      - id: driftctl-scan
+        name: Check for infrastructure drift with driftctl
+        entry: driftctl scan
+        language: system
+        files: \.(tf|tfstate)$
+        pass_filenames: false
+        require_serial: true
+        description: Runs driftctl to detect drift between Terraform state and AWS

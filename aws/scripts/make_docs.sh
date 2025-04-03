@@ -38,5 +38,14 @@ document_tf "tfstate/environments/prod"
 document_tf "single_instance/environments/dev"
 document_tf "single_instance/environments/prod"
 
+# Document single_instance modules 
+document_tf "single_instance/modules/cache"
+document_tf "single_instance/modules/compute"
+document_tf "single_instance/modules/identity"
+document_tf "single_instance/modules/kms"
+document_tf "single_instance/modules/messages"
+document_tf "single_instance/modules/networking"
+document_tf "single_instance/modules/storage"
+document_tf "single_instance/modules/vpc"
 echo "Full documentation complete!"
 
