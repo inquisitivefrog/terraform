@@ -106,6 +106,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
       days_after_initiation = 7
     }
   }
+  depends_on = [aws_s3_bucket.log_bucket]
 }
 
 resource "aws_s3_bucket_logging" "log_bucket_logging" {

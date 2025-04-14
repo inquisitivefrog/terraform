@@ -86,4 +86,5 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev_bucket_lifecycle" {
       prefix = ""
     }
   }
+  depends_on = [aws_s3_bucket.dev_bucket] 
 }

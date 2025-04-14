@@ -1,8 +1,24 @@
 
+Why
+---
+1. Lack of Best Practices
+   a. no CI/CD pipelines to ensure single point of access when implementing
+      change
+   b. SREs or Cloud Infrastructure Engineers allowed to impose change from
+      Public Cloud Consoles which make Terraform out-of-sync
+   c. SREs or Cloud Infrastructure Engineers or even strategic customers 
+      allowed to impose change from laptops which make Terraform out-of-sync
+   d. Too many cooks in the kitchen
+   e. new hires granted too much access by lax process
+2. Industry Issues
+   a. Some things changed are not wired to work with Terraform yet
+   b. Rogue employee does bad things
+
 Docs
 ----
 1. https://github.com/snyk/driftctl
 2. https://github.com/cloudskiff/driftctl-advanced-aws-tutorial
+3. https://docs.driftctl.com/0.40.0
 
 Installation
 ------------
@@ -50,6 +66,7 @@ v0.40.0
 
 Configure
 ---------
+tim@Tims-MacBook-Pro ~ % ls -l .driftignore
 tim@Tims-MacBook-Pro ~ % ls -l $HOME/.driftctl
 total 0
 drwxr-xr-x  3 tim  staff  96 Apr  3 15:08 plugins
@@ -141,3 +158,6 @@ aws_sns_topic_subscription with incorrect subscription arn (PendingConfirmation)
 Scan duration: 14s
 Provider version used to scan: 5.93.0. Use --tf-provider-version to use another version.
 
+Also you can update .pre-commit-config.yaml with one of these lines:
+1. entry; driftctl scan --driftignore .driftignore
+2. entry: driftctl scan --verbose

@@ -42,6 +42,17 @@ resource "aws_instance" "public-ec2" {
     chown ubuntu:ubuntu /home/ubuntu/.ssh/bluedragon.pem
     apt-get update
     apt-get install -y wget
+    apt install -y unzip
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip awscliv2.zip
+    ./aws/install
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    sudo apt install -y python3 
+    sudo apt install -y python3-pip 
+    sudo apt install -y docker.io
+    pip3 install kubernetes
+    pip3 install boto3
     # Optional: CloudWatch Agent
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
     dpkg -i amazon-cloudwatch-agent.deb

@@ -1,6 +1,10 @@
 # File 12: modules/networking/outputs.tf
 # https://developer.hashicorp.com/terraform/language/values/outputs
 
+output "sg_eks_cluster_id" {
+  value = aws_security_group.eks_cluster.id 
+}
+
 output "sg_public_ec2_id" {
   value = aws_security_group.public_ec2.id
 }

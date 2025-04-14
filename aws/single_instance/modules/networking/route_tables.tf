@@ -20,6 +20,7 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_route_table" "private" {
+  count  = length(var.vpc_subnet_private_ids)
   vpc_id = var.vpc_id
 
   route {
@@ -27,11 +28,12 @@ resource "aws_route_table" "private" {
     nat_gateway_id = var.nat_id
   }
   tags = {
-    Name = "rtb-private"
+    Name = "rtb-private-${count.index}"
   }
 }
 
 resource "aws_route_table_association" "private" {
-  subnet_id      = var.vpc_subnet_private_id
-  route_table_id = aws_route_table.private.id
+  count          = length(var.vpc_subnet_private_ids)
+  subnet_id      = var.vpc_subnet_private_ids[count.index]
+  route_table_id = aws_route_table.private[count.index].id
 }

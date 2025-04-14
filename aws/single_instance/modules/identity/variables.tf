@@ -11,11 +11,6 @@ variable "ec2_arns" {
   description = "List of EC2 instance ARNs"
 }
 
-variable "elasticache_arn" {
-  type        = string
-  description = "ARN of the ElastiCache instance"
-}
-
 variable "ecs_cluster_arn" {
   type        = string
   description = "ARN of the ECS Cluster instance"
@@ -26,6 +21,16 @@ variable "ecs_service_arn" {
   description = "ARN of the ECS instance"
 }
 
+variable "elasticache_arn" {
+  type        = string
+  description = "ARN of the ElastiCache instance"
+}
+
+variable "env" {
+  type        = string
+  description = "Environment name (e.g., prod, dev)"
+}
+
 variable "private_ec2_arn" {
   type        = string
   description = "ARN of the private EC2 instance"
@@ -34,6 +39,11 @@ variable "private_ec2_arn" {
 variable "public_ec2_arn" {
   type        = string
   description = "ARN of the public EC2 instance"
+}
+
+variable "random_suffix" {
+  type        = string
+  description = "Random suffix for resource names"
 }
 
 variable "s3_bucket_arn" {

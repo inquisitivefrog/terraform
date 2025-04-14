@@ -5,8 +5,8 @@
 resource "aws_sns_topic" "example" {
   name = "example-topic"
   tags = {
-    Name        = "example-topic-${var.environment}"
-    Environment = var.environment
+    Name        = "example-topic-${var.env}"
+    Environment = var.env
     AccountID   = var.account_id
   }
 
@@ -64,8 +64,8 @@ resource "aws_sns_topic" "custom" {
   # First In, First Out Policy
   name = "custom-topic.fifo"
   tags = {
-    Name        = "custom-topic-${var.environment}"
-    Environment = var.environment
+    Name        = "custom-topic-${var.env}"
+    Environment = var.env
     AccountID   = var.account_id
   }
   fifo_topic                  = true

@@ -6,6 +6,11 @@ output "asymmetric_key_arn" {
   description = "ARN of the asymmetric KMS key"
 }
 
+output "eks_key_arn" {
+  value       = aws_kms_key.eks_key.arn
+  description = "ARN of the KMS key for EKS cluster encryption"
+}
+
 output "sns_custom_key_alias_arn" {
   value       = aws_kms_alias.sns_custom_key_alias.arn
   description = "ARN of the custom KMS key alias for SNS"

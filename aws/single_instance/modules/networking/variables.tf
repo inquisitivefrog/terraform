@@ -1,6 +1,28 @@
 # File 9: modules/networking/variables.tf
 # https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-variables
 
+variable "env" {
+  type        = string
+  description = "Environment name (e.g., prod, dev)"
+}
+
+variable "random_suffix" {
+  type        = string
+  description = "Random suffix for resource names"
+}
+
+variable "vpc_subnet_private_ids" {
+  type        = list(string)
+  default     = []
+  description = "List of private subnet IDs"
+}
+
+variable "vpc_subnet_private_cidr_blocks" {
+  type        = list(string)
+  default     = []
+  description = "List of private subnet CIDR blocks"
+}
+
 variable "igw_id" {
   type        = string
   default     = ""
@@ -40,13 +62,13 @@ variable "vpc_cidr_block" {
 variable "vpc_subnet_private_cidr_block" {
   type        = string
   default     = ""
-  description = "IPv4 subnet ID"
+  description = "Deprecated: Use vpc_subnet_private_cidr_blocks instead"
 }
 
 variable "vpc_subnet_private_id" {
   type        = string
   default     = ""
-  description = "AWS vpc_subnet ID"
+  description = "Deprecated: Use vpc_subnet_private_ids instead"
 }
 
 variable "vpc_subnet_public_cidr_block" {

@@ -25,7 +25,7 @@ resource "aws_default_security_group" "default" {
 
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 12, 1)
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 3)
   availability_zone       = var.availability_zones[0]
   map_public_ip_on_launch = false
   tags = {
@@ -35,12 +35,13 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "private" {
+  count                   = length(var.availability_zones)
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 12, 2)
-  availability_zone       = var.availability_zones[1]
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 4 + count.index)
+  availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = false
   tags = {
-    Name = "private"
+    Name = "private-${var.availability_zones[count.index]}"
   }
   depends_on = [aws_nat_gateway.nat]
 }
@@ -64,12 +65,13 @@ resource "aws_iam_role" "vpc_flow_logs" {
 }
 
 data "aws_iam_role" "vpc_flow_logs" {
+  count = var.create_iam_resources ? 0 : 1
   name = "vpc-flow-logs-role"
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
   name = "vpc-flow-logs-policy"
-  role = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].id : data.aws_iam_role.vpc_flow_logs.id
+  role = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].id : data.aws_iam_role.vpc_flow_logs[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -100,7 +102,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "vpc_flow_logs" {
-  iam_role_arn    = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].arn : data.aws_iam_role.vpc_flow_logs.arn
+  iam_role_arn    = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].arn : data.aws_iam_role.vpc_flow_logs[0].arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
   traffic_type    = "ALL" # Options: ACCEPT, REJECT, ALL
   vpc_id          = aws_vpc.main.id

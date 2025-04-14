@@ -13,6 +13,12 @@ variable "ec2_keypair" {
   description = "AWS EC2 keypair name"
 }
 
+variable "eks_version" {
+  type        = string
+  default     = "1.28"
+  description = "Kubernetes version for EKS"
+}
+
 variable "env" {
   type        = string
   default     = "develop"

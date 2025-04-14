@@ -1,0 +1,152 @@
+
+(py3) tim@Tims-MBP single_instance % rm -rf ~/.cache/pre-commit
+(py3) tim@Tims-MBP single_instance % pre-commit install     
+pre-commit installed at .git/hooks/pre-commit
+(py3) tim@Tims-MBP single_instance % which driftctl
+/usr/local/bin/driftctl
+(py3) tim@Tims-MBP single_instance % driftctl version
+v0.40.0
+(py3) tim@Tims-MBP single_instance % cd environments/dev
+(py3) tim@Tims-MBP dev % export AWS_REGION=us-west-2
+(py3) tim@Tims-MBP dev % driftctl scan --from tfstate+s3://bluedragon-tfstate-admin-dev/terraform.tfstate --filter "Type != 'aws_route_table' && Type != 'aws_elasticache_cluster'"
+Scanned states (1)      
+Found missing resources:
+  From tfstate+s3://bluedragon-tfstate-admin-dev/terraform.tfstate
+    - arn:aws:sns:us-west-2:084375569056:example-topic:c515116a-8aa6-42db-b01c-17a3a6bb9ddc (module.messages.aws_sns_topic_subscription.example)
+Found resources not covered by IaC:
+  aws_eip:
+    - eipalloc-00e87fac508ebbbef
+    - eipalloc-0c490b7756da55df0
+  aws_iam_access_key:
+    - AKIARHJJNAKQIIJBIAEZ
+        User: bluedragon
+    - AKIARHJJNAKQIYWAY4R3
+        User: bluedragon
+  aws_iam_group:
+    - mygroup
+    - operations
+    - sre
+  aws_iam_policy:
+    - arn:aws:iam::084375569056:policy/AdminPolicy
+    - arn:aws:iam::084375569056:policy/AssumeAdminRolePolicy
+    - arn:aws:iam::084375569056:policy/DeveloperPolicy
+    - arn:aws:iam::084375569056:policy/my-eks-cluster-cluster-20250129002812357700000002
+    - arn:aws:iam::084375569056:policy/my-eks-cluster-cluster-ClusterEncryption2025012900283384830000000f
+  aws_iam_policy_attachment:
+    - AWSServiceRoleForAmazonEKS-arn:aws:iam::aws:policy/aws-service-role/AmazonEKSServiceRolePolicy
+    - AWSServiceRoleForAutoScaling-arn:aws:iam::aws:policy/aws-service-role/AutoScalingServiceRolePolicy
+    - AWSServiceRoleForECS-arn:aws:iam::aws:policy/aws-service-role/AmazonECSServiceRolePolicy
+    - AWSServiceRoleForElastiCache-arn:aws:iam::aws:policy/aws-service-role/ElastiCacheServiceRolePolicy
+    - AWSServiceRoleForElasticLoadBalancing-arn:aws:iam::aws:policy/aws-service-role/AWSElasticLoadBalancingServiceRolePolicy
+    - AWSServiceRoleForNetworkFirewall-arn:aws:iam::aws:policy/aws-service-role/AWSNetworkFirewallServiceRolePolicy
+    - EC2-arn:aws:iam::aws:policy/AdministratorAccess
+    - ECS-arn:aws:iam::aws:policy/AdministratorAccess
+    - ECS-arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+    - bluedragon-arn:aws:iam::aws:policy/AdministratorAccess
+    - bluedragon-arn:aws:iam::aws:policy/IAMUserChangePassword
+    - example-eks-node-group-20250129003607721700000011-arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+    - example-eks-node-group-20250129003607721700000011-arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+    - example-eks-node-group-20250129003607721700000011-arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+    - my-eks-cluster-cluster-20250129002812356300000001-arn:aws:iam::084375569056:policy/my-eks-cluster-cluster-20250129002812357700000002
+    - my-eks-cluster-cluster-20250129002812356300000001-arn:aws:iam::084375569056:policy/my-eks-cluster-cluster-ClusterEncryption2025012900283384830000000f
+    - my-eks-cluster-cluster-20250129002812356300000001-arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+    - my-eks-cluster-cluster-20250129002812356300000001-arn:aws:iam::aws:policy/AmazonEKSVPCResourceController
+    - mygroup-arn:aws:iam::aws:policy/AWSNetworkManagerFullAccess
+    - mygroup-arn:aws:iam::aws:policy/AdministratorAccess
+    - mygroup-arn:aws:iam::aws:policy/AmazonECS_FullAccess
+    - mygroup-arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy
+    - mygroup-arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+    - mygroup-arn:aws:iam::aws:policy/AmazonEKSComputePolicy
+    - mygroup-arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy
+    - mygroup-arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy
+    - mygroup-arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+    - mygroup-arn:aws:iam::aws:policy/job-function/NetworkAdministrator
+    - sre-arn:aws:iam::aws:policy/AdministratorAccess
+  aws_iam_role:
+    - Admin
+    - Developer
+    - EC2
+    - EC2Role
+    - ECS
+    - ecsTaskExecutionRole
+    - example-eks-node-group-20250129003607721700000011
+    - my-eks-cluster-cluster-20250129002812356300000001
+    - vpc-flow-logs-role
+  aws_iam_user:
+    - bluedragon
+    - dba
+    - sre
+  aws_key_pair:
+    - bluedragon
+    - webserver
+  aws_network_acl_rule:
+    - nacl-1313588911
+        CIDR: 0.0.0.0/0, Egress: true, Network: acl-0fb8c7889db394b77, Protocol: All, Rule number: 100
+    - nacl-2938788583
+        CIDR: 0.0.0.0/0, Egress: false, Network: acl-00a84617f433cccd8, Protocol: All, Rule number: 100
+    - nacl-3286715868
+        CIDR: 0.0.0.0/0, Egress: false, Network: acl-033a806f70940fff2, Protocol: All, Rule number: 100
+    - nacl-3954113858
+        CIDR: 0.0.0.0/0, Egress: true, Network: acl-033a806f70940fff2, Protocol: All, Rule number: 100
+    - nacl-502871586
+        CIDR: 0.0.0.0/0, Egress: false, Network: acl-0fb8c7889db394b77, Protocol: All, Rule number: 100
+    - nacl-539765526
+        CIDR: 0.0.0.0/0, Egress: true, Network: acl-00a84617f433cccd8, Protocol: All, Rule number: 100
+  aws_route:
+    - r-rtb-075222783b94437861080289494
+        Destination: 0.0.0.0/0, Table: rtb-075222783b9443786
+  aws_s3_bucket:
+    - bluedragon-tfstate-admin-dev
+    - bluedragon-tfstate-admin-dev-logs
+  aws_s3_bucket_policy:
+    - bluedragon-tfstate-admin-dev-logs
+  aws_s3_bucket_public_access_block:
+    - bluedragon-tfstate-admin-dev
+    - bluedragon-tfstate-admin-dev-logs
+  aws_security_group:
+    - sg-0cd936a655f79f0e3
+  aws_security_group_rule:
+    - sgrule-1218547983
+        Destination: 0.0.0.0/0, Ports: All, Protocol: All, SecurityGroup: sg-0cd936a655f79f0e3, Type: egress
+    - sgrule-1729472361
+        Ports: 22, Protocol: tcp, SecurityGroup: sg-0cd936a655f79f0e3, Source: 0.0.0.0/0, Type: ingress
+    - sgrule-1885071387
+        Ports: 80, Protocol: tcp, SecurityGroup: sg-0afad614855dc4ed2, Source: 23.93.84.244/32, Type: ingress
+    - sgrule-1902770030
+        Ports: -1, Protocol: icmp, SecurityGroup: sg-0afad614855dc4ed2, Source: 23.93.84.244/32, Type: ingress
+    - sgrule-2169972040
+        Destination: 10.1.0.32/28, Ports: All, Protocol: All, SecurityGroup: sg-0afad614855dc4ed2, Type: egress
+    - sgrule-2297827575
+        Ports: -1, Protocol: icmp, SecurityGroup: sg-07930187811458941, Source: 10.1.0.16/28, Type: ingress
+    - sgrule-2431139834
+        Destination: 10.1.0.0/16, Ports: 443, Protocol: tcp, SecurityGroup: sg-07930187811458941, Type: egress
+    - sgrule-2437504564
+        Ports: 443, Protocol: tcp, SecurityGroup: sg-0afad614855dc4ed2, Source: 23.93.84.244/32, Type: ingress
+    - sgrule-3119035738
+        Ports: 22, Protocol: tcp, SecurityGroup: sg-0afad614855dc4ed2, Source: 23.93.84.244/32, Type: ingress
+    - sgrule-3199280348
+        Destination: 10.1.0.0/16, Ports: 22, Protocol: tcp, SecurityGroup: sg-07930187811458941, Type: egress
+    - sgrule-3294351156
+        Destination: 23.93.84.244/32, Ports: All, Protocol: All, SecurityGroup: sg-0afad614855dc4ed2, Type: egress
+    - sgrule-3463761224
+        Ports: 6379, Protocol: tcp, SecurityGroup: sg-0fcd343caa1e5fcee, Source: 10.1.0.32/28, Type: ingress
+    - sgrule-3491418445
+        Destination: 10.1.0.32/28, Ports: All, Protocol: All, SecurityGroup: sg-0fcd343caa1e5fcee, Type: egress
+    - sgrule-3516922588
+        Ports: 80, Protocol: tcp, SecurityGroup: sg-0cd936a655f79f0e3, Source: 0.0.0.0/0, Type: ingress
+    - sgrule-3900460609
+        Ports: 22, Protocol: tcp, SecurityGroup: sg-07930187811458941, Source: 10.1.0.16/28, Type: ingress
+    - sgrule-958341763
+        Destination: 10.1.0.16/28, Ports: All, Protocol: All, SecurityGroup: sg-0afad614855dc4ed2, Type: egress
+  aws_vpc:
+    - vpc-0d20fc15974c2f2e5
+Found 128 resource(s)
+ - 32% coverage
+ - 42 resource(s) managed by Terraform
+ - 85 resource(s) not managed by Terraform
+ - 1 resource(s) found in a Terraform state but missing on the cloud provider
+aws_sns_topic_subscription with incorrect subscription arn (PendingConfirmation) for endpoint "https://example.com/sns-notification" will be ignored
+You have unmanaged security group rules that could be false positives, find out more at https://docs.driftctl.com/limitations
+Scan duration: 5s
+Provider version used to scan: 5.93.0. Use --tf-provider-version to use another version.
+
