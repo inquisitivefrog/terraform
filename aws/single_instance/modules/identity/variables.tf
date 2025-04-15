@@ -1,5 +1,10 @@
 # File 24: modules/identity/variables.tf
 
+variable "account_id" {
+  type        = string
+  description = "AWS account ID"
+}
+
 variable "create_iam_resources" {
   type        = bool
   default     = true

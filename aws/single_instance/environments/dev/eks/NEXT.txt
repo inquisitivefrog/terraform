@@ -1,0 +1,8 @@
+
+Scaling: Experiment with HorizontalPodAutoscalers (see examples/hpa.py).
+
+Monitoring: Integrate Prometheus for heartbeat metrics.
+
+CI/CD: Automate deployments with GitHub Actions or ArgoCD.
+
+

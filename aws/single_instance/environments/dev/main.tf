@@ -26,6 +26,39 @@ provider "aws" {
   region = var.region
 }
 
+provider "kubernetes" {
+  alias                   = "dev1"
+  host                    = module.eks.eks_cluster_endpoints["dev1"]
+  cluster_ca_certificate  = base64decode(module.eks.eks_cluster_ca_certificates["dev1"])
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_names["dev1"]]
+  }
+}
+
+provider "kubernetes" {
+  alias                   = "dev2"
+  host                    = module.eks.eks_cluster_endpoints["dev2"]
+  cluster_ca_certificate  = base64decode(module.eks.eks_cluster_ca_certificates["dev2"])
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_names["dev2"]]
+  }
+}
+
+provider "kubernetes" {
+  alias                   = "dev3"
+  host                    = module.eks.eks_cluster_endpoints["dev3"]
+  cluster_ca_certificate  = base64decode(module.eks.eks_cluster_ca_certificates["dev3"])
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_names["dev3"]]
+  }
+}
+
 data "aws_caller_identity" "current" {}
 
 resource "random_string" "suffix" {
@@ -59,6 +92,7 @@ module "compute" {
 # Identity Module
 module "identity" {
   source               = "../../modules/identity"
+  account_id           = data.aws_caller_identity.current.account_id
   create_iam_resources = true
   ec2_arns             = module.compute.ec2_arns
   ecs_cluster_arn      = module.compute.ecs_cluster_arn
@@ -145,4 +179,83 @@ module "eks" {
   eks_node_policy_attachments    = module.identity.eks_node_policy_attachments
   random_suffix                  = random_string.suffix.result
   node_security_group_ids        = [module.networking.sg_eks_cluster_id]  # Use cluster SG for nodes
+  cluster_names                  = ["dev1", "dev2", "dev3"]
+}
+
+module "kubernetes_dev1" {
+  source               = "../../modules/kubernetes"
+  providers            = { kubernetes = kubernetes.dev1 }
+  cluster_endpoint     = module.eks.eks_cluster_endpoints["dev1"]
+  cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev1"]
+  cluster_name         = module.eks.eks_cluster_names["dev1"]
+  region               = var.region
+  namespaces           = ["app1", "app2"]
+  rbac_roles = [
+    {
+      user       = "sre"
+      namespace  = "app1"
+      api_groups = [""]
+      resources  = ["pods", "services"]
+      verbs      = ["get", "list", "create", "delete"]
+    },
+    {
+      user       = "dba"
+      namespace  = "app2"
+      api_groups = [""]
+      resources  = ["pods", "services"]
+      verbs      = ["get", "list", "create", "delete"]
+    }
+  ]
+}
+
+module "kubernetes_dev2" {
+  source               = "../../modules/kubernetes"
+  providers            = { kubernetes = kubernetes.dev2 }
+  cluster_endpoint     = module.eks.eks_cluster_endpoints["dev2"]
+  cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev2"]
+  cluster_name         = module.eks.eks_cluster_names["dev2"]
+  region               = var.region
+  namespaces           = ["app1", "app2"]
+  rbac_roles = [
+    {
+      user       = "sre"
+      namespace  = "app1"
+      api_groups = [""]
+      resources  = ["pods", "services"]
+      verbs      = ["get", "list", "create", "delete"]
+    },
+    {
+      user       = "dba"
+      namespace  = "app2"
+      api_groups = [""]
+      resources  = ["pods", "services"]
+      verbs      = ["get", "list", "create", "delete"]
+    }
+  ]
+}
+
+module "kubernetes_dev3" {
+  source               = "../../modules/kubernetes"
+  providers            = { kubernetes = kubernetes.dev3 }
+  cluster_endpoint     = module.eks.eks_cluster_endpoints["dev3"]
+  cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev3"]
+  cluster_name         = module.eks.eks_cluster_names["dev3"]
+  region               = var.region
+  namespaces           = ["app1", "app2"]
+  rbac_roles = [
+    {
+      user       = "sre"
+      namespace  = "app1"
+      api_groups = [""]
+      resources  = ["pods", "services"]
+      verbs      = ["get", "list", "create", "delete"]
+    },
+    {
+      user       = "dba"
+      namespace  = "app2"
+      api_groups = [""]
+      resources  = ["pods", "services"]
+      verbs      = ["get", "list", "create", "delete"]
+    }
+  ]
 }

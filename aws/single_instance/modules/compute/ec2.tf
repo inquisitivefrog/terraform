@@ -46,12 +46,18 @@ resource "aws_instance" "public-ec2" {
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
     unzip awscliv2.zip
     ./aws/install
+    wget https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+    unzip terraform_1.5.7_linux_amd64.zip
+    sudo mv terraform /usr/local/bin/
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    sudo apt install -y python3 
-    sudo apt install -y python3-pip 
-    sudo apt install -y docker.io
-    pip3 install kubernetes
+    apt install -y python3
+    apt install -y python3-pip
+    apt install -y docker.io
+    usermod -aG docker ubuntu
+        systemctl enable docker
+    systemctl start docker
+    pip3 install kubernetes==32.0.1
     pip3 install boto3
     # Optional: CloudWatch Agent
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb

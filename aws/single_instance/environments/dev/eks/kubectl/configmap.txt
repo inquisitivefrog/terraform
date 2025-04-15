@@ -1,0 +1,11 @@
+
+kubectl edit configmap aws-auth -n kube-system
+mapUsers: |
+  - userarn: arn:aws:iam::ACCOUNT_ID:user/user1
+    username: user1
+    groups:
+      - system:masters
+  - userarn: arn:aws:iam::ACCOUNT_ID:user/user2
+    username: user2
+    groups:
+      - system:masters

@@ -39,21 +39,26 @@ resource "aws_iam_role_policy" "ec2_policy" {
       {
         Action   = ["iam:ListAttachedRolePolicies", "iam:GetRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::084375569056:role/EC2Role"
+        #Resource = "arn:aws:iam::084375569056:role/EC2Role"
+        Resource = var.create_iam_resources ? aws_iam_role.ec2_role[0].arn : data.aws_iam_role.ec2_role[0].arn
       }
     ]
   })
 }
 
 resource "aws_iam_role_policy" "ec2_eks_policy" {
-  name   = "EKSDescribeCluster"
+  name   = "ec2-eks-access-${var.env}-${var.random_suffix}"
   role   = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name  # Fixed here
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect   = "Allow"
-        Action   = "eks:*"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+          "eks:AccessKubernetesApi"
+        ]
         Resource = "*"
       }
     ]
