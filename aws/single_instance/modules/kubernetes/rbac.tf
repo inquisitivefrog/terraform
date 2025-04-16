@@ -11,7 +11,9 @@ resource "kubernetes_role" "role" {
     resources  = each.value.resources
     verbs      = each.value.verbs
   }
+  depends_on = [kubernetes_namespace.namespaces]
 }
+
 resource "kubernetes_role_binding" "binding" {
   for_each = { for role in var.rbac_roles : "${role.user}-${role.namespace}" => role }
   metadata {
@@ -28,4 +30,5 @@ resource "kubernetes_role_binding" "binding" {
     name      = kubernetes_role.role["${each.value.user}-${each.value.namespace}"].metadata[0].name
     api_group = "rbac.authorization.k8s.io"
   }
+  depends_on = [kubernetes_role.role, kubernetes_namespace.namespaces]
 }

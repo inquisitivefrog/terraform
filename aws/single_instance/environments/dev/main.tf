@@ -127,9 +127,11 @@ module "messages" {
 # Networking Module
 module "networking" {
   source                         = "../../modules/networking"
+  eks_cluster_sg_id              = module.eks.eks_cluster_sg_id
   igw_id                         = module.vpc.igw_id
   my_laptop_cidr_block           = var.my_laptop_cidr_block
   nat_id                         = module.vpc.nat_id
+  sg_public_ec2_id               = module.compute.public_ec2_sg_id
   vpc_cidr_block                 = var.vpc_cidr_block
   vpc_id                         = module.vpc.vpc_id
   vpc_subnet_private_cidr_blocks = module.vpc.vpc_subnet_private_cidr_blocks
@@ -178,7 +180,7 @@ module "eks" {
   eks_cluster_policy_attachments = module.identity.eks_cluster_policy_attachments
   eks_node_policy_attachments    = module.identity.eks_node_policy_attachments
   random_suffix                  = random_string.suffix.result
-  node_security_group_ids        = [module.networking.sg_eks_cluster_id]  # Use cluster SG for nodes
+  node_security_group_ids        = [module.networking.sg_eks_cluster_id] 
   cluster_names                  = ["dev1", "dev2", "dev3"]
 }
 
@@ -258,4 +260,70 @@ module "kubernetes_dev3" {
       verbs      = ["get", "list", "create", "delete"]
     }
   ]
+}
+
+resource "kubernetes_config_map_v1_data" "aws_auth_dev1" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+  data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = "arn:aws:iam::084375569056:role/eks-node-role-multi-x2fdd61h"
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      },
+      {
+        rolearn  = "arn:aws:iam::084375569056:role/EC2Role"
+        username = "ec2-admin"
+        groups   = ["system:masters"]
+      }
+    ])
+  }
+  force = true
+}
+
+resource "kubernetes_config_map_v1_data" "aws_auth_dev2" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+  data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = "arn:aws:iam::084375569056:role/eks-node-role-multi-x2fdd61h"
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      },
+      {
+        rolearn  = "arn:aws:iam::084375569056:role/EC2Role"
+        username = "ec2-admin"
+        groups   = ["system:masters"]
+      }
+    ])
+  }
+  force = true
+}
+
+resource "kubernetes_config_map_v1_data" "aws_auth_dev3" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+  data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = "arn:aws:iam::084375569056:role/eks-node-role-multi-x2fdd61h"
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      },
+      {
+        rolearn  = "arn:aws:iam::084375569056:role/EC2Role"
+        username = "ec2-admin"
+        groups   = ["system:masters"]
+      }
+    ])
+  }
+  force = true
 }

@@ -13,6 +13,43 @@ if [ "$CURRENT_DIR" != "$EXPECTED_DIR" ]; then
   exit 1
 fi
 
+# Function to destroy Terraform Kubernetes resources
+destroy_k8s() {
+  local dir=$1
+  echo "Destroying resources in $dir..."
+  cd "$dir" || { echo "Failed to cd into $dir"; return 1; }
+  terraform init -backend-config=backend.hcl >/dev/null 2>&1 || terraform init >/dev/null 2>&1 || echo "Terraform init failed in $dir (continuing anyway)"
+  for resource in `terraform state list | grep kubernetes_deployment`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  for resource in `terraform state list | grep kubernetes_namespace`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  for resource in `terraform state list | grep kubernetes_resource_quota`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  for resource in `terraform state list | grep kubernetes_config_map`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  for resource in `terraform state list | grep kubernetes_secret`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  for resource in `terraform state list | grep kubernetes_role_binding`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  for resource in `terraform state list | grep kubernetes_role`
+  do
+      terraform state rm '$resource' >/dev/null 2>&1
+  done
+  cd - >/dev/null || exit 1
+}
+
 # Function to destroy Terraform resources
 destroy_tf() {
   local dir=$1
@@ -51,6 +88,8 @@ wipe_bucket() {
 echo "Starting full cleanup..."
 
 # Destroy single_instance environments first (depends on tfstate buckets)
+destroy_k8s "single_instance/environments/dev"
+destroy_k8s "single_instance/environments/prod"
 destroy_tf "single_instance/environments/dev"
 destroy_tf "single_instance/environments/prod"
 

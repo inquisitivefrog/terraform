@@ -29,3 +29,8 @@ output "private_ec2_arn" {
   value       = aws_instance.private-ec2.arn
   description = "ARN of the private EC2 instance"
 }
+
+output "public_ec2_sg_id" {
+  value       = tolist(aws_instance.public-ec2.vpc_security_group_ids)[0]
+  description = "Security group ID for public EC2 instance"
+}

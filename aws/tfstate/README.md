@@ -47,7 +47,7 @@ tim@Tims-MBP % pwd
 tim@Tims-MBP % pwd
 /Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environment/prod
 
-1. terraform init -backend-config=backend.hcl 
+1. terraform init -backend-config=backend.hcl  -reconfigure
 2. terraform validate
 3. terraform plan -out plan-prod
 4. terraform apply plan-prod
@@ -57,7 +57,7 @@ tim@Tims-MBP % pwd
 tim@Tims-MBP % pwd
 /Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environment/dev
 
-1. terraform init -backend-config=backend.hcl 
+1. terraform init -backend-config=backend.hcl  -reconfigure
 2. terraform validate
 3. terraform plan -out plan-dev
 4. terraform apply plan-dev

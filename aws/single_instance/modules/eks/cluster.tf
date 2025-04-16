@@ -7,10 +7,11 @@ resource "aws_eks_cluster" "this" {
   role_arn = var.eks_cluster_role_arn
   version  = var.eks_version
   vpc_config {
-    subnet_ids         = var.vpc_subnet_private_ids
-    security_group_ids = [var.eks_cluster_sg_id]
+    subnet_ids              = var.vpc_subnet_private_ids
+    security_group_ids      = [var.eks_cluster_sg_id]
     endpoint_public_access  = false
     endpoint_private_access = true
+    public_access_cidrs     = []
   }
   encryption_config {
     provider {

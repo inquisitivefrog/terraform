@@ -55,7 +55,7 @@ resource "aws_instance" "public-ec2" {
     apt install -y python3-pip
     apt install -y docker.io
     usermod -aG docker ubuntu
-        systemctl enable docker
+    systemctl enable docker
     systemctl start docker
     pip3 install kubernetes==32.0.1
     pip3 install boto3

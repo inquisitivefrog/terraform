@@ -172,3 +172,12 @@ resource "aws_security_group" "eks_cluster" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+resource "aws_security_group_rule" "eks_cluster_ingress" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = var.eks_cluster_sg_id
+  source_security_group_id = var.sg_public_ec2_id
+}

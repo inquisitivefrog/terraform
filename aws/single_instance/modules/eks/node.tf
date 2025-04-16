@@ -34,8 +34,8 @@ resource "aws_eks_node_group" "this" {
   node_role_arn   = var.eks_node_role_arn
   subnet_ids      = var.vpc_subnet_private_ids
   scaling_config {
-    desired_size = 2
-    max_size     = 2
+    desired_size = 3
+    max_size     = 4
     min_size     = 1
   }
   launch_template {
