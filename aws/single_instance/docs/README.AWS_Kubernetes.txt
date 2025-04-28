@@ -544,5 +544,53 @@ kube-system   kube-proxy-b5gbm                   1/1     Running   0          32
 kube-system   kube-proxy-fcnpr                   1/1     Running   0          3h45m   10.0.0.37   ip-10-0-0-37.us-west-1.compute.internal   <none>           <none>
 kube-system   kube-proxy-mgms8                   1/1     Running   0          3h45m   10.0.0.57   ip-10-0-0-57.us-west-1.compute.internal   <none>           <none>
 
+tim@Tims-MacBook-Pro dev % ls ../../modules/kubernetes 
+heartbeat.tf	outputs.tf	rbac.tf		terraform.tf
+namespaces.tf	quotas.tf	secrets.tf	variables.tf
 
+kubectl get nodes
+kubectl describe configmap aws-auth -n kube-system
+kubectl get deployments -n app1
+kubectl describe deployment heartbeat-app -n app1
+kubectl logs -l app=heartbeat -n app1
+kubectl get roles -n app1 --context=arn:aws:eks:us-west-2:<account_id>:cluster/eks-dev3-<random_suffix>
+kubectl get deployments -n app2
+aws eks describe-cluster --region us-west-2 --name eks-dev1-x2fdd61h
+aws eks describe-cluster --region us-west-2 --name eks-dev2-x2fdd61h
+aws eks describe-cluster --region us-west-2 --name eks-dev3-x2fdd61h
+aws eks update-kubeconfig --region us-west-2 --name eks-dev1-x2fdd61h --alias dev1
+aws eks update-kubeconfig --region us-west-2 --name eks-dev2-x2fdd61h --alias dev2
+aws eks update-kubeconfig --region us-west-2 --name eks-dev3-x2fdd61h --alias dev3
+kubectl get nodes --context dev1
+kubectl get nodes --context dev2
+kubectl get nodes --context dev3
+
+aws eks describe-cluster --region us-west-2 --name eks-dev3-x2fdd61h --query 'cluster.{status:status,endpoint:endpoint,publicAccess:resourcesVpcConfig.endpointPublicAccess}'
+
+aws eks update-kubeconfig --region us-west-2 --name eks-dev1-x2fdd61h --alias dev1-admin
+aws eks update-kubeconfig --region us-west-2 --name eks-dev2-x2fdd61h --alias dev2-admin
+aws eks update-kubeconfig --region us-west-2 --name eks-dev3-x2fdd61h --alias dev3-admin
+kubectl edit configmap aws-auth -n kube-system --context dev1-admin
+kubectl get configmap aws-auth -n kube-system -o yaml --context dev1-admin
+kubectl edit configmap aws-auth -n kube-system --context dev2-admin
+kubectl get configmap aws-auth -n kube-system -o yaml --context dev2-admin
+kubectl edit configmap aws-auth -n kube-system --context dev3-admin
+kubectl get configmap aws-auth -n kube-system -o yaml --context dev3-admin
+
+terraform state list | grep kubernetes_resource_quota   
+terraform state rm 'module.kubernetes_dev1.kubernetes_resource_quota.quota["app1"]'
+terraform state list | grep kubernetes_config_map   
+terraform state rm 'module.kubernetes_dev1.kubernetes_config_map.app_config["app1"]'
+terraform state list | grep kubernetes_secret 
+terraform state rm 'module.kubernetes_dev1.kubernetes_secret.app_secret["app1"]'
+terraform state list | grep kubernetes_namespace
+terraform state rm 'module.kubernetes_dev1.kubernetes_namespace.namespaces["app1"]'
+terraform state list | grep kubernetes_deployment
+terraform state rm module.kubernetes_dev1.kubernetes_deployment.heartbeat
+terraform state list | grep kubernetes_role 
+terraform state rm 'module.kubernetes_dev1.kubernetes_role.role["dba-app2"]'
+terraform state rm 'module.kubernetes_dev1.kubernetes_role_binding.binding["dba-app2"]'
+
+aws eks describe-nodegroup --cluster-name eks-dev1-x2fdd61h --nodegroup-name ng-dev1-x2fdd61h --region us-west-2
+aws eks update-nodegroup-config --cluster-name eks-dev1-x2fdd61h --nodegroup-name ng-dev1-x2fdd61h --scaling-config "desiredSize=0,minSize=0,maxSize=0" --region us-west-2
 

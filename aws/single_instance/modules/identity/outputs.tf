@@ -1,6 +1,10 @@
 # File 19: modules/identity/outputs.tf
 # https://developer.hashicorp.com/terraform/language/values/outputs
 
+output "alb_controller_role_arn" {
+  value = var.enable_ingress ? aws_iam_role.alb_controller[0].arn : ""
+}
+
 output "ecs_task_execution_role_arn" {
   value = var.create_iam_resources ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.ecs_task_execution_role[0].arn
 }

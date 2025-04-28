@@ -15,6 +15,12 @@ variable "cluster_name" {
   description = "EKS cluster name"
 }
 
+variable "enable_ingress" {
+  description = "Enable AWS ALB Ingress Controller"
+  type        = bool
+  default     = false
+}
+
 variable "region" {
   type        = string
   description = "AWS region"
@@ -36,4 +42,9 @@ variable "namespaces" {
   type        = list(string)
   description = "List of namespaces to create"
   default     = []
+}
+
+variable "vpc_id" {
+  description = "VPC ID for the EKS cluster"
+  type        = string
 }

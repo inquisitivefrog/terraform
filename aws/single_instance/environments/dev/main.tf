@@ -167,31 +167,36 @@ module "vpc" {
 
 module "eks" {
   source                         = "../../modules/eks"
-  env                            = var.env
+  cluster_names                  = ["dev1", "dev2", "dev3"]
+  cluster_role_arn               = module.identity.eks_cluster_role_arn
+  eks_cluster_policy_attachments = module.identity.eks_cluster_policy_attachments
+  eks_cluster_role_arn           = module.identity.eks_cluster_role_arn
+  eks_cluster_sg_id              = module.networking.sg_eks_cluster_id
+  eks_node_policy_attachments    = module.identity.eks_node_policy_attachments
+  eks_node_role_arn              = module.identity.eks_node_role_arn
   eks_version                    = var.eks_version
+  env                            = var.env
   instance_type                  = var.instance_type
   kms_key_arn                    = module.kms.eks_key_arn
-  vpc_id                         = module.vpc.vpc_id
-  vpc_cidr_block                 = var.vpc_cidr_block
-  vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids
-  eks_cluster_sg_id              = module.networking.sg_eks_cluster_id
-  eks_cluster_role_arn           = module.identity.eks_cluster_role_arn
-  eks_node_role_arn              = module.identity.eks_node_role_arn
-  eks_cluster_policy_attachments = module.identity.eks_cluster_policy_attachments
-  eks_node_policy_attachments    = module.identity.eks_node_policy_attachments
-  random_suffix                  = random_string.suffix.result
+  node_role_arn                  = module.identity.eks_node_role_arn
   node_security_group_ids        = [module.networking.sg_eks_cluster_id] 
-  cluster_names                  = ["dev1", "dev2", "dev3"]
+  random_suffix                  = random_string.suffix.result
+  subnet_ids                     = module.vpc.private_subnets
+  vpc_cidr_block                 = var.vpc_cidr_block
+  vpc_id                         = module.vpc.vpc_id
+  vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids
 }
 
 module "kubernetes_dev1" {
-  source               = "../../modules/kubernetes"
-  providers            = { kubernetes = kubernetes.dev1 }
-  cluster_endpoint     = module.eks.eks_cluster_endpoints["dev1"]
+  source                 = "../../modules/kubernetes"
+  cluster_endpoint       = module.eks.eks_cluster_endpoints["dev1"]
   cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev1"]
-  cluster_name         = module.eks.eks_cluster_names["dev1"]
-  region               = var.region
-  namespaces           = ["app1", "app2"]
+  cluster_name           = module.eks.eks_cluster_names["dev1"]
+  enable_ingress         = true
+  namespaces             = ["app1", "app2"]
+  providers              = { kubernetes = kubernetes.dev1 }
+  region                 = var.region
+  vpc_id                 = module.vpc.vpc_id
   rbac_roles = [
     {
       user       = "sre"
@@ -211,13 +216,15 @@ module "kubernetes_dev1" {
 }
 
 module "kubernetes_dev2" {
-  source               = "../../modules/kubernetes"
-  providers            = { kubernetes = kubernetes.dev2 }
-  cluster_endpoint     = module.eks.eks_cluster_endpoints["dev2"]
+  source                 = "../../modules/kubernetes"
+  cluster_endpoint       = module.eks.eks_cluster_endpoints["dev2"]
   cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev2"]
-  cluster_name         = module.eks.eks_cluster_names["dev2"]
-  region               = var.region
-  namespaces           = ["app1", "app2"]
+  cluster_name           = module.eks.eks_cluster_names["dev2"]
+  enable_ingress         = true
+  namespaces             = ["app1", "app2"]
+  providers              = { kubernetes = kubernetes.dev2 }
+  region                 = var.region
+  vpc_id                 = module.vpc.vpc_id
   rbac_roles = [
     {
       user       = "sre"
@@ -237,13 +244,15 @@ module "kubernetes_dev2" {
 }
 
 module "kubernetes_dev3" {
-  source               = "../../modules/kubernetes"
-  providers            = { kubernetes = kubernetes.dev3 }
-  cluster_endpoint     = module.eks.eks_cluster_endpoints["dev3"]
+  source                 = "../../modules/kubernetes"
+  cluster_endpoint       = module.eks.eks_cluster_endpoints["dev3"]
   cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev3"]
-  cluster_name         = module.eks.eks_cluster_names["dev3"]
-  region               = var.region
-  namespaces           = ["app1", "app2"]
+  cluster_name           = module.eks.eks_cluster_names["dev3"]
+  enable_ingress         = true
+  namespaces             = ["app1", "app2"]
+  providers              = { kubernetes = kubernetes.dev3 }
+  region                 = var.region
+  vpc_id                 = module.vpc.vpc_id
   rbac_roles = [
     {
       user       = "sre"
@@ -263,6 +272,7 @@ module "kubernetes_dev3" {
 }
 
 resource "kubernetes_config_map_v1_data" "aws_auth_dev1" {
+  provider = kubernetes.dev1
   metadata {
     name      = "aws-auth"
     namespace = "kube-system"
@@ -270,12 +280,12 @@ resource "kubernetes_config_map_v1_data" "aws_auth_dev1" {
   data = {
     mapRoles = yamlencode([
       {
-        rolearn  = "arn:aws:iam::084375569056:role/eks-node-role-multi-x2fdd61h"
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role-multi-x2fdd61h"
         username = "system:node:{{EC2PrivateDNSName}}"
         groups   = ["system:bootstrappers", "system:nodes"]
       },
       {
-        rolearn  = "arn:aws:iam::084375569056:role/EC2Role"
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/EC2Role"
         username = "ec2-admin"
         groups   = ["system:masters"]
       }
@@ -285,6 +295,7 @@ resource "kubernetes_config_map_v1_data" "aws_auth_dev1" {
 }
 
 resource "kubernetes_config_map_v1_data" "aws_auth_dev2" {
+  provider = kubernetes.dev2
   metadata {
     name      = "aws-auth"
     namespace = "kube-system"
@@ -292,12 +303,12 @@ resource "kubernetes_config_map_v1_data" "aws_auth_dev2" {
   data = {
     mapRoles = yamlencode([
       {
-        rolearn  = "arn:aws:iam::084375569056:role/eks-node-role-multi-x2fdd61h"
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role-multi-x2fdd61h"
         username = "system:node:{{EC2PrivateDNSName}}"
         groups   = ["system:bootstrappers", "system:nodes"]
       },
       {
-        rolearn  = "arn:aws:iam::084375569056:role/EC2Role"
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/EC2Role"
         username = "ec2-admin"
         groups   = ["system:masters"]
       }
@@ -307,6 +318,7 @@ resource "kubernetes_config_map_v1_data" "aws_auth_dev2" {
 }
 
 resource "kubernetes_config_map_v1_data" "aws_auth_dev3" {
+  provider = kubernetes.dev3
   metadata {
     name      = "aws-auth"
     namespace = "kube-system"
@@ -314,12 +326,12 @@ resource "kubernetes_config_map_v1_data" "aws_auth_dev3" {
   data = {
     mapRoles = yamlencode([
       {
-        rolearn  = "arn:aws:iam::084375569056:role/eks-node-role-multi-x2fdd61h"
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role-multi-x2fdd61h"
         username = "system:node:{{EC2PrivateDNSName}}"
         groups   = ["system:bootstrappers", "system:nodes"]
       },
       {
-        rolearn  = "arn:aws:iam::084375569056:role/EC2Role"
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/EC2Role"
         username = "ec2-admin"
         groups   = ["system:masters"]
       }
