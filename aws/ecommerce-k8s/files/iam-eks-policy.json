@@ -1,0 +1,22 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "eks:DescribeCluster",
+                "eks:ListClusters",
+                "eks:AccessKubernetesApi",
+                "eks:ListAccessEntries",
+                "eks:DescribeAccessEntry",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicies",
+                "iam:ListPolicyVersions",
+                "iam:GetRole",
+                "iam:ListRoles"
+            ],
+            "Resource": "*"
+        }
+    ]
+}

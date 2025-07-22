@@ -1,0 +1,9 @@
+# values.yaml
+clusterName: ecommerce-cluster
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::084375569056:role/ecommerce-cluster-alb-controller
+region: us-east-1
+vpcId: vpc-024a85329deac8669

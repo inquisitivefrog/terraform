@@ -1,12 +1,29 @@
 # modules/networking/main.tf
-resource "aws_security_group_rule" "eks_control_plane_ingress" {
+
+resource "aws_security_group" "cluster" {
+  name   = "${var.cluster_name}-cluster"
+  vpc_id = var.vpc_id
+  tags = {
+    Name = "${var.cluster_name}-cluster"
+  }
+}
+
+resource "aws_security_group_rule" "app_ingress_http" {
   type              = "ingress"
-  from_port         = 443
-  to_port           = 443
+  from_port         = var.app_port
+  to_port           = var.app_port
   protocol          = "tcp"
-  cidr_blocks       = var.cluster_endpoint_public_access_cidrs
   security_group_id = var.cluster_security_group_id
-  description       = "Allow ingress to EKS control plane from specified CIDRs"
+  cidr_blocks       = var.cluster_endpoint_public_access_cidrs
+}
+
+resource "aws_security_group_rule" "eks_control_plane_ingress" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = var.cluster_security_group_id
+  source_security_group_id = aws_security_group.cluster.id
 }
 
 resource "aws_vpc_endpoint" "s3" {

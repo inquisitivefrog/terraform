@@ -9,7 +9,7 @@ ecommerce-k8s/
 │   ├── ingress.yaml
 
 Commands
-1. terraform init
+1. terraform init -backend-config=backend.hcl 
 2. terraform plan -out=tfplan
 3. terraform apply tfplan
 4. aws eks update-kubeconfig --region us-east-1 --name ecommerce-cluster

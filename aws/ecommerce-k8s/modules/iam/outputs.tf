@@ -1,10 +1,12 @@
 # modules/iam/outputs.tf
-output "alb_controller_role_arn" {
-  description = "ARN of the ALB controller IAM role"
-  value       = aws_iam_role.alb_controller.arn
+output "eks_cluster_role_arn" {
+  value = aws_iam_role.eks.arn
 }
 
-output "node_group_elb_policy_arn" {
-  description = "ARN of the ELB policy for the node group"
-  value       = aws_iam_policy.node_group_elb.arn
+output "node_role_arn" {
+  value = aws_iam_role.node.arn
+}
+
+output "terraform_role_arn" {
+  value = aws_iam_role.terraform_admin.arn
 }

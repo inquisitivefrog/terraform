@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ecommerce-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ecommerce-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ecommerce-app.selectorLabels" . | nindent 8 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ecommerce-app.selectorLabels" . | nindent 12 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 12 }}
+        {{- end }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 5678
+              protocol: TCP

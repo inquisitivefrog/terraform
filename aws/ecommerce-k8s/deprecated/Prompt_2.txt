@@ -1,0 +1,17 @@
+Actually, we have been working on this problem for a few days.   I will show the repository layout.  We have three subdirs: terraform-state, stage1-infra, and stage2-k8s to be deployed in that order.  Usually, the terraform-state completes as configured without a need to tune.  Most of the time, the same can be said for stage1-infra.  Stage2-k8s however always seems to require some tweaks so expect to offer lots of advice there.   I will show the filesystem layout and the content of each main.tf file.   Eventually, so please don’t run ahead, I will need help with ArgoCD and integrating the application itself which you recommended storing in a separate repository.  As we have had difficulties with the Kubernetes and Helm, you suggested using a test app until they are resolved.  Lastly, you have repeatedly flipped between helm v2 and helm v3 for various reasons.  As I am learning, I should probably start with Newer Is Better but many large corporations prefer If It Isn’t Broken Don’t Fix It so won’t upgrade until older versions are actually deprecated and no longer supported by service contract.  There may be some extra files, no longer needed, due to sometimes recommending use of kubectl or helm rather than automating with terraform.  When you suspect them, feel free to request a peek at content and to recommend OK To Delete Now.  Also, to reduce independent TF file size, I have extracted JSON or YAML content to separate files ingested by terraform.  When suggesting updates to TF files, please note if JSON or YAML files need to be updated as well.
+
+tim@Tims-MacBook-Pro ecommerce-k8s % pwd             
+/Users/tim/Documents/workspace/sre/terraform/aws/ecommerce-k8s
+tim@Tims-MacBook-Pro ecommerce-k8s % find . -name "*.hcl" -o -name "*.tf" -o -name "*.tfvars" -o -name "*.json" -o -name "*.yaml" 
+tim@Tims-MacBook-Pro ecommerce-k8s % cat terraform-state/main.tf 
+
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage1-infra/backend.hcl  
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage1-infra/terraform.tfvars 
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage1-infra/providers.tf    
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage1-infra/main.tf     
+
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage2-k8s/backend.hcl 
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage2-k8s/terraform.tfvars 
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage2-k8s/providers.tf    
+tim@Tims-MacBook-Pro ecommerce-k8s % cat stage2-k8s/main.tf   
+

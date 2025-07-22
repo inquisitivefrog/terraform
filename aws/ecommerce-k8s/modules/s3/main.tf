@@ -1,11 +1,14 @@
-# modules/s3/main.tf
 resource "aws_s3_bucket" "app_bucket" {
-  bucket = var.bucket_name
-  force_destroy = true # Allows deletion even if non-empty (use with caution)
-
+  bucket        = var.bucket_name
+  force_destroy = true
   tags = {
-    Name        = "${var.cluster_name}-app-bucket"
-    Environment = "prod"
+    Name                               = "${var.cluster_name}-app-bucket"
+    Environment                        = "prod"
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+  }
+  timeouts {
+    create = "10m"
+    delete = "10m"
   }
 }
 
@@ -26,7 +29,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_bucket_encryp
 }
 
 resource "aws_s3_bucket_public_access_block" "app_bucket_public_access" {
-  bucket = aws_s3_bucket.app_bucket.id
+  bucket                  = aws_s3_bucket.app_bucket.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true

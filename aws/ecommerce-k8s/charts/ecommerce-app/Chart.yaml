@@ -1,0 +1,4 @@
+apiVersion: v2
+name: ecommerce-app
+description: A Helm chart for ecommerce-app
+version: 0.1.0
