@@ -5,7 +5,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.65"
     }
   }
 }
@@ -14,14 +14,16 @@ provider "aws" {
   region = "us-west-2"
 }
 
+data "aws_caller_identity" "current" {}
+
 module "storage" {
   source                   = "../../modules/storage"
-  account_id               = "084375569056"
+  account_id               = data.aws_caller_identity.current.account_id
   employer                 = "Fireworks Inc"
   env                      = "dev"
   random_suffix            = ""
   region                   = "us-west-2"
   tfstate_bucket           = "bluedragon-tfstate-admin-dev"
-  state_bucket_key_arn     = "arn:aws:kms:us-west-2:084375569056:key/dummy"
-  state_log_bucket_key_arn = "arn:aws:kms:us-west-2:084375569056:key/dummy"
+  state_bucket_key_arn     = "arn:aws:kms:us-west-2:${data.aws_caller_identity.current.account_id}:key/dummy"
+  state_log_bucket_key_arn = "arn:aws:kms:us-west-2:${data.aws_caller_identity.current.account_id}:key/dummy"
 }

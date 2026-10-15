@@ -75,7 +75,7 @@ resource "aws_kms_key" "symmetric_key" {
         Sid    = "Allow administration of the key"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:user/bluedragon"
+          AWS = "arn:aws:iam::${var.account_id}:user/${var.admin_user_name}"
         }
         Action = [
           "kms:ReplicateKey",

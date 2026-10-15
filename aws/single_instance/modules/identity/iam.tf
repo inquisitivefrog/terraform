@@ -7,6 +7,8 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_group_membership
 # https://registry.terraform.io/providers/-/aws/latest/docs/resources/iam_group_policy_attachment
 
+data "aws_region" "current" {}
+
 resource "aws_iam_user" "sre" {
   count = var.create_iam_resources ? 1 : 0
   name  = "sre"
@@ -185,7 +187,7 @@ resource "aws_iam_policy" "admin_policy" {
           [var.s3_bucket_arn, "${var.s3_bucket_arn}/*"],
           [var.elasticache_arn],
           [var.ecs_cluster_arn, var.ecs_service_arn],
-          ["arn:aws:kms:us-west-1:084375569056:key/*"],
+          ["arn:aws:kms:${data.aws_region.current.region}:${var.account_id}:key/*"],
           var.sns_topic_arns
         )
       },
@@ -209,7 +211,7 @@ resource "aws_iam_policy" "admin_policy" {
           var.create_iam_resources ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.ecs_task_execution_role[0].arn,
           var.create_iam_resources ? aws_iam_role.admin_role[0].arn : data.aws_iam_role.admin_role[0].arn,
           var.create_iam_resources ? aws_iam_role.developer_role[0].arn : data.aws_iam_role.developer_role[0].arn,
-          "arn:aws:iam::084375569056:policy/*"
+          "arn:aws:iam::${var.account_id}:policy/*"
         ]
       },
       {

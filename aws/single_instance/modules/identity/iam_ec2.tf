@@ -39,7 +39,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
       {
         Action = ["iam:ListAttachedRolePolicies", "iam:GetRole"]
         Effect = "Allow"
-        #Resource = "arn:aws:iam::084375569056:role/EC2Role"
+        #Resource = "arn:aws:iam::${var.account_id}:role/EC2Role"
         Resource = var.create_iam_resources ? aws_iam_role.ec2_role[0].arn : data.aws_iam_role.ec2_role[0].arn
       }
     ]

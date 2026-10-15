@@ -8,7 +8,6 @@ variable "cluster_name" {
 variable "admin_user_name" {
   description = "IAM user name for admin access"
   type        = string
-  default     = "bluedragon"
 }
 
 variable "terraform_role_arn" {

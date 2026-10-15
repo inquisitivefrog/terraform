@@ -46,11 +46,11 @@ variable "node_groups" {
 }
 
 variable "admin_user_arn" {
-  type    = string
-  default = "arn:aws:iam::084375569056:user/bluedragon"
+  type        = string
+  description = "ARN of the IAM user granted EKS cluster admin access"
 }
 
 variable "admin_user_name" {
-  type    = string
-  default = "bluedragon"
+  type        = string
+  description = "Name of the IAM user granted EKS cluster admin access"
 }

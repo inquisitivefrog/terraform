@@ -5,7 +5,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "5.94.1"
+      version = "~> 6.65"
     }
     null = {
       source  = "hashicorp/null"
@@ -47,6 +47,7 @@ module "compute" {
   source                      = "../../modules/compute"
   ec2_instance_profile_name   = module.identity.ec2_instance_profile_name
   ec2_keypair                 = var.ec2_keypair
+  ssh_private_key_path        = var.ssh_private_key_path
   ecs_task_execution_role_arn = module.identity.ecs_task_execution_role_arn
   instance_type               = var.instance_type
   sg_private_ec2_id           = module.networking.sg_private_ec2_id
@@ -73,10 +74,11 @@ module "identity" {
 }
 
 module "kms" {
-  source     = "../../modules/kms"
-  account_id = data.aws_caller_identity.current.account_id
-  region     = var.region
-  vpc_id     = module.vpc.vpc_id
+  source          = "../../modules/kms"
+  account_id      = data.aws_caller_identity.current.account_id
+  admin_user_name = var.admin_user_name
+  region          = var.region
+  vpc_id          = module.vpc.vpc_id
 }
 
 module "messages" {

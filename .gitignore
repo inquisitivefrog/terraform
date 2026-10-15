@@ -29,3 +29,5 @@ bootstrap-dev
 bootstrap-prod
 bucket-dev
 bucket-prod
+dev-bucket
+prod-bucket

@@ -6,6 +6,8 @@ data "aws_eks_cluster_auth" "this" {
   name = "ecommerce-cluster"
 }
 
+data "aws_caller_identity" "current" {}
+
 data "terraform_remote_state" "stage1_infra" {
   backend = "s3"
   config = {
@@ -49,8 +51,8 @@ resource "kubernetes_config_map_v1" "aws_auth" {
     ])
     mapUsers = yamlencode([
       {
-        userarn  = "arn:aws:iam::084375569056:user/bluedragon"
-        username = "bluedragon"
+        userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.admin_user_name}"
+        username = var.admin_user_name
         groups   = ["system:masters"]
       }
     ])
@@ -311,7 +313,7 @@ resource "kubernetes_manifest" "bluedragon_admin_clusterrolebinding" {
     subjects = [
       {
         kind     = "User"
-        name     = "bluedragon"
+        name     = var.admin_user_name
         apiGroup = "rbac.authorization.k8s.io"
       }
     ]

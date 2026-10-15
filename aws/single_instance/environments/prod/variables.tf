@@ -9,7 +9,6 @@ variable "availability_zones" {
 
 variable "ec2_keypair" {
   type        = string
-  default     = "nobody"
   description = "AWS EC2 keypair name"
 }
 
@@ -53,4 +52,14 @@ variable "vpc_cidr_block" {
   type        = string
   default     = "10.0.0.0/16"
   description = "IPv4 network address range"
+}
+
+variable "admin_user_name" {
+  type        = string
+  description = "IAM user allowed to administer the symmetric KMS key"
+}
+
+variable "ssh_private_key_path" {
+  type        = string
+  description = "Local path to the private key for ec2_keypair"
 }
