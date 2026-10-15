@@ -31,6 +31,12 @@ variable "elasticache_arn" {
   description = "ARN of the ElastiCache instance"
 }
 
+variable "enable_ingress" {
+  type        = bool
+  default     = false
+  description = "Enable ALB controller IAM role creation"
+}
+
 variable "env" {
   type        = string
   description = "Environment name (e.g., prod, dev)"

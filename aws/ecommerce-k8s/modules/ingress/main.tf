@@ -5,8 +5,8 @@ resource "kubernetes_ingress_v1" "app" {
     name      = "${var.app_name}-ingress"
     namespace = var.namespace
     annotations = {
-      "alb.ingress.kubernetes.io/scheme"        = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type"   = "ip"
+      "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"      = "ip"
       "alb.ingress.kubernetes.io/healthcheck-path" = "/"
       "alb.ingress.kubernetes.io/healthcheck-port" = "5678"
     }

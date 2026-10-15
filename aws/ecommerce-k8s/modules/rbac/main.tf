@@ -15,7 +15,7 @@ resource "kubernetes_manifest" "terraform_admin_clusterrole" {
 }
 
 resource "kubernetes_manifest" "terraform_admin_clusterrolebinding" {
-  manifest = yamldecode(file("${path.module}/../../files/terraform-admin-clusterrolebinding.yaml"))
+  manifest   = yamldecode(file("${path.module}/../../files/terraform-admin-clusterrolebinding.yaml"))
   depends_on = [kubernetes_manifest.terraform_admin_clusterrole]
 }
 
@@ -24,6 +24,6 @@ resource "kubernetes_manifest" "bluedragon_impersonator_clusterrole" {
 }
 
 resource "kubernetes_manifest" "bluedragon_impersonator_clusterrolebinding" {
-  manifest = yamldecode(file("${path.module}/../../files/bluedragon-impersonator-clusterrolebinding.yaml"))
+  manifest   = yamldecode(file("${path.module}/../../files/bluedragon-impersonator-clusterrolebinding.yaml"))
   depends_on = [kubernetes_manifest.bluedragon_impersonator_clusterrole]
 }

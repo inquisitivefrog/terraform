@@ -26,8 +26,8 @@ data "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name   = "EC2Policy"
-  role   = var.create_iam_resources ? aws_iam_role.ec2_role[0].id : data.aws_iam_role.ec2_role[0].id
+  name = "EC2Policy"
+  role = var.create_iam_resources ? aws_iam_role.ec2_role[0].id : data.aws_iam_role.ec2_role[0].id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -37,8 +37,8 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Resource = [var.public_ec2_arn, var.private_ec2_arn]
       },
       {
-        Action   = ["iam:ListAttachedRolePolicies", "iam:GetRole"]
-        Effect   = "Allow"
+        Action = ["iam:ListAttachedRolePolicies", "iam:GetRole"]
+        Effect = "Allow"
         #Resource = "arn:aws:iam::084375569056:role/EC2Role"
         Resource = var.create_iam_resources ? aws_iam_role.ec2_role[0].arn : data.aws_iam_role.ec2_role[0].arn
       }
@@ -47,13 +47,13 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_role_policy" "ec2_eks_policy" {
-  name   = "ec2-eks-access-${var.env}-${var.random_suffix}"
-  role   = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name  # Fixed here
+  name = "ec2-eks-access-${var.env}-${var.random_suffix}"
+  role = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name # Fixed here
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
+        Effect = "Allow"
         Action = [
           "eks:DescribeCluster",
           "eks:ListClusters",

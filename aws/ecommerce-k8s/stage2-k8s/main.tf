@@ -122,14 +122,14 @@ resource "random_password" "argocd_secretkey" {
 }
 
 resource "helm_release" "argocd" {
-  name       = "argocd"
-  repository = "https://argoproj.github.io/argo-helm"
-  chart      = "argo-cd"
-  namespace  = "argocd"
-  version    = "2.17.0"
+  name             = "argocd"
+  repository       = "https://argoproj.github.io/argo-helm"
+  chart            = "argo-cd"
+  namespace        = "argocd"
+  version          = "2.17.0"
   create_namespace = true
-  timeout    = 1200
-  wait       = true
+  timeout          = 1200
+  wait             = true
 
   values = [
     yamlencode({
@@ -150,7 +150,7 @@ resource "helm_release" "argocd" {
           "--insecure"
         ]
         secret = {
-          create = true
+          create          = true
           serverSecretKey = random_password.argocd_secretkey.result
         }
         resources = {
@@ -205,12 +205,12 @@ resource "helm_release" "argocd" {
 }
 
 resource "helm_release" "ecommerce_app" {
-  name       = "ecommerce-app"
-  chart      = "./../charts/ecommerce-app"
-  namespace  = "default"
+  name             = "ecommerce-app"
+  chart            = "./../charts/ecommerce-app"
+  namespace        = "default"
   create_namespace = true
-  timeout    = 600
-  wait       = true
+  timeout          = 600
+  wait             = true
 
   set {
     name  = "replicaCount"
@@ -310,14 +310,14 @@ resource "kubernetes_manifest" "bluedragon_admin_clusterrolebinding" {
     }
     subjects = [
       {
-        kind      = "User"
-        name      = "bluedragon"
+        kind     = "User"
+        name     = "bluedragon"
         apiGroup = "rbac.authorization.k8s.io"
       }
     ]
     roleRef = {
-      kind      = "ClusterRole"
-      name      = "bluedragon-admin"
+      kind     = "ClusterRole"
+      name     = "bluedragon-admin"
       apiGroup = "rbac.authorization.k8s.io"
     }
   }
@@ -355,8 +355,8 @@ resource "kubernetes_manifest" "bluedragon_impersonator_clusterrolebinding" {
       }
     ]
     roleRef = {
-      kind      = "ClusterRole"
-      name      = "bluedragon-impersonator"
+      kind     = "ClusterRole"
+      name     = "bluedragon-impersonator"
       apiGroup = "rbac.authorization.k8s.io"
     }
   }
@@ -388,14 +388,14 @@ resource "kubernetes_manifest" "terraform_admin_clusterrolebinding" {
     }
     subjects = [
       {
-        kind      = "User"
-        name      = "terraform-admin"
+        kind     = "User"
+        name     = "terraform-admin"
         apiGroup = "rbac.authorization.k8s.io"
       }
     ]
     roleRef = {
-      kind      = "ClusterRole"
-      name      = "terraform-admin"
+      kind     = "ClusterRole"
+      name     = "terraform-admin"
       apiGroup = "rbac.authorization.k8s.io"
     }
   }

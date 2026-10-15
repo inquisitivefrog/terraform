@@ -8,7 +8,7 @@ variable "account_id" {
 }
 
 variable "env" {
-  type = string
+  type        = string
   description = "environment: prod, dev"
 }
 

@@ -4,7 +4,7 @@ resource "kubernetes_config_map" "app_config" {
     namespace = kubernetes_namespace.app1.metadata[0].name
   }
   data = {
-    "APP_ENV" = "dev"
+    "APP_ENV"   = "dev"
     "LOG_LEVEL" = "info"
   }
 }

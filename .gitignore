@@ -22,3 +22,10 @@ config
 # Logs or temporary files
 *.log
 *.tmp
+
+# Saved Terraform plan files (binary, may contain sensitive values)
+plan-*
+bootstrap-dev
+bootstrap-prod
+bucket-dev
+bucket-prod

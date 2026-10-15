@@ -48,7 +48,7 @@ resource "aws_subnet" "private" {
 
 resource "aws_iam_role" "vpc_flow_logs" {
   count = var.create_iam_resources ? 1 : 0
-  name = "vpc-flow-logs-role"
+  name  = "vpc-flow-logs-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -66,7 +66,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 
 data "aws_iam_role" "vpc_flow_logs" {
   count = var.create_iam_resources ? 0 : 1
-  name = "vpc-flow-logs-role"
+  name  = "vpc-flow-logs-role"
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs_policy" {

@@ -1,14 +1,13 @@
 # File 32: modules/eks/node.tf
 
 resource "aws_launch_template" "eks_nodes" {
-  for_each      = { for idx, name in var.cluster_names : name => idx }
-  name_prefix   = "eks-ng-${each.key}-${var.random_suffix}"
-  image_id      = "ami-08113a8b76e84a784"
+  name_prefix   = "eks-ng-${var.env}-${var.random_suffix}"
+  image_id      = data.aws_ami.eks_optimized.id
   instance_type = var.instance_type
   user_data = base64encode(<<-EOF
     #!/bin/bash
     set -ex
-    /etc/eks/bootstrap.sh eks-${each.key}-${var.random_suffix} --kubelet-extra-args '--node-labels=eks.amazonaws.com/nodegroup-image=ami-08113a8b76e84a784,eks.amazonaws.com/capacityType=ON_DEMAND,eks.amazonaws.com/nodegroup=ng-${each.key}-${var.random_suffix} --max-pods=17'
+    /etc/eks/bootstrap.sh eks-${var.env}-${var.random_suffix} --kubelet-extra-args '--node-labels=eks.amazonaws.com/nodegroup-image=${data.aws_ami.eks_optimized.id},eks.amazonaws.com/capacityType=ON_DEMAND,eks.amazonaws.com/nodegroup=ng-${var.env}-${var.random_suffix} --max-pods=17'
     EOF
   )
   block_device_mappings {
@@ -28,9 +27,8 @@ resource "aws_launch_template" "eks_nodes" {
   }
 }
 resource "aws_eks_node_group" "this" {
-  for_each        = { for idx, name in var.cluster_names : name => idx }
-  cluster_name    = aws_eks_cluster.this[each.key].name
-  node_group_name = "ng-${each.key}-${var.random_suffix}"
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "ng-${var.env}-${var.random_suffix}"
   node_role_arn   = var.eks_node_role_arn
   subnet_ids      = var.vpc_subnet_private_ids
   scaling_config {
@@ -39,8 +37,17 @@ resource "aws_eks_node_group" "this" {
     min_size     = 1
   }
   launch_template {
-    id      = aws_launch_template.eks_nodes[each.key].id
+    id      = aws_launch_template.eks_nodes.id
     version = "$Latest"
   }
   depends_on = [var.eks_node_policy_attachments]
+}
+
+data "aws_ami" "eks_optimized" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amazon-eks-node-${var.eks_version}-*"]
+  }
 }

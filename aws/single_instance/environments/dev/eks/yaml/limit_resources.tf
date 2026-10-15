@@ -9,7 +9,7 @@ resource "kubernetes_deployment" "heartbeat_dev1" {
         containers {
           # ... previous container ...
           resources {
-            limits = { cpu = "500m", memory = "512Mi" }
+            limits   = { cpu = "500m", memory = "512Mi" }
             requests = { cpu = "200m", memory = "256Mi" }
           }
         }
@@ -29,7 +29,7 @@ resource "kubernetes_deployment" "heartbeat_dev2" {
         containers {
           # ... previous container ...
           resources {
-            limits = { cpu = "500m", memory = "512Mi" }
+            limits   = { cpu = "500m", memory = "512Mi" }
             requests = { cpu = "200m", memory = "256Mi" }
           }
         }
@@ -49,7 +49,7 @@ resource "kubernetes_deployment" "heartbeat_dev3" {
         containers {
           # ... previous container ...
           resources {
-            limits = { cpu = "500m", memory = "512Mi" }
+            limits   = { cpu = "500m", memory = "512Mi" }
             requests = { cpu = "200m", memory = "256Mi" }
           }
         }

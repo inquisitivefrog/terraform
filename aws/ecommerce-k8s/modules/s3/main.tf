@@ -2,8 +2,8 @@ resource "aws_s3_bucket" "app_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
   tags = {
-    Name                               = "${var.cluster_name}-app-bucket"
-    Environment                        = "prod"
+    Name                                        = "${var.cluster_name}-app-bucket"
+    Environment                                 = "prod"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   }
   timeouts {

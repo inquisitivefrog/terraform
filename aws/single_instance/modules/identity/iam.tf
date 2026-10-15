@@ -28,17 +28,17 @@ resource "aws_iam_group" "operations" {
 }
 
 data "aws_iam_user" "sre" {
-  count = var.create_iam_resources ? 0 : 1
+  count     = var.create_iam_resources ? 0 : 1
   user_name = "sre"
 }
 
 data "aws_iam_user" "dba" {
-  count = var.create_iam_resources ? 0 : 1
+  count     = var.create_iam_resources ? 0 : 1
   user_name = "dba"
 }
 
 data "aws_iam_group" "operations" {
-  count = var.create_iam_resources ? 0 : 1
+  count      = var.create_iam_resources ? 0 : 1
   group_name = "operations"
 }
 
@@ -53,7 +53,7 @@ resource "aws_iam_group_membership" "operations_membership" {
 
 data "aws_iam_policy" "assume_admin_role_policy" {
   count = var.create_iam_resources ? 0 : 1
-  name = "AssumeAdminRolePolicy"
+  name  = "AssumeAdminRolePolicy"
 }
 
 resource "aws_iam_group_policy_attachment" "attach_assume_admin_policy" {
@@ -80,12 +80,12 @@ resource "aws_iam_role" "developer_role" {
 
 data "aws_iam_role" "developer_role" {
   count = var.create_iam_resources ? 0 : 1
-  name = "Developer"
+  name  = "Developer"
 }
 
 data "aws_iam_policy" "developer_policy" {
   count = var.create_iam_resources ? 0 : 1
-  name = "DeveloperPolicy"
+  name  = "DeveloperPolicy"
 }
 
 resource "aws_iam_policy" "developer_policy" {
@@ -139,7 +139,7 @@ resource "aws_iam_role" "admin_role" {
 
 data "aws_iam_role" "admin_role" {
   count = var.create_iam_resources ? 0 : 1
-  name = "Admin"
+  name  = "Admin"
 }
 
 resource "aws_iam_policy" "assume_admin_role_policy" {
@@ -160,7 +160,7 @@ resource "aws_iam_policy" "assume_admin_role_policy" {
 
 data "aws_iam_policy" "admin_policy" {
   count = var.create_iam_resources ? 0 : 1
-  name = "AdminPolicy"
+  name  = "AdminPolicy"
 }
 
 resource "aws_iam_policy" "admin_policy" {

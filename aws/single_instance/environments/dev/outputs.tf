@@ -1,19 +1,19 @@
 # File 8: environments/dev/outputs.tf
 # https://developer.hashicorp.com/terraform/language/values/outputs
 
-output "eks_cluster_ca_certificates" {
-  value       = module.eks.eks_cluster_ca_certificates
-  description = "EKS cluster CA certificates"
+output "eks_cluster_endpoint" {
+  description = "EKS cluster API endpoint"
+  value       = module.eks.eks_cluster_endpoint
 }
 
-output "eks_cluster_endpoints" {
-  value       = module.eks.eks_cluster_endpoints
-  description = "EKS cluster API endpoints"
+output "eks_cluster_name" {
+  description = "EKS cluster name"
+  value       = module.eks.eks_cluster_name
 }
 
-output "eks_cluster_names" {
-  value       = module.eks.eks_cluster_names
-  description = "EKS cluster names"
+output "eks_cluster_ca_certificate" {
+  description = "EKS cluster CA certificate"
+  value       = module.eks.eks_cluster_ca_certificate
 }
 
 output "sns_topic_example_arn" {

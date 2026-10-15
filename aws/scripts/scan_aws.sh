@@ -6,11 +6,6 @@ REGIONS=(
   "us-west-2"
 ) 
   
-# Inspect resources
-for region in "${REGIONS[@]}"; do
-  scan_tf "$region"
-done
-
 # Validate AWS credentials
 if ! aws sts get-caller-identity >/dev/null 2>&1; then
   echo "Error: Invalid or missing AWS credentials"
@@ -92,4 +87,10 @@ scan_tf() {
   aws sns list-topics --query 'Topics[*].TopicArn' --region $region --output table
 
   aws sqs list-queues --region $region --output table
+}
+
+# Inspect resources
+for region in "${REGIONS[@]}"; do
+  scan_tf "$region"
+done
 

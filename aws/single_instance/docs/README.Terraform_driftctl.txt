@@ -84,9 +84,9 @@ Found missing resources:
     - bluedragon-tfstate-admin-prod-logs (module.storage.aws_s3_bucket_public_access_block.state_log_bucket)
 Found resources not covered by IaC:
   aws_iam_access_key:
-    - AKIARHJJNAKQIIJBIAEZ
+    - AKIAXXXXXXXXXXXXXXXX
         User: bluedragon
-    - AKIARHJJNAKQIYWAY4R3
+    - AKIAXXXXXXXXXXXXXXXX
         User: bluedragon
   aws_iam_group:
     - mygroup

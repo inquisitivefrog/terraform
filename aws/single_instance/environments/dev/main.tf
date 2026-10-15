@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "2.36.0"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "2.17.0"
+    }
   }
   backend "s3" {} # see backend.hcl
 }
@@ -27,35 +31,24 @@ provider "aws" {
 }
 
 provider "kubernetes" {
-  alias                   = "dev1"
-  host                    = module.eks.eks_cluster_endpoints["dev1"]
-  cluster_ca_certificate  = base64decode(module.eks.eks_cluster_ca_certificates["dev1"])
+  host                   = module.eks.eks_cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.eks_cluster_ca_certificate)
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_names["dev1"]]
+    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_name]
   }
 }
 
-provider "kubernetes" {
-  alias                   = "dev2"
-  host                    = module.eks.eks_cluster_endpoints["dev2"]
-  cluster_ca_certificate  = base64decode(module.eks.eks_cluster_ca_certificates["dev2"])
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_names["dev2"]]
-  }
-}
-
-provider "kubernetes" {
-  alias                   = "dev3"
-  host                    = module.eks.eks_cluster_endpoints["dev3"]
-  cluster_ca_certificate  = base64decode(module.eks.eks_cluster_ca_certificates["dev3"])
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_names["dev3"]]
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.eks_cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.eks_cluster_ca_certificate)
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_name]
+    }
   }
 }
 
@@ -144,31 +137,29 @@ module "networking" {
 
 # Storage Module
 module "storage" {
-  source                         = "../../modules/storage"
-  account_id                     = data.aws_caller_identity.current.account_id
-  random_suffix                  = random_string.suffix.result
-  sns_topic_example_arn          = module.messages.sns_topic_example_arn
-  sns_topic_example_policy_arn   = module.messages.sns_topic_example_policy_arn
-  sns_custom_key_arn             = module.kms.sns_custom_key_arn
+  source                       = "../../modules/storage"
+  account_id                   = data.aws_caller_identity.current.account_id
+  random_suffix                = random_string.suffix.result
+  sns_topic_example_arn        = module.messages.sns_topic_example_arn
+  sns_topic_example_policy_arn = module.messages.sns_topic_example_policy_arn
+  sns_custom_key_arn           = module.kms.sns_custom_key_arn
 }
 
 # VPC Module
 module "vpc" {
-  source                         = "../../modules/vpc"
-  account_id                     = data.aws_caller_identity.current.account_id
-  availability_zones             = var.availability_zones
-  create_iam_resources           = true
-  kms_key_resource               = module.kms.vpc_flow_logs_key_resource
-  region                         = var.region
-  vpc_cidr_block                 = var.vpc_cidr_block
-  vpc_flow_logs_key_arn          = module.kms.vpc_flow_logs_key_arn
-  vpc_flow_logs_key_id           = module.kms.vpc_flow_logs_key_id
+  source                = "../../modules/vpc"
+  account_id            = data.aws_caller_identity.current.account_id
+  availability_zones    = var.availability_zones
+  create_iam_resources  = true
+  kms_key_resource      = module.kms.vpc_flow_logs_key_resource
+  region                = var.region
+  vpc_cidr_block        = var.vpc_cidr_block
+  vpc_flow_logs_key_arn = module.kms.vpc_flow_logs_key_arn
+  vpc_flow_logs_key_id  = module.kms.vpc_flow_logs_key_id
 }
 
 module "eks" {
   source                         = "../../modules/eks"
-  cluster_names                  = ["dev1", "dev2", "dev3"]
-  cluster_role_arn               = module.identity.eks_cluster_role_arn
   eks_cluster_policy_attachments = module.identity.eks_cluster_policy_attachments
   eks_cluster_role_arn           = module.identity.eks_cluster_role_arn
   eks_cluster_sg_id              = module.networking.sg_eks_cluster_id
@@ -178,23 +169,20 @@ module "eks" {
   env                            = var.env
   instance_type                  = var.instance_type
   kms_key_arn                    = module.kms.eks_key_arn
-  node_role_arn                  = module.identity.eks_node_role_arn
-  node_security_group_ids        = [module.networking.sg_eks_cluster_id] 
+  node_security_group_ids        = [module.networking.sg_eks_cluster_id]
   random_suffix                  = random_string.suffix.result
-  subnet_ids                     = module.vpc.private_subnets
   vpc_cidr_block                 = var.vpc_cidr_block
   vpc_id                         = module.vpc.vpc_id
   vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids
 }
 
-module "kubernetes_dev1" {
+module "kubernetes" {
   source                 = "../../modules/kubernetes"
-  cluster_endpoint       = module.eks.eks_cluster_endpoints["dev1"]
-  cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev1"]
-  cluster_name           = module.eks.eks_cluster_names["dev1"]
+  cluster_endpoint       = module.eks.eks_cluster_endpoint
+  cluster_ca_certificate = module.eks.eks_cluster_ca_certificate
+  cluster_name           = module.eks.eks_cluster_name
   enable_ingress         = true
   namespaces             = ["app1", "app2"]
-  providers              = { kubernetes = kubernetes.dev1 }
   region                 = var.region
   vpc_id                 = module.vpc.vpc_id
   rbac_roles = [
@@ -215,64 +203,7 @@ module "kubernetes_dev1" {
   ]
 }
 
-module "kubernetes_dev2" {
-  source                 = "../../modules/kubernetes"
-  cluster_endpoint       = module.eks.eks_cluster_endpoints["dev2"]
-  cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev2"]
-  cluster_name           = module.eks.eks_cluster_names["dev2"]
-  enable_ingress         = true
-  namespaces             = ["app1", "app2"]
-  providers              = { kubernetes = kubernetes.dev2 }
-  region                 = var.region
-  vpc_id                 = module.vpc.vpc_id
-  rbac_roles = [
-    {
-      user       = "sre"
-      namespace  = "app1"
-      api_groups = [""]
-      resources  = ["pods", "services"]
-      verbs      = ["get", "list", "create", "delete"]
-    },
-    {
-      user       = "dba"
-      namespace  = "app2"
-      api_groups = [""]
-      resources  = ["pods", "services"]
-      verbs      = ["get", "list", "create", "delete"]
-    }
-  ]
-}
-
-module "kubernetes_dev3" {
-  source                 = "../../modules/kubernetes"
-  cluster_endpoint       = module.eks.eks_cluster_endpoints["dev3"]
-  cluster_ca_certificate = module.eks.eks_cluster_ca_certificates["dev3"]
-  cluster_name           = module.eks.eks_cluster_names["dev3"]
-  enable_ingress         = true
-  namespaces             = ["app1", "app2"]
-  providers              = { kubernetes = kubernetes.dev3 }
-  region                 = var.region
-  vpc_id                 = module.vpc.vpc_id
-  rbac_roles = [
-    {
-      user       = "sre"
-      namespace  = "app1"
-      api_groups = [""]
-      resources  = ["pods", "services"]
-      verbs      = ["get", "list", "create", "delete"]
-    },
-    {
-      user       = "dba"
-      namespace  = "app2"
-      api_groups = [""]
-      resources  = ["pods", "services"]
-      verbs      = ["get", "list", "create", "delete"]
-    }
-  ]
-}
-
-resource "kubernetes_config_map_v1_data" "aws_auth_dev1" {
-  provider = kubernetes.dev1
+resource "kubernetes_config_map_v1_data" "aws_auth" {
   metadata {
     name      = "aws-auth"
     namespace = "kube-system"
@@ -280,53 +211,7 @@ resource "kubernetes_config_map_v1_data" "aws_auth_dev1" {
   data = {
     mapRoles = yamlencode([
       {
-        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role-multi-x2fdd61h"
-        username = "system:node:{{EC2PrivateDNSName}}"
-        groups   = ["system:bootstrappers", "system:nodes"]
-      },
-      {
-        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/EC2Role"
-        username = "ec2-admin"
-        groups   = ["system:masters"]
-      }
-    ])
-  }
-  force = true
-}
-
-resource "kubernetes_config_map_v1_data" "aws_auth_dev2" {
-  provider = kubernetes.dev2
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
-  }
-  data = {
-    mapRoles = yamlencode([
-      {
-        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role-multi-x2fdd61h"
-        username = "system:node:{{EC2PrivateDNSName}}"
-        groups   = ["system:bootstrappers", "system:nodes"]
-      },
-      {
-        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/EC2Role"
-        username = "ec2-admin"
-        groups   = ["system:masters"]
-      }
-    ])
-  }
-  force = true
-}
-
-resource "kubernetes_config_map_v1_data" "aws_auth_dev3" {
-  provider = kubernetes.dev3
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
-  }
-  data = {
-    mapRoles = yamlencode([
-      {
-        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role-multi-x2fdd61h"
+        rolearn  = module.identity.eks_node_role_arn
         username = "system:node:{{EC2PrivateDNSName}}"
         groups   = ["system:bootstrappers", "system:nodes"]
       },

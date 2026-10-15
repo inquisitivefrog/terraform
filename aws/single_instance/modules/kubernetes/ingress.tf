@@ -14,7 +14,7 @@ resource "helm_release" "aws_alb_ingress_controller" {
   }
   set {
     name  = "region"
-    value = "us-west-2"
+    value = var.region
   }
   set {
     name  = "vpcId"
@@ -36,7 +36,7 @@ resource "kubernetes_ingress_v1" "app_ingress" {
     name      = "app-ingress"
     namespace = "app1"
     annotations = {
-      "alb.ingress.kubernetes.io/scheme" = "internet-facing"
+      "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
       "alb.ingress.kubernetes.io/target-type" = "ip"
     }
   }

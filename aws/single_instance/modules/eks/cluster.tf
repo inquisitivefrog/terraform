@@ -2,8 +2,7 @@
 
 # EKS Cluster
 resource "aws_eks_cluster" "this" {
-  for_each = { for idx, name in var.cluster_names : name => idx }
-  name     = "eks-${each.key}-${var.random_suffix}"
+  name     = "eks-${var.env}-${var.random_suffix}"
   role_arn = var.eks_cluster_role_arn
   version  = var.eks_version
   vpc_config {

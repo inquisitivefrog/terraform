@@ -36,9 +36,9 @@ variable "cluster_enabled_log_types" {
 
 variable "node_groups" {
   type = map(object({
-    min_size     = number
-    desired_size = number
-    max_size     = number
+    min_size       = number
+    desired_size   = number
+    max_size       = number
     instance_types = list(string)
   }))
 }

@@ -49,7 +49,7 @@ resource "aws_s3_bucket_versioning" "state_bucket_versioning" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "state_bucket_lifecycle" {
-  bucket = aws_s3_bucket.state_bucket.id
+  bucket     = aws_s3_bucket.state_bucket.id
   depends_on = [aws_s3_bucket.state_bucket]
 
   rule {
@@ -75,7 +75,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state_bucket_lifecycle" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "state_bucket_encryption" {
-  bucket              = aws_s3_bucket.state_bucket.id
+  bucket = aws_s3_bucket.state_bucket.id
 
   rule {
     apply_server_side_encryption_by_default {

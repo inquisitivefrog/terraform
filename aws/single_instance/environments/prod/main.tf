@@ -57,11 +57,13 @@ module "compute" {
 
 module "identity" {
   source               = "../../modules/identity"
+  account_id           = data.aws_caller_identity.current.account_id
   create_iam_resources = true
   ec2_arns             = module.compute.ec2_arns
   ecs_cluster_arn      = module.compute.ecs_cluster_arn
   ecs_service_arn      = module.compute.ecs_service_arn
   elasticache_arn      = module.cache.elasticache_arn
+  enable_ingress       = true
   s3_bucket_arn        = module.storage.s3_bucket_arn
   sns_topic_arns       = module.messages.sns_topic_arns
   private_ec2_arn      = module.compute.private_ec2_arn
@@ -93,8 +95,8 @@ module "networking" {
   nat_id                         = module.vpc.nat_id
   vpc_cidr_block                 = var.vpc_cidr_block
   vpc_id                         = module.vpc.vpc_id
-  vpc_subnet_private_cidr_blocks = module.vpc.vpc_subnet_private_cidr_blocks  # Pass full list
-  vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids  # Pass full list
+  vpc_subnet_private_cidr_blocks = module.vpc.vpc_subnet_private_cidr_blocks # Pass full list
+  vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids         # Pass full list
   vpc_subnet_public_cidr_block   = module.vpc.vpc_subnet_public_cidr_block
   vpc_subnet_public_id           = module.vpc.vpc_subnet_public_id
   env                            = var.env

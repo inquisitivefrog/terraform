@@ -1,12 +1,6 @@
 # File 34: modules/eks/variables.tf
 # https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-variables
 
-variable "cluster_names" {
-  type        = list(string)
-  description = "List of cluster environment names (e.g., dev1, dev2, dev3)"
-  default     = []
-}
-
 variable "eks_cluster_policy_attachments" {
   type        = list(string)
   description = "List of policy attachment ARNs for EKS cluster role"

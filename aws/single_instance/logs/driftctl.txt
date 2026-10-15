@@ -18,9 +18,9 @@ Found resources not covered by IaC:
     - eipalloc-00e87fac508ebbbef
     - eipalloc-0c490b7756da55df0
   aws_iam_access_key:
-    - AKIARHJJNAKQIIJBIAEZ
+    - AKIAXXXXXXXXXXXXXXXX
         User: bluedragon
-    - AKIARHJJNAKQIYWAY4R3
+    - AKIAXXXXXXXXXXXXXXXX
         User: bluedragon
   aws_iam_group:
     - mygroup

@@ -6,11 +6,11 @@ resource "aws_security_group" "elasticache" {
   # checkov:skip=CKV2_AWS_5:Attached to redis-cluster in module.cache.aws_elasticache_cluster.example
   vpc_id = var.vpc_id
 
- ingress {
+  ingress {
     from_port   = var.redis_port
     to_port     = var.redis_port
     protocol    = "tcp"
-    cidr_blocks = length(var.vpc_subnet_private_cidr_blocks) > 0 ? [var.vpc_subnet_private_cidr_blocks[0]] : [var.vpc_cidr_block]  # Fallback to VPC CIDR if empty
+    cidr_blocks = length(var.vpc_subnet_private_cidr_blocks) > 0 ? [var.vpc_subnet_private_cidr_blocks[0]] : [var.vpc_cidr_block] # Fallback to VPC CIDR if empty
     description = "Allow Redis traffic from first private subnet or VPC"
   }
 
@@ -18,7 +18,7 @@ resource "aws_security_group" "elasticache" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = length(var.vpc_subnet_private_cidr_blocks) > 0 ? [var.vpc_subnet_private_cidr_blocks[0]] : [var.vpc_cidr_block]  # Fallback to VPC CIDR if empty
+    cidr_blocks = length(var.vpc_subnet_private_cidr_blocks) > 0 ? [var.vpc_subnet_private_cidr_blocks[0]] : [var.vpc_cidr_block] # Fallback to VPC CIDR if empty
     description = "Allow all outbound traffic to first private subnet or VPC"
   }
 }
@@ -109,14 +109,14 @@ resource "aws_security_group" "public_ec2" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-      #"13.56.0.0/16",     # us-west-1 AWS (Ubuntu repo IPs)
-      #"54.183.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
-      #"54.193.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
-      #"54.241.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
-      #"91.189.91.0/24",   # security.ubuntu.com
-      #"185.125.190.0/24", # security.ubuntu.com
-      #"34.107.0.0/16",    # dl.k8s.io (Google Cloud)
-      #"176.32.0.0/16"     # ec2.us-west-1.amazonaws.com
+    #"13.56.0.0/16",     # us-west-1 AWS (Ubuntu repo IPs)
+    #"54.183.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
+    #"54.193.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
+    #"54.241.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
+    #"91.189.91.0/24",   # security.ubuntu.com
+    #"185.125.190.0/24", # security.ubuntu.com
+    #"34.107.0.0/16",    # dl.k8s.io (Google Cloud)
+    #"176.32.0.0/16"     # ec2.us-west-1.amazonaws.com
     #]
     description = "Allow HTTPS to AWS EKS and Ubuntu repos"
   }
@@ -125,25 +125,25 @@ resource "aws_security_group" "public_ec2" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-      #"13.56.0.0/16",     # us-west-1 AWS (Ubuntu repo IPs)
-      #"54.183.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
-      #"54.193.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
-      #"54.241.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
-      #"91.189.91.0/24",   # security.ubuntu.com
-      #"185.125.190.0/24", # security.ubuntu.com
-      #"34.107.0.0/16",    # dl.k8s.io (Google Cloud)
-      #"176.32.0.0/16"     # ec2.us-west-1.amazonaws.com
+    #"13.56.0.0/16",     # us-west-1 AWS (Ubuntu repo IPs)
+    #"54.183.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
+    #"54.193.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
+    #"54.241.0.0/16",    # us-west-1 AWS (Ubuntu repo IPs)
+    #"91.189.91.0/24",   # security.ubuntu.com
+    #"185.125.190.0/24", # security.ubuntu.com
+    #"34.107.0.0/16",    # dl.k8s.io (Google Cloud)
+    #"176.32.0.0/16"     # ec2.us-west-1.amazonaws.com
     #]
     description = "Allow HTTP to Ubuntu repos"
   }
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
     cidr_blocks = [
-      var.my_laptop_cidr_block,                     # 77.81.142.250/32
-      var.vpc_subnet_public_cidr_block,             # 10.0.0.16/28
-      length(var.vpc_subnet_private_cidr_blocks) > 0 ? var.vpc_subnet_private_cidr_blocks[0] : var.vpc_cidr_block  # 10.0.0.32/28
+      var.my_laptop_cidr_block,                                                                                   # 77.81.142.250/32
+      var.vpc_subnet_public_cidr_block,                                                                           # 10.0.0.16/28
+      length(var.vpc_subnet_private_cidr_blocks) > 0 ? var.vpc_subnet_private_cidr_blocks[0] : var.vpc_cidr_block # 10.0.0.32/28
     ]
     description = "Allow all traffic to laptop and VPC subnets"
   }
@@ -162,7 +162,7 @@ resource "aws_security_group" "eks_cluster" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr_block] 
+    cidr_blocks = [var.vpc_cidr_block]
   }
 
   egress {
