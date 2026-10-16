@@ -79,7 +79,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_bucket_encr
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
+      sse_algorithm     = var.state_bucket_key_arn != null ? "aws:kms" : "AES256"
       kms_master_key_id = var.state_bucket_key_arn
     }
   }
@@ -92,7 +92,7 @@ resource "aws_s3_bucket_notification" "state_bucket_notification" {
   topic {
     topic_arn     = var.sns_topic_logging_arn
     events        = ["s3:ObjectCreated:*"]
-    filter_prefix = "logs/"
+    filter_suffix = ".tfstate"
   }
 }
 

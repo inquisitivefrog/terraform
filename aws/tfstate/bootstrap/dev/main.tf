@@ -17,13 +17,11 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 module "storage" {
-  source                   = "../../modules/storage"
-  account_id               = data.aws_caller_identity.current.account_id
-  employer                 = "Fireworks Inc"
-  env                      = "dev"
-  random_suffix            = ""
-  region                   = "us-west-2"
-  tfstate_bucket           = "bluedragon-tfstate-admin-dev"
-  state_bucket_key_arn     = "arn:aws:kms:us-west-2:${data.aws_caller_identity.current.account_id}:key/dummy"
-  state_log_bucket_key_arn = "arn:aws:kms:us-west-2:${data.aws_caller_identity.current.account_id}:key/dummy"
+  source         = "../../modules/storage"
+  account_id     = data.aws_caller_identity.current.account_id
+  employer       = "Fireworks Inc"
+  env            = "dev"
+  random_suffix  = ""
+  region         = "us-west-2"
+  tfstate_bucket = "bluedragon-tfstate-admin-dev"
 }

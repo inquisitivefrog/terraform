@@ -53,7 +53,6 @@ module "storage" {
   sns_topic_logging_arn        = module.messages.sns_topic_logging_arn
   sns_topic_logging_policy_arn = module.messages.sns_topic_logging_policy_arn
   state_bucket_key_arn         = module.kms.state_bucket_key_arn
-  state_log_bucket_key_arn     = module.kms.state_log_bucket_key_arn
   tfstate_bucket               = var.tfstate_bucket
   enable_notifications         = true
 }

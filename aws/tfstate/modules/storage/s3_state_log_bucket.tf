@@ -23,7 +23,7 @@ resource "aws_s3_bucket_policy" "state_log_bucket_policy" {
     Statement = [
       {
         Effect    = "Allow"
-        Principal = { Service = "s3.amazonaws.com" }
+        Principal = { Service = "logging.s3.amazonaws.com" }
         Action    = ["s3:PutObject"]
         Resource  = "${aws_s3_bucket.state_log_bucket.arn}/state-logs/*"
         Condition = {
@@ -47,8 +47,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_log_bucket"
   bucket = aws_s3_bucket.state_log_bucket.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = var.state_log_bucket_key_arn
+      sse_algorithm = "AES256" # server access log targets do not support SSE-KMS
     }
   }
 }
@@ -60,7 +59,7 @@ resource "aws_s3_bucket_notification" "state_log_bucket_notification" {
   topic {
     topic_arn     = var.sns_topic_logging_arn
     events        = ["s3:ObjectCreated:*"]
-    filter_prefix = "logs/"
+    filter_prefix = "state-logs/"
   }
 
   depends_on = [aws_s3_bucket_policy.state_log_bucket_policy]

@@ -46,13 +46,9 @@ variable "sns_topic_logging_policy_arn" {
 }
 
 variable "state_bucket_key_arn" {
-  description = "ARN of the state bucket KMS key for encryption"
+  description = "ARN of the state bucket KMS key; null uses S3-managed encryption (bootstrap)"
   type        = string
-}
-
-variable "state_log_bucket_key_arn" {
-  description = "ARN of the state log bucket KMS key for encryption"
-  type        = string
+  default     = null
 }
 
 variable "tfstate_bucket" {

@@ -8,14 +8,6 @@ resource "aws_kms_key" "state_bucket_key" {
   }
 }
 
-resource "aws_kms_key" "log_bucket_key" {
-  description         = "KMS key for S3 state log bucket (${var.env})"
-  enable_key_rotation = true
-  tags = {
-    Name = "${var.env}-log-bucket-key"
-  }
-}
-
 resource "aws_kms_key" "sns_logging_key" {
   description              = "Custom key for SNS encryption (${var.env})"
   deletion_window_in_days  = 7
