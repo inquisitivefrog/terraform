@@ -53,12 +53,30 @@ resource "aws_security_group" "private_ec2" {
     description = "Allow SSH outbound to VPC subnets"
   }
 
+  # Outbound web traffic leaves through the NAT gateway: apt, the SSM agent,
+  # CloudWatch agent and AWS APIs. Nothing outside can connect in.
   egress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr_block]
-    description = "Allow SSM Agent to reach AWS endpoints"
+    cidr_blocks = ["0.0.0.0/0"] # tfsec:ignore:aws-ec2-no-public-egress-sgr
+    description = "Allow HTTPS out via NAT (SSM, AWS APIs, apt)"
+  }
+
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # tfsec:ignore:aws-ec2-no-public-egress-sgr
+    description = "Allow HTTP out via NAT (Ubuntu apt mirrors)"
+  }
+
+  egress {
+    from_port   = var.redis_port
+    to_port     = var.redis_port
+    protocol    = "tcp"
+    cidr_blocks = var.vpc_subnet_private_cidr_blocks
+    description = "Allow Redis to ElastiCache in the private subnets"
   }
 
   tags = {

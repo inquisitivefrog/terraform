@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Enhanced cleanup script for Terraform and AWS resources
+# List AWS resources (read-only describe/list calls)
 # Run from /Users/tim/Documents/workspace/sre/terraform/aws/
 
 EXPECTED_DIR="/Users/tim/Documents/workspace/sre/terraform/aws"
@@ -13,12 +13,6 @@ fi
 # Default region (override with environment variable if needed)
 AWS_REGION=${AWS_REGION:-us-east-1}
 
-# Function to destroy Terraform resources
-identify_tf() {
-  local dir=$1
-  echo "Destroying resources in $dir..."
-  cd "$dir" || { echo "Failed to cd into $dir"; return 1; }
-  aws s3 ls >/dev/null 2>&1 || { echo "aws s3 ls failed in $dir"; return 1; }
 
 aws elb describe-load-balancers --region us-west-1
 aws elbv2 describe-load-balancers --region us-west-1 

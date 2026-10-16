@@ -44,13 +44,17 @@ data "aws_iam_group" "operations" {
   group_name = "operations"
 }
 
+# Shared IAM (one copy per account, so only the environment with
+# create_iam_resources = true manages it; the other would overwrite it, and
+# destroying it would delete it for both).
 resource "aws_iam_group_membership" "operations_membership" {
-  name = "operations-membership"
+  count = var.create_iam_resources ? 1 : 0
+  name  = "operations-membership"
   users = [
-    var.create_iam_resources ? aws_iam_user.sre[0].name : data.aws_iam_user.sre[0].user_name,
-    var.create_iam_resources ? aws_iam_user.dba[0].name : data.aws_iam_user.dba[0].user_name,
+    aws_iam_user.sre[0].name,
+    aws_iam_user.dba[0].name,
   ]
-  group = var.create_iam_resources ? aws_iam_group.operations[0].name : data.aws_iam_group.operations[0].group_name
+  group = aws_iam_group.operations[0].name
 }
 
 data "aws_iam_policy" "assume_admin_role_policy" {
@@ -59,8 +63,9 @@ data "aws_iam_policy" "assume_admin_role_policy" {
 }
 
 resource "aws_iam_group_policy_attachment" "attach_assume_admin_policy" {
-  group      = var.create_iam_resources ? aws_iam_group.operations[0].name : data.aws_iam_group.operations[0].group_name
-  policy_arn = var.create_iam_resources ? aws_iam_policy.assume_admin_role_policy[0].arn : data.aws_iam_policy.assume_admin_role_policy[0].arn
+  count      = var.create_iam_resources ? 1 : 0
+  group      = aws_iam_group.operations[0].name
+  policy_arn = aws_iam_policy.assume_admin_role_policy[0].arn
 }
 
 resource "aws_iam_role" "developer_role" {
@@ -118,8 +123,9 @@ resource "aws_iam_policy" "developer_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "developer_attach" {
-  role       = var.create_iam_resources ? aws_iam_role.developer_role[0].name : data.aws_iam_role.developer_role[0].name
-  policy_arn = var.create_iam_resources ? aws_iam_policy.developer_policy[0].arn : data.aws_iam_policy.developer_policy[0].arn
+  count      = var.create_iam_resources ? 1 : 0
+  role       = aws_iam_role.developer_role[0].name
+  policy_arn = aws_iam_policy.developer_policy[0].arn
 }
 
 resource "aws_iam_role" "admin_role" {
@@ -235,8 +241,9 @@ resource "aws_iam_policy" "admin_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "admin_attach" {
-  role       = var.create_iam_resources ? aws_iam_role.admin_role[0].name : data.aws_iam_role.admin_role[0].name
-  policy_arn = var.create_iam_resources ? aws_iam_policy.admin_policy[0].arn : data.aws_iam_policy.admin_policy[0].arn
+  count      = var.create_iam_resources ? 1 : 0
+  role       = aws_iam_role.admin_role[0].name
+  policy_arn = aws_iam_policy.admin_policy[0].arn
 }
 
 resource "aws_iam_instance_profile" "operations_profile" {
@@ -246,14 +253,15 @@ resource "aws_iam_instance_profile" "operations_profile" {
 }
 
 resource "aws_iam_group_policy" "operations_assume_role" {
+  count = var.create_iam_resources ? 1 : 0
   name  = "OperationsAssumeRolePolicy"
-  group = var.create_iam_resources ? aws_iam_group.operations[0].name : data.aws_iam_group.operations[0].group_name
+  group = aws_iam_group.operations[0].name
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action   = "sts:AssumeRole"
       Effect   = "Allow"
-      Resource = var.create_iam_resources ? aws_iam_role.admin_role[0].arn : data.aws_iam_role.admin_role[0].arn
+      Resource = aws_iam_role.admin_role[0].arn
     }]
   })
 }

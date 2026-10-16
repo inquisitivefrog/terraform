@@ -26,7 +26,9 @@ data "aws_iam_role" "ecs_task_execution_role" {
   name  = "ecsTaskExecutionRole"
 }
 
+# Shared role: managed only where create_iam_resources = true.
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_role" {
-  role       = var.create_iam_resources ? aws_iam_role.ecs_task_execution_role[0].name : data.aws_iam_role.ecs_task_execution_role[0].name
+  count      = var.create_iam_resources ? 1 : 0
+  role       = aws_iam_role.ecs_task_execution_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }

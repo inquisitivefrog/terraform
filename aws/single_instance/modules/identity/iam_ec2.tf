@@ -25,8 +25,9 @@ data "aws_iam_role" "ec2_role" {
   name  = "EC2Role"
 }
 
+# Lists this environment's instances, so each environment has its own copy.
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "EC2Policy"
+  name = "EC2Policy-${var.env}-${var.random_suffix}"
   role = var.create_iam_resources ? aws_iam_role.ec2_role[0].id : data.aws_iam_role.ec2_role[0].id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -71,12 +72,17 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role  = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name
 }
 
+# Shared IAM (one copy per account, so only the environment with
+# create_iam_resources = true manages it; the other would overwrite it, and
+# destroying it would delete it for both).
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
-  role       = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name
+  count      = var.create_iam_resources ? 1 : 0
+  role       = aws_iam_role.ec2_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_eks_cluster" {
-  role       = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name
+  count      = var.create_iam_resources ? 1 : 0
+  role       = aws_iam_role.ec2_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }

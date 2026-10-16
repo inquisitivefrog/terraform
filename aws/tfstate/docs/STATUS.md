@@ -11,6 +11,9 @@ change log, and update "Current state" and "Open items" when they change.
 
 ## Remember
 
+- **Shortcuts:** `aws/scripts/kube_use.sh dev|prod` switches kubectl and
+  shows nodes and pods; `aws/scripts/ssh_ec2.sh dev|prod [public|private]`
+  SSHes in. kubectl follows the current context, not your directory.
 - **SSH to the private EC2 instance goes through the public one; no key is
   stored on either instance.** Until 2026-10-16 the public instance's user
   data copied your private key onto it so you could SSH onward. That was
@@ -38,7 +41,7 @@ change log, and update "Current state" and "Open items" when they change.
 | `tfstate/bootstrap` (local state) | `bluedragon-tfstate-admin-dev` + `-logs`, SSE-S3 | `bluedragon-tfstate-admin-prod` + `-logs`, SSE-S3 |
 | `tfstate/environments` (state in bootstrap bucket, key `terraform.tfstate`) | suffix `gmeemt5w`: KMS `state_bucket_key` `39173157-…` + `alias/tfstate-dev`, SNS key, `logging-topic`, suffixed buckets | suffix `l4ilb4si`: KMS `state_bucket_key` `5a0c9bd2-…` + `alias/tfstate-prod`, SNS key, `logging-topic`, suffixed buckets |
 | EC2 key pair `bluedragon` | ed25519, re-created 2026-10-16 after exposure; matches `~/.aws/bluedragon_uswest2.pem` (old key kept as `.pem.exposed`) | matches `~/.aws/bluedragon_uswest1.pem` (same key as `~/.aws/bluedragon.pem`) |
-| `single_instance` | **applied** 2026-10-16, suffix `pvneok82`: VPC, EKS `eks-multi-pvneok82` (1.36, 4 x t3.micro), 2 EC2 (public `54.245.6.254`, private `10.1.4.226`), ElastiCache, ECS, KMS, S3, SNS, Kubernetes resources. Verified (see change log) | **applied** 2026-10-16, suffix `w0xkpjbs`: VPC, EKS `eks-prod-w0xkpjbs` (1.36, 3 x t3.micro), 2 EC2, ElastiCache, ECS, KMS, S3, SNS (79 resources). kubectl not yet verified |
+| `single_instance` | **applied** 2026-10-16, suffix `pvneok82`: VPC, EKS `eks-multi-pvneok82` (1.36, 4 x t3.micro), 2 EC2 on Ubuntu 24.04 (public `34.220.46.250`, private `10.1.4.26`), ElastiCache, ECS, KMS, S3, SNS, Kubernetes resources. Verified (see change log) | **applied** 2026-10-16, suffix `w0xkpjbs`: VPC, EKS `eks-prod-w0xkpjbs` (1.36, 3 x t3.micro), 2 EC2, ElastiCache, ECS, KMS, S3, SNS, 2 EC2 on Ubuntu 24.04 (public `54.183.161.163`, private `10.0.4.223`). Verified: 3 nodes Ready in us-west-1, kube-system pods Running (context `eks-prod`) |
 | `ecommerce-k8s` | not deployed (us-east-1, own state bucket, which was wiped); stages validate | — |
 
 Unrelated bucket in the same account: `grid-meter-app-tfstate-084375569056`
@@ -80,6 +83,59 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ### 2026-10-16
 
+- **Private instance had no outbound internet.** Its security group
+  (`private_ec2`) only allowed egress to the VPC CIDR on 22 and 443, so
+  nothing reached the NAT gateway: the user data's `apt-get install
+  redis-tools` and CloudWatch agent download failed silently, apt patching
+  couldn't work, and SSM (no VPC endpoints) couldn't connect. Redis on 6379
+  wasn't allowed out either. Predates this rebuild. Now egress allows 443 and
+  80 to `0.0.0.0/0` (through the NAT) and 6379 to the private subnets.
+  Inbound is unchanged (SSH and ping from the public subnet). The private
+  instance is replaced with `-replace` so its user data runs again.
+  Applied: dev 1 added / 4 changed / 1 destroyed (private `10.1.4.26`), prod
+  1 added / 2 changed / 1 destroyed (private `10.0.4.223`). Verified:
+  `redis-cli` 7.0.15 installed on both; all four instances `Online` in SSM
+  (agent 3.3.4793.0), so Session Manager works too. `redis-cli PING` to dev's
+  ElastiCache from dev's private instance returns `PONG`.
+- **EC2 instances: Ubuntu 20.04 -> 24.04.** The AMI filter was
+  `ubuntu-focal-20.04` (standard support ended May 2025; the login banner
+  listed 186 security updates available only through paid ESM), although the
+  instances were tagged `ubuntu-24.04`. Now
+  `ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*` (20261004
+  build in both regions). User data: pip installs use
+  `--break-system-packages` (24.04 blocks pip into the system Python), and
+  the private instance no longer installs the SSM agent .deb (Canonical's AMI
+  ships it as a snap). Replaces both instances in each environment; new IPs
+  and new SSH host keys. Dev applied: 2 added, 3 changed, 2 destroyed
+  (`DeveloperPolicy` and `AdminPolicy` also list dev's instance ARNs, so they
+  update too); AMI `ami-03d70b8354a16a8bc`. Verified: public instance runs
+  24.04.5, cloud-init finished, aws-cli 2.38.1, kubectl 1.37.1, terraform
+  1.5.7, Python kubernetes/boto3 import; private instance runs 24.04.5 but
+  `redis-cli` is missing (see open items). Prod applied (2 added, 1 changed,
+  2 destroyed) with the same results: public `54.183.161.163`, private
+  `10.0.4.137`.
+- **Scripts:** added `aws/scripts/kube_use.sh` and `aws/scripts/ssh_ec2.sh`
+  (tested against both clusters and both environments' state). Fixed
+  `aws/scripts/inspect_aws.sh`, which failed with a syntax error: it had an
+  unfinished function left over from a cleanup script. Verified by the user:
+  `kube_use.sh` dev and prod, `ssh_ec2.sh` dev public and private.
+- **dev and prod both managed the same IAM objects.** Prod skipped creating
+  the shared roles, users and group, but still managed policies and
+  attachments on them under the same AWS names. `EC2Policy` lists one
+  environment's instance ARNs, so each apply overwrote the other's (dev plan
+  after the prod apply: 1 to change, prod's us-west-1 ARNs back to dev's), and
+  destroying prod would have deleted these from dev. Fix: the 9 attachments
+  and policies on shared IAM (`operations_membership`,
+  `attach_assume_admin_policy`, `developer_attach`, `admin_attach`,
+  `operations_assume_role`, `ec2_ssm`, `ec2_eks_cluster`,
+  `ecs_task_execution_role` attachment, `vpc_flow_logs_policy`) now exist only
+  where `create_iam_resources = true` (dev). `EC2Policy` is per environment:
+  `EC2Policy-<env>-<suffix>`. Prod must drop them from its state first with
+  `terraform state rm` (this leaves AWS untouched); otherwise its plan would
+  destroy them.
+  Applied: prod `state rm` (10 removed), prod 1 added
+  (`EC2Policy-prod-w0xkpjbs`), dev 1 added / 1 destroyed (`EC2Policy` ->
+  `EC2Policy-multi-pvneok82`). Prod can now be destroyed without touching dev.
 - **Prod apply (suffix `w0xkpjbs`): 78 of 79 created, then
   `Error: reading Security Group (): empty result` on
   `module.networking.aws_security_group_rule.eks_cluster_ingress`.** Prod never
@@ -239,6 +295,11 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 - ecommerce-k8s: EKS 1.29; stage1 and stage2 failed `terraform validate`.
 
 ## Open items
+
+- **ElastiCache:** Redis 6.2 with no in-transit encryption or AUTH.
+- **`DeveloperPolicy` and `AdminPolicy` list only dev's EC2 instances**
+  (`var.ec2_arns`), so the Developer and Admin roles can't act on prod's
+  instances, and every dev instance replacement rewrites both policies.
 
 - **Dev ingress has no load balancer:** `app-ingress` shows no ADDRESS. The
   ALB controller (chart 1.6.0) has no IAM role (no IRSA) and the public

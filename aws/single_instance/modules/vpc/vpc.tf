@@ -69,9 +69,11 @@ data "aws_iam_role" "vpc_flow_logs" {
   name  = "vpc-flow-logs-role"
 }
 
+# Shared role: managed only where create_iam_resources = true.
 resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
-  name = "vpc-flow-logs-policy"
-  role = var.create_iam_resources ? aws_iam_role.vpc_flow_logs[0].id : data.aws_iam_role.vpc_flow_logs[0].id
+  count = var.create_iam_resources ? 1 : 0
+  name  = "vpc-flow-logs-policy"
+  role  = aws_iam_role.vpc_flow_logs[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"

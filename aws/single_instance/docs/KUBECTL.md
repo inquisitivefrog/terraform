@@ -88,6 +88,19 @@ kubectl get nodes
 Get the cluster name from `terraform output -raw eks_cluster_name`. Prod does
 not map `EC2Role`, so in prod use your laptop.
 
+## Shortcuts
+
+Two scripts in `aws/scripts` do the steps in this file for you. Run them
+from anywhere:
+
+```sh
+aws/scripts/kube_use.sh dev|prod                    # point kubectl at the cluster, show nodes and pods
+aws/scripts/ssh_ec2.sh  dev|prod [public|private]   # SSH in; private hops through public
+```
+
+They read the cluster name and instance IPs from Terraform, so they keep
+working after a rebuild changes them.
+
 ## Reaching the EC2 instances
 
 The private key stays on your laptop. Nothing copies it onto an instance (the

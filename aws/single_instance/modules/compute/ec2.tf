@@ -5,7 +5,7 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 }
 
@@ -53,8 +53,8 @@ resource "aws_instance" "public-ec2" {
     usermod -aG docker ubuntu
     systemctl enable docker
     systemctl start docker
-    pip3 install kubernetes==32.0.1
-    pip3 install boto3
+    # 24.04 blocks pip installs into the system Python (PEP 668) unless told to.
+    pip3 install --break-system-packages kubernetes==32.0.1 boto3
     # Optional: CloudWatch Agent
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
     dpkg -i amazon-cloudwatch-agent.deb
@@ -89,10 +89,7 @@ resource "aws_instance" "private-ec2" {
     #!/bin/bash
     apt-get update
     apt-get install -y wget redis-tools
-    wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb
-    dpkg -i amazon-ssm-agent.deb
-    systemctl enable amazon-ssm-agent
-    systemctl start amazon-ssm-agent
+    # SSM agent comes preinstalled as a snap on Canonical's AMIs.
     # Optional: CloudWatch Agent
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
     dpkg -i amazon-cloudwatch-agent.deb
