@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Pre-commit checks for this repo. Plain bash plus git; no virtualenv.
+# Installed with:  git config core.hooksPath scripts/git-hooks
+# Bypass once (not recommended):  git commit --no-verify
+# Docs: docs/REPO_CHECKS.md
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+fail=0
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+
+# 1. Files that .gitignore excludes must not be tracked or staged
+#    (tfvars, state, plans, logs, keys).
+ignored=$(git ls-files -ci --exclude-standard)
+if [ -n "$ignored" ]; then
+  red "Tracked or staged files that .gitignore excludes:"
+  echo "$ignored" | sed 's/^/  /'
+  echo "  Fix: git rm --cached <file>"
+  fail=1
+fi
+
+# 2. Private keys or AWS access key IDs in the lines being added.
+added=$(git diff --cached -U0 --no-color --diff-filter=ACM | grep '^+' | grep -v '^+++')
+if echo "$added" | grep -qE -- '-----BEGIN [A-Z ]*PRIVATE KEY-----|(AKIA|ASIA)[A-Z0-9]{16}'; then
+  red "Staged changes contain a private key or an AWS access key ID."
+  fail=1
+fi
+
+# 3. gitleaks secret scan of staged changes (skipped if not installed).
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks git --pre-commit --staged --redact --no-banner -l warn .; then
+    red "gitleaks found a possible secret in staged changes."
+    fail=1
+  fi
+else
+  echo "pre-commit: gitleaks not installed, skipping secret scan (brew install gitleaks)"
+fi
+
+# 4. Staged Terraform files must be formatted.
+tf_files=$(git diff --cached --name-only --diff-filter=ACM -- '*.tf' '*.tfvars')
+if [ -n "$tf_files" ] && command -v terraform >/dev/null 2>&1; then
+  # shellcheck disable=SC2086
+  if ! unformatted=$(terraform fmt -check -list=true $tf_files); then
+    red "Terraform files need formatting:"
+    echo "$unformatted" | sed 's/^/  /'
+    echo "  Fix: terraform fmt <file>, then git add it"
+    fail=1
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  red "Commit blocked by scripts/git-hooks/pre-commit."
+  exit 1
+fi

@@ -1,0 +1,8 @@
+# Known findings in old commits, accepted 2026-10-16.
+# AWS access key IDs pasted into driftctl notes in April 2025; redacted in
+# commit 05f08e1 and the key has been deleted. Only these exact findings
+# (commit:file:rule:line) are ignored; anything new still fails.
+7ca7f321c91b84aeff56a63c4bb0c8dd4fc27e1c:aws/single_instance/logs/driftctl.txt:aws-access-token:21
+7ca7f321c91b84aeff56a63c4bb0c8dd4fc27e1c:aws/single_instance/logs/driftctl.txt:aws-access-token:23
+6e0a1ae5d1514de0558f948e39a45c576d48ea8a:aws/single_instance/docs/README.Terraform_driftctl.txt:aws-access-token:70
+6e0a1ae5d1514de0558f948e39a45c576d48ea8a:aws/single_instance/docs/README.Terraform_driftctl.txt:aws-access-token:72

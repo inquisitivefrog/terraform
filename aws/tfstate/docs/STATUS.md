@@ -38,7 +38,7 @@ change log, and update "Current state" and "Open items" when they change.
 | `tfstate/bootstrap` (local state) | `bluedragon-tfstate-admin-dev` + `-logs`, SSE-S3 | `bluedragon-tfstate-admin-prod` + `-logs`, SSE-S3 |
 | `tfstate/environments` (state in bootstrap bucket, key `terraform.tfstate`) | suffix `gmeemt5w`: KMS `state_bucket_key` `39173157-…` + `alias/tfstate-dev`, SNS key, `logging-topic`, suffixed buckets | suffix `l4ilb4si`: KMS `state_bucket_key` `5a0c9bd2-…` + `alias/tfstate-prod`, SNS key, `logging-topic`, suffixed buckets |
 | EC2 key pair `bluedragon` | ed25519, re-created 2026-10-16 after exposure; matches `~/.aws/bluedragon_uswest2.pem` (old key kept as `.pem.exposed`) | matches `~/.aws/bluedragon_uswest1.pem` (same key as `~/.aws/bluedragon.pem`) |
-| `single_instance` | **applied** 2026-10-16, suffix `pvneok82`: VPC, EKS `eks-multi-pvneok82` (1.36, 4 x t3.micro), 2 EC2 (public `54.245.6.254`, private `10.1.4.226`), ElastiCache, ECS, KMS, S3, SNS, Kubernetes resources. Verified (see change log) | not applied; needs dev's shared IAM first |
+| `single_instance` | **applied** 2026-10-16, suffix `pvneok82`: VPC, EKS `eks-multi-pvneok82` (1.36, 4 x t3.micro), 2 EC2 (public `54.245.6.254`, private `10.1.4.226`), ElastiCache, ECS, KMS, S3, SNS, Kubernetes resources. Verified (see change log) | **applied** 2026-10-16, suffix `w0xkpjbs`: VPC, EKS `eks-prod-w0xkpjbs` (1.36, 3 x t3.micro), 2 EC2, ElastiCache, ECS, KMS, S3, SNS (79 resources). kubectl not yet verified |
 | `ecommerce-k8s` | not deployed (us-east-1, own state bucket, which was wiped); stages validate | — |
 
 Unrelated bucket in the same account: `grid-meter-app-tfstate-084375569056`
@@ -67,6 +67,11 @@ Locking uses S3 native lock files (`use_lockfile = true`); no DynamoDB table.
    `terraform init -upgrade -backend-config=backend.hcl -reconfigure`, then plan/apply
 5. kubectl: see `single_instance/docs/KUBECTL.md`
 
+`terraform.tfvars` is git-ignored in every environment. On a fresh clone,
+copy `terraform.tfvars.example` to `terraform.tfvars` and fill it in.
+To check that nothing ignored is still tracked: `git ls-files -ci --exclude-standard`
+(it should print nothing).
+
 Saved plan files (`plan-*`, `bootstrap-*`, `bucket-*`, `dev-bucket`, `prod-bucket`)
 are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
@@ -75,6 +80,34 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ### 2026-10-16
 
+- **Prod apply (suffix `w0xkpjbs`): 78 of 79 created, then
+  `Error: reading Security Group (): empty result` on
+  `module.networking.aws_security_group_rule.eks_cluster_ingress`.** Prod never
+  passed `eks_cluster_sg_id` or `sg_public_ec2_id` to the networking module,
+  and both defaulted to `""`, so the rule had no group IDs. Dev passed both,
+  which is why dev worked. Fix: prod now passes
+  `eks_cluster_sg_id = module.eks.eks_cluster_sg_id`; the variable no longer
+  has a default, so leaving it out fails at plan time instead of mid-apply.
+  `sg_public_ec2_id` is removed: the rule's source is the module's own
+  `aws_security_group.public_ec2`, which is what dev was passing back in.
+  Re-applied prod: 1 added, 0 changed, 0 destroyed.
+- **Repo checks:** new pre-commit hook `scripts/git-hooks/pre-commit`
+  (enabled with `git config core.hooksPath scripts/git-hooks`, already set on
+  this Mac) and GitHub Action `.github/workflows/repo-checks.yml`. Both block
+  tracked files that `.gitignore` excludes, secrets (gitleaks, installed via
+  Homebrew) and unformatted Terraform. `.gitleaksignore` accepts the 4
+  redacted 2025 access key ID findings. See `docs/REPO_CHECKS.md`, which also
+  has a cheat sheet of pre-commit, trivy, tflint, checkov and the rest.
+- **Stopped tracking files `.gitignore` already excludes** (`git rm --cached`;
+  the files stay on disk). They were committed in 2025, after the ignore rules
+  were added, and git keeps tracking a file once it's committed. Removed:
+  both prod `terraform.tfvars` (home IP, employer name), `tfstate/logs/*.log`,
+  `basic/logs/aws_configure.log`, a saved binary plan
+  `single_instance/environments/dev/bucket-dev`, and old state
+  `ecommerce-k8s/stage2-k8s/statefile.json`. None contained credentials
+  (checked). Added `terraform.tfvars.example` in each environment, and
+  `.gitignore` now also covers `*statefile*.json`, `*.pem` and `*.key`. Older
+  commits still contain these files; history was not rewritten.
 - **Applied:** `single_instance/environments/dev`, the remaining 15 to add
   and 1 to change, with the security group, key-copy and IAM fixes below.
   Verified: 4 nodes Ready; heartbeat/monitor Services created and pods
@@ -230,6 +263,6 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
   split; `aws/tfstate/README.md` is the accurate procedure.
 - **Lock files:** git-ignored; consider committing multi-platform locks
   (`terraform providers lock -platform=darwin_arm64 -platform=linux_amd64`).
-- **Pre-commit:** hook retired; reinstall from
-  `single_instance/python3/requirements.txt` plus Homebrew tools if wanted
-  (driftctl is archived upstream).
+- **Security scanners not wired in:** trivy/checkov/tflint from the 2025
+  pre-commit config aren't installed; see `docs/REPO_CHECKS.md` for adding
+  trivy.

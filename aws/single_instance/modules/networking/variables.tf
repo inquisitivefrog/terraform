@@ -3,14 +3,7 @@
 
 variable "eks_cluster_sg_id" {
   type        = string
-  description = "Security group ID for EKS cluster"
-  default     = ""
-}
-
-variable "sg_public_ec2_id" {
-  type        = string
-  description = "Security group ID for public EC2 instance"
-  default     = ""
+  description = "EKS-managed cluster security group ID (module.eks.eks_cluster_sg_id)"
 }
 
 variable "env" {

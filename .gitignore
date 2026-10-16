@@ -31,3 +31,8 @@ bucket-dev
 bucket-prod
 dev-bucket
 prod-bucket
+
+# Old state dumps and private keys
+*statefile*.json
+*.pem
+*.key

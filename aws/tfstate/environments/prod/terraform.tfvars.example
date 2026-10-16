@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+
+employer       = "<organization name, used in tags>"
+env            = "prod"
+region         = "us-west-1"
+tfstate_bucket = "<bootstrap state bucket, e.g. bluedragon-tfstate-admin-prod>"

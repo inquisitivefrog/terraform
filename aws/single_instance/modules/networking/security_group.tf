@@ -184,11 +184,13 @@ resource "aws_security_group" "eks_cluster" {
   }
 }
 
+# Let the public EC2 instance reach the API server through the EKS-managed
+# cluster security group.
 resource "aws_security_group_rule" "eks_cluster_ingress" {
   type                     = "ingress"
   from_port                = 443
   to_port                  = 443
   protocol                 = "tcp"
   security_group_id        = var.eks_cluster_sg_id
-  source_security_group_id = var.sg_public_ec2_id
+  source_security_group_id = aws_security_group.public_ec2.id
 }

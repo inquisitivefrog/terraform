@@ -91,6 +91,7 @@ module "messages" {
 
 module "networking" {
   source                         = "../../modules/networking"
+  eks_cluster_sg_id              = module.eks.eks_cluster_sg_id
   igw_id                         = module.vpc.igw_id
   my_laptop_cidr_block           = var.my_laptop_cidr_block
   nat_id                         = module.vpc.nat_id

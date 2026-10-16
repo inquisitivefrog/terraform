@@ -1,6 +1,15 @@
 # terraform
 Configuration Knowledge for Future Reference
 
+**Repo checks:** a pre-commit hook (`scripts/git-hooks/pre-commit`) and a
+GitHub Action (`.github/workflows/repo-checks.yml`) block secrets, files that
+`.gitignore` excludes, and unformatted Terraform. On a new clone run
+`git config core.hooksPath scripts/git-hooks` once. Details, plus a cheat
+sheet of the Terraform and security tools (pre-commit, trivy, tflint,
+checkov, ...): [docs/REPO_CHECKS.md](docs/REPO_CHECKS.md).
+
+**Status of the AWS rebuild:** [aws/tfstate/docs/STATUS.md](aws/tfstate/docs/STATUS.md)
+
 AWS
 
 1. tfstate: create S3 bucket for terraform.tfstate
