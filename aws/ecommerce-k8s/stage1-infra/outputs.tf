@@ -17,3 +17,8 @@ output "cluster_security_group_id" {
   description = "EKS cluster security group ID"
   value       = module.eks.cluster_security_group_id
 }
+
+output "vpc_public_subnets" {
+  description = "Public subnet IDs (used by stage2 for the ALB and Argo CD load balancer)"
+  value       = module.vpc.public_subnets
+}

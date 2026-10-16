@@ -47,7 +47,6 @@ module "compute" {
   source                      = "../../modules/compute"
   ec2_instance_profile_name   = module.identity.ec2_instance_profile_name
   ec2_keypair                 = var.ec2_keypair
-  ssh_private_key_path        = var.ssh_private_key_path
   ecs_task_execution_role_arn = module.identity.ecs_task_execution_role_arn
   instance_type               = var.instance_type
   sg_private_ec2_id           = module.networking.sg_private_ec2_id
@@ -59,7 +58,7 @@ module "compute" {
 module "identity" {
   source               = "../../modules/identity"
   account_id           = data.aws_caller_identity.current.account_id
-  create_iam_resources = true
+  create_iam_resources = false # IAM is global; dev creates the shared roles and users
   ec2_arns             = module.compute.ec2_arns
   ecs_cluster_arn      = module.compute.ecs_cluster_arn
   ecs_service_arn      = module.compute.ecs_service_arn
@@ -117,6 +116,7 @@ module "storage" {
 module "vpc" {
   source                = "../../modules/vpc"
   account_id            = data.aws_caller_identity.current.account_id
+  create_iam_resources  = false # dev creates vpc-flow-logs-role
   availability_zones    = var.availability_zones
   kms_key_resource      = module.kms.vpc_flow_logs_key_resource
   region                = var.region
@@ -129,8 +129,11 @@ module "eks" {
   source                         = "../../modules/eks"
   env                            = var.env
   eks_version                    = var.eks_version
-  instance_type                  = var.instance_type
+  instance_type                  = var.eks_node_instance_type
   kms_key_arn                    = module.kms.eks_key_arn
+  node_desired_size              = var.eks_node_desired_size
+  node_max_size                  = var.eks_node_max_size
+  public_access_cidrs            = [var.my_laptop_cidr_block]
   vpc_id                         = module.vpc.vpc_id
   vpc_cidr_block                 = var.vpc_cidr_block
   vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids

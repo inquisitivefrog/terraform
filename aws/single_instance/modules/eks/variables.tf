@@ -28,7 +28,7 @@ variable "eks_node_role_arn" {
 
 variable "eks_version" {
   type        = string
-  default     = "1.28"
+  default     = "1.36"
   description = "Kubernetes version for EKS"
 }
 
@@ -51,6 +51,27 @@ variable "node_security_group_ids" {
   type        = list(string)
   description = "List of security group IDs for EKS node group instances"
   default     = []
+}
+
+variable "node_desired_size" {
+  type        = number
+  default     = 3
+  description = "Number of worker nodes in the managed node group"
+}
+
+variable "node_max_size" {
+  type        = number
+  default     = 4
+  description = "Maximum number of worker nodes in the managed node group"
+}
+
+variable "public_access_cidrs" {
+  type        = list(string)
+  description = "IPv4 CIDRs allowed to reach the public EKS API endpoint"
+  validation {
+    condition     = length(var.public_access_cidrs) > 0 && !contains(var.public_access_cidrs, "0.0.0.0/0")
+    error_message = "Set at least one CIDR (e.g. your laptop's /32); 0.0.0.0/0 is not allowed."
+  }
 }
 
 variable "random_suffix" {

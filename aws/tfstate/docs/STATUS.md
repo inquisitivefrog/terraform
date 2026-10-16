@@ -9,6 +9,26 @@ change log, and update "Current state" and "Open items" when they change.
 - Regions: dev = `us-west-2`, prod = `us-west-1`
 - Terraform: AWS provider `~> 6.65` (6.69.1 installed)
 
+## Remember
+
+- **SSH to the private EC2 instance goes through the public one; no key is
+  stored on either instance.** Until 2026-10-16 the public instance's user
+  data copied your private key onto it so you could SSH onward. That was
+  removed because the key ended up in plan output and Terraform state. Now
+  your laptop keeps the key and `ssh -J` hops through:
+
+  ```sh
+  ssh -i ~/.aws/bluedragon_uswest2.pem -J ubuntu@<public-ip> ubuntu@<private-ip>
+  ```
+
+  Add the key to your agent first (`ssh-add ~/.aws/bluedragon_uswest2.pem`)
+  so the second hop can use it. Details: `single_instance/docs/KUBECTL.md`,
+  "Reaching the EC2 instances". (prod: `~/.aws/bluedragon.pem`.)
+- **Apply dev before prod:** prod looks up the IAM roles and users that dev
+  creates.
+- **Your home IP changes:** check `curl -4 ifconfig.me` against
+  `my_laptop_cidr_block` before plan/apply or kubectl.
+
 ## Current state (2026-10-16)
 
 ### Deployed in AWS
@@ -17,9 +37,9 @@ change log, and update "Current state" and "Open items" when they change.
 |---|---|---|
 | `tfstate/bootstrap` (local state) | `bluedragon-tfstate-admin-dev` + `-logs`, SSE-S3 | `bluedragon-tfstate-admin-prod` + `-logs`, SSE-S3 |
 | `tfstate/environments` (state in bootstrap bucket, key `terraform.tfstate`) | suffix `gmeemt5w`: KMS `state_bucket_key` `39173157-…` + `alias/tfstate-dev`, SNS key, `logging-topic`, suffixed buckets | suffix `l4ilb4si`: KMS `state_bucket_key` `5a0c9bd2-…` + `alias/tfstate-prod`, SNS key, `logging-topic`, suffixed buckets |
-| EC2 key pair `bluedragon` | matches `~/.aws/bluedragon_uswest2.pem` | matches `~/.aws/bluedragon_uswest1.pem` (same key as `~/.aws/bluedragon.pem`) |
-| `single_instance` | initialized, not applied | initialized, not applied |
-| `ecommerce-k8s` | not deployed (uses its own state bucket in us-east-1) | — |
+| EC2 key pair `bluedragon` | ed25519, re-created 2026-10-16 after exposure; matches `~/.aws/bluedragon_uswest2.pem` (old key kept as `.pem.exposed`) | matches `~/.aws/bluedragon_uswest1.pem` (same key as `~/.aws/bluedragon.pem`) |
+| `single_instance` | **applied** 2026-10-16, suffix `pvneok82`: VPC, EKS `eks-multi-pvneok82` (1.36, 4 x t3.micro), 2 EC2 (public `54.245.6.254`, private `10.1.4.226`), ElastiCache, ECS, KMS, S3, SNS, Kubernetes resources. Verified (see change log) | not applied; needs dev's shared IAM first |
+| `ecommerce-k8s` | not deployed (us-east-1, own state bucket, which was wiped); stages validate | — |
 
 Unrelated bucket in the same account: `grid-meter-app-tfstate-084375569056`
 holds another project's Terraform state. Do not delete it.
@@ -42,8 +62,10 @@ Locking uses S3 native lock files (`use_lockfile = true`); no DynamoDB table.
 3. Import the EC2 key pair per region:
    `ssh-keygen -y -f ~/.aws/<key>.pem > /tmp/<key>.pub` then
    `aws ec2 import-key-pair --key-name bluedragon --public-key-material fileb:///tmp/<key>.pub --region <region>`
-4. `single_instance/environments/{dev,prod}`: `terraform init -upgrade -backend-config=backend.hcl -reconfigure`, then plan/apply
-   (blocked until the EKS items under "Open items" are fixed)
+4. `single_instance/environments/dev`, then `prod` (prod reads dev's IAM): check `curl -4 ifconfig.me` matches
+   `my_laptop_cidr_block` in `terraform.tfvars`, then
+   `terraform init -upgrade -backend-config=backend.hcl -reconfigure`, then plan/apply
+5. kubectl: see `single_instance/docs/KUBECTL.md`
 
 Saved plan files (`plan-*`, `bootstrap-*`, `bucket-*`, `dev-bucket`, `prod-bucket`)
 are git-ignored. Provider lock files are git-ignored and machine-local; if
@@ -53,6 +75,74 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ### 2026-10-16
 
+- **Applied:** `single_instance/environments/dev`, the remaining 15 to add
+  and 1 to change, with the security group, key-copy and IAM fixes below.
+  Verified: 4 nodes Ready; heartbeat/monitor Services created and pods
+  Running; ALB controller, coredns, aws-node and kube-proxy Running;
+  `kubectl auth can-i` as `sre` gives yes in app1 and no in app2; SSH
+  laptop -> public -> private with `ProxyJump`, with no private key on either
+  instance. `app-ingress` has no ADDRESS (see Open items).
+- **Rotated the us-west-2 EC2 key pair `bluedragon`** (ed25519) before the
+  EC2 instances were created.
+- **Applied (partial):** `single_instance/environments/dev`, 94 of 109.
+  Failed: `EC2Role` already exists (an orphan created 2025-09-19, tagged
+  `Environment=Dev`, with AmazonEC2FullAccess and AmazonS3FullAccess, no
+  instance profile; not from this repo's code and missed by the wipe); and the
+  heartbeat/monitor Services, because the API server could not reach the ALB
+  controller's webhook on the nodes.
+- **Deleted orphan `EC2Role`** (AWS CLI, outside Terraform): detached
+  AmazonEC2FullAccess and AmazonS3FullAccess, then deleted the role. Checked
+  first that nothing used it: no references in ecommerce-k8s or grid-meter-app
+  (which moved to account 184375956348 on 2026-10-06); no instance profile;
+  AWS `RoleLastUsed` empty, so unused since its creation on 2025-09-19.
+- **Fixes after the dev apply (uncommitted):**
+  - EKS security group: added an all-traffic ingress rule from itself. The
+    control plane and nodes share this group, which only allowed 443 from the
+    VPC, so webhooks (9443), kubelet (10250) and cross-node pod traffic
+    (DNS) were blocked.
+  - Public EC2 user data no longer copies a private key onto the instance;
+    removed `ssh_private_key_path` everywhere. The us-west-2 key appeared in
+    plan output shared in a chat session, so that key pair needs to be replaced.
+    To reach the private instance, use `ssh -J ubuntu@<public-ip> ubuntu@<private-ip>`.
+  - IAM is global: prod now sets `create_iam_resources = false` on its
+    identity and vpc modules and looks up the roles, users and policies that
+    dev creates. Before this, a prod apply would have collided with dev on
+    `EC2Role`, `Admin`, `sre`, `vpc-flow-logs-role` and others. Fixed the
+    identity output `ec2_role_name` for that case. **Prod now requires dev to
+    be applied first.**
+- **EKS access and node size:** single_instance EKS API endpoint is now
+  public, limited to `my_laptop_cidr_block` (validation rejects empty or
+  `0.0.0.0/0`); private access stays on for nodes. `access_config` set
+  explicitly: `CONFIG_MAP` auth with cluster-creator admin, not left to
+  provider or API defaults. EKS nodes are `t3.micro` (4 pods each,
+  2 for system pods); new variables `eks_node_desired_size`/`eks_node_max_size`:
+  dev 4/5 (its 8 pods need every slot), prod 3/4. dev `aws-auth` patch waits
+  for the node group (`depends_on = [module.eks]`). New output
+  `kubeconfig_command`; kubectl directions in `single_instance/docs/KUBECTL.md`.
+  Laptop IP changed: `my_laptop_cidr_block` 23.93.84.244 -> 23.93.161.67 in
+  both tfvars. Read-only plans: prod 92 to add, dev 109 to add.
+- **ecommerce-k8s, M4 move:** deleted Intel (`darwin_amd64`) provider caches
+  and lock files in `terraform-state`, `stage1-infra`, `stage2-k8s` and the
+  stray root lock file, plus an empty `stage2-k8s/.terraform 2`; re-initialized
+  for `darwin_arm64` (AWS 6.69.1). Fixed validation: stage1 dropped
+  `control_plane_subnet_ids` and duplicate subnet tags (the vpc module sets
+  them); stage1 now outputs `vpc_public_subnets`, which stage2 reads; stage2
+  removed duplicate providers and outputs from `main.tf`, kept the
+  `aws eks get-token` providers in `providers.tf`, added the `random` provider,
+  and its remote-state key now matches stage1's backend key
+  (`ecommerce-k8s/stage1-infra/terraform.tfstate`). EKS `cluster_version`
+  1.29 -> 1.36 (EKS no longer offers 1.29), node group `ami_type`
+  `AL2023_x86_64_STANDARD`. All three roots pass `terraform validate`. Its old
+  `terraform-state/terraform.tfstate` (local) still describes the wiped bucket.
+- **EKS update:** cluster version 1.28 -> 1.36 (AWS default, standard
+  support to 2027-08). Node group uses `ami_type = "AL2023_x86_64_STANDARD"`;
+  the launch template no longer sets `image_id` or bootstrap user data, so EKS
+  supplies the Amazon Linux 2023 image and bootstraps with `nodeadm` (removed
+  the `aws_ami` lookup and `/etc/eks/bootstrap.sh` script). Launch template is
+  referenced by `latest_version` instead of `"$Latest"`. New variable
+  `eks_node_instance_type` (default `t3.medium`) so prod EKS nodes no longer
+  share `instance_type` (`t3.micro`, still used for EC2/ECS). Read-only plans:
+  prod 92 to add, dev 109 to add, 0 change/destroy, no errors.
 - **Commit (this file):** Added `alias/tfstate-{env}` on the tfstate stage's
   state KMS key; `single_instance` `backend.hcl` now sets `kms_key_id` to that
   alias, so single_instance state is KMS-encrypted. Applied the alias in dev
@@ -111,22 +201,31 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 - AWS provider pinned to 5.x (`5.94.1`, `~> 5.0`, `~> 5.95.0`).
 - tfstate bootstrap encrypted buckets with a placeholder `key/dummy` KMS ARN.
 - single_instance and tfstate/environments shared one state object per env.
-- Prod EKS: version 1.28 with `t3.micro` nodes and an Amazon Linux 2 AMI lookup.
+- Prod EKS: version 1.28 with `t3.micro` nodes and an Amazon Linux 2 AMI lookup;
+  API endpoint private-only.
+- ecommerce-k8s: EKS 1.29; stage1 and stage2 failed `terraform validate`.
 
 ## Open items
 
-- **EKS (blocks single_instance apply):** 1.28 is past AWS support; move to a
-  current version, switch the node AMI lookup from Amazon Linux 2
-  (`amazon-eks-node-*`, `/etc/eks/bootstrap.sh`) to Amazon Linux 2023
-  (`nodeadm`), and raise prod nodes from `t3.micro` (dev uses `t3.medium`).
+- **Dev ingress has no load balancer:** `app-ingress` shows no ADDRESS. The
+  ALB controller (chart 1.6.0) has no IAM role (no IRSA) and the public
+  subnets have no `kubernetes.io/role/elb` tag, so it can't create an ALB.
+  Expected; fix together with the chart update below.
+- **Laptop IP drift:** the EKS API and SSH rules allow only
+  `my_laptop_cidr_block`. When the home IP changes, update both tfvars and
+  apply, or Terraform's Kubernetes resources and kubectl time out.
+- **Dev EKS capacity is full:** dev's 4 `t3.micro` nodes have 8 free pod
+  slots and all 8 are used. Any new workload needs more nodes or bigger nodes.
+- **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
+  chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
 - **Suffixed tfstate buckets unused:** nothing stores state in
   `bluedragon-tfstate-admin-{env}-{suffix}`; candidates for removal, or fold
   the KMS key/alias into the bootstrap and drop the tfstate stage.
-- **EC2 user data copies a private key** to the public instance (and into
-  Terraform state). Replace with SSM Session Manager or an SSH agent forward.
-- **ecommerce-k8s does not validate:** stage1 passes arguments its `vpc` and
-  `eks` modules do not declare; stage2 defines providers and outputs twice.
-  `stage2-k8s/statefile.json` (old Terraform state) is committed.
+- **ecommerce-k8s not plan-tested:** validates, but its state bucket
+  `bluedragon-ecommerce-terraform-state` must be re-created (`terraform-state`
+  root, whose local state is stale) before init with the backend.
+  `stage2-k8s/statefile.json` (old Terraform state) is committed. stage1
+  tfvars uses 4 `t3.medium` nodes; the default endpoint CIDR is `0.0.0.0/0`.
 - **Docs:** `README.AWS.md` build steps predate the bootstrap/environments
   split; `aws/tfstate/README.md` is the accurate procedure.
 - **Lock files:** git-ignored; consider committing multi-platform locks

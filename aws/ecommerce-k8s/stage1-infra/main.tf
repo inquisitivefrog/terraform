@@ -8,14 +8,7 @@ module "vpc" {
   enable_nat_gateway = true
   single_nat_gateway = true
   cluster_name       = var.cluster_name
-  public_subnet_tags = {
-    "kubernetes.io/role/elb"                    = "1"
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-  }
-  private_subnet_tags = {
-    "kubernetes.io/role/internal-elb"           = "1"
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-  }
+  # Subnet tags for the ALB controller are set inside modules/vpc
 }
 
 module "iam" {
@@ -36,7 +29,6 @@ module "eks" {
   cluster_version                      = var.cluster_version
   vpc_id                               = module.vpc.vpc_id
   subnet_ids                           = module.vpc.private_subnets
-  control_plane_subnet_ids             = module.vpc.public_subnets # Use public subnets for control plane
   cluster_role_arn                     = module.iam.eks_cluster_role_arn
   node_role_arn                        = module.iam.node_role_arn
   cluster_endpoint_private_access      = var.cluster_endpoint_private_access

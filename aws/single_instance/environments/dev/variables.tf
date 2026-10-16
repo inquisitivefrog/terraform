@@ -14,7 +14,7 @@ variable "ec2_keypair" {
 
 variable "eks_version" {
   type        = string
-  default     = "1.28"
+  default     = "1.36"
   description = "Kubernetes version for EKS"
 }
 
@@ -107,7 +107,20 @@ variable "admin_user_name" {
   description = "IAM user allowed to administer the symmetric KMS key"
 }
 
-variable "ssh_private_key_path" {
+variable "eks_node_instance_type" {
   type        = string
-  description = "Local path to the private key for ec2_keypair"
+  default     = "t3.micro"
+  description = "EC2 instance type for EKS worker nodes (separate from instance_type used by EC2/ECS)"
+}
+
+variable "eks_node_desired_size" {
+  type        = number
+  default     = 4
+  description = "EKS worker node count (t3.micro holds 4 pods, 2 of them system pods)"
+}
+
+variable "eks_node_max_size" {
+  type        = number
+  default     = 5
+  description = "Maximum EKS worker node count"
 }

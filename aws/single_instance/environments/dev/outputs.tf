@@ -11,6 +11,11 @@ output "eks_cluster_name" {
   value       = module.eks.eks_cluster_name
 }
 
+output "kubeconfig_command" {
+  description = "Run this to point kubectl at the EKS cluster"
+  value       = "aws eks update-kubeconfig --region ${var.region} --name ${module.eks.eks_cluster_name} --alias eks-${var.env}"
+}
+
 output "eks_cluster_ca_certificate" {
   description = "EKS cluster CA certificate"
   value       = module.eks.eks_cluster_ca_certificate

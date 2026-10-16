@@ -2,32 +2,14 @@ data "aws_eks_cluster" "this" {
   name = "ecommerce-cluster"
 }
 
-data "aws_eks_cluster_auth" "this" {
-  name = "ecommerce-cluster"
-}
-
 data "aws_caller_identity" "current" {}
 
 data "terraform_remote_state" "stage1_infra" {
   backend = "s3"
   config = {
     bucket = "bluedragon-ecommerce-terraform-state"
-    key    = "stage1-infra/terraform.tfstate"
+    key    = "ecommerce-k8s/stage1-infra/terraform.tfstate" # matches stage1-infra/backend.hcl
     region = "us-east-1"
-  }
-}
-
-provider "kubernetes" {
-  host                   = data.aws_eks_cluster.this.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.this.token
-}
-
-provider "helm" {
-  kubernetes {
-    host                   = data.aws_eks_cluster.this.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.this.token
   }
 }
 
@@ -401,14 +383,4 @@ resource "kubernetes_manifest" "terraform_admin_clusterrolebinding" {
       apiGroup = "rbac.authorization.k8s.io"
     }
   }
-}
-
-output "bluedragon_admin_role" {
-  value = {
-    name = kubernetes_manifest.bluedragon_admin_clusterrole.manifest.metadata.name
-  }
-}
-
-output "ingress_hostname" {
-  value = try(kubernetes_ingress_v1.ecommerce_app.status[0].load_balancer[0].ingress[0].hostname, "pending")
 }

@@ -11,11 +11,6 @@ variable "ec2_keypair" {
   description = "AWS EC2 key pair name"
 }
 
-variable "ssh_private_key_path" {
-  type        = string
-  description = "Local path to the private key for ec2_keypair, copied to the public EC2 instance"
-}
-
 variable "ecs_task_execution_role_arn" {
   type        = string
   default     = ""

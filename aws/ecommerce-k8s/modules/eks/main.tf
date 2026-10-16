@@ -35,6 +35,7 @@ resource "aws_eks_node_group" "default" {
     min_size     = each.value.min_size
   }
   instance_types = each.value.instance_types
+  ami_type       = "AL2023_x86_64_STANDARD" # AL2 is not supported on EKS 1.33+
   disk_size      = 20
   timeouts {
     create = "30m"

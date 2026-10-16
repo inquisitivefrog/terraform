@@ -1,15 +1,10 @@
 # File 32: modules/eks/node.tf
 
+# No image_id or user_data: EKS supplies the Amazon Linux 2023 image for the
+# cluster version (ami_type below) and bootstraps nodes with nodeadm.
 resource "aws_launch_template" "eks_nodes" {
   name_prefix   = "eks-ng-${var.env}-${var.random_suffix}"
-  image_id      = data.aws_ami.eks_optimized.id
   instance_type = var.instance_type
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    set -ex
-    /etc/eks/bootstrap.sh eks-${var.env}-${var.random_suffix} --kubelet-extra-args '--node-labels=eks.amazonaws.com/nodegroup-image=${data.aws_ami.eks_optimized.id},eks.amazonaws.com/capacityType=ON_DEMAND,eks.amazonaws.com/nodegroup=ng-${var.env}-${var.random_suffix} --max-pods=17'
-    EOF
-  )
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
@@ -31,23 +26,15 @@ resource "aws_eks_node_group" "this" {
   node_group_name = "ng-${var.env}-${var.random_suffix}"
   node_role_arn   = var.eks_node_role_arn
   subnet_ids      = var.vpc_subnet_private_ids
+  ami_type        = "AL2023_x86_64_STANDARD"
   scaling_config {
-    desired_size = 3
-    max_size     = 4
+    desired_size = var.node_desired_size
+    max_size     = var.node_max_size
     min_size     = 1
   }
   launch_template {
     id      = aws_launch_template.eks_nodes.id
-    version = "$Latest"
+    version = aws_launch_template.eks_nodes.latest_version
   }
   depends_on = [var.eks_node_policy_attachments]
-}
-
-data "aws_ami" "eks_optimized" {
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["amazon-eks-node-${var.eks_version}-*"]
-  }
 }

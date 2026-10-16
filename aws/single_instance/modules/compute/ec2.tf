@@ -36,10 +36,6 @@ resource "aws_instance" "public-ec2" {
   }
   user_data = <<-EOF
     #!/bin/bash
-    mkdir -p /home/ubuntu/.ssh
-    echo "${file(var.ssh_private_key_path)}" > /home/ubuntu/.ssh/${var.ec2_keypair}.pem
-    chmod 400 /home/ubuntu/.ssh/${var.ec2_keypair}.pem
-    chown ubuntu:ubuntu /home/ubuntu/.ssh/${var.ec2_keypair}.pem
     apt-get update
     apt-get install -y wget
     apt install -y unzip

@@ -165,6 +165,17 @@ resource "aws_security_group" "eks_cluster" {
     cidr_blocks = [var.vpc_cidr_block]
   }
 
+  # The control plane ENIs and the worker nodes both use this group. Allow all
+  # traffic between them: admission webhooks (ALB controller on 9443), kubelet
+  # (10250), and pod-to-pod traffic such as DNS to coredns on another node.
+  ingress {
+    description = "All traffic between control plane and nodes"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

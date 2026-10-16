@@ -19,7 +19,7 @@ output "ec2_instance_role_arn" {
 }
 
 output "ec2_role_name" {
-  value       = aws_iam_role.ec2_role[0].name
+  value       = var.create_iam_resources ? aws_iam_role.ec2_role[0].name : data.aws_iam_role.ec2_role[0].name
   description = "Name of the EC2 IAM role"
 }
 

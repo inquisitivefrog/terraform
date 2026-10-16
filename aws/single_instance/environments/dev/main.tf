@@ -74,7 +74,6 @@ module "compute" {
   source                      = "../../modules/compute"
   ec2_instance_profile_name   = module.identity.ec2_instance_profile_name
   ec2_keypair                 = var.ec2_keypair
-  ssh_private_key_path        = var.ssh_private_key_path
   ecs_task_execution_role_arn = module.identity.ecs_task_execution_role_arn
   instance_type               = var.instance_type
   sg_private_ec2_id           = module.networking.sg_private_ec2_id
@@ -168,9 +167,12 @@ module "eks" {
   eks_node_policy_attachments    = module.identity.eks_node_policy_attachments
   eks_node_role_arn              = module.identity.eks_node_role_arn
   eks_version                    = var.eks_version
+  instance_type                  = var.eks_node_instance_type
+  public_access_cidrs            = [var.my_laptop_cidr_block]
   env                            = var.env
-  instance_type                  = var.instance_type
   kms_key_arn                    = module.kms.eks_key_arn
+  node_desired_size              = var.eks_node_desired_size
+  node_max_size                  = var.eks_node_max_size
   node_security_group_ids        = [module.networking.sg_eks_cluster_id]
   random_suffix                  = random_string.suffix.result
   vpc_cidr_block                 = var.vpc_cidr_block
@@ -225,4 +227,6 @@ resource "kubernetes_config_map_v1_data" "aws_auth" {
     ])
   }
   force = true
+  # The managed node group creates aws-auth; patch it only after the group exists.
+  depends_on = [module.eks]
 }
