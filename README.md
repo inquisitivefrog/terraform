@@ -40,6 +40,4 @@ AWS
 
    g. s3: S3 bucket
 
-   h. tiller: kubernetes_service_account, deployment, service
-
-   i. sample-app: kubernetes_deployment, kubernetes_service
+   h. sample-app: kubernetes_deployment, kubernetes_service

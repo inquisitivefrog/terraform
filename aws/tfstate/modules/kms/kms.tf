@@ -8,6 +8,12 @@ resource "aws_kms_key" "state_bucket_key" {
   }
 }
 
+# Fixed name so backend.hcl files can reference the key without its random ID
+resource "aws_kms_alias" "state_bucket_key" {
+  name          = "alias/tfstate-${var.env}"
+  target_key_id = aws_kms_key.state_bucket_key.key_id
+}
+
 resource "aws_kms_key" "sns_logging_key" {
   description              = "Custom key for SNS encryption (${var.env})"
   deletion_window_in_days  = 7
