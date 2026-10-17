@@ -59,4 +59,8 @@ resource "kubernetes_ingress_v1" "app_ingress" {
       }
     }
   }
+
+  # The controller removes this ingress's finalizer. Destroy the ingress
+  # first, or the delete waits forever on a controller that is already gone.
+  depends_on = [helm_release.aws_alb_ingress_controller]
 }

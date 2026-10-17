@@ -1,142 +1,178 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Tear down the tfstate layer so the AWS account stops costing money.
+#
+#   aws/scripts/aws_wipe.sh
+#
+# Order (each step's state lives in the next step's buckets):
+#   1. tfstate/environments/{prod,dev}  KMS keys, SNS topic, suffixed buckets.
+#                                       State: in the bootstrap bucket.
+#   2. tfstate/bootstrap/{prod,dev}     bootstrap state and log buckets.
+#                                       State: local terraform.tfstate.
+#
+# Refuses to start while single_instance (dev or prod) still has resources:
+# destroy those first with terraform destroy in each environment directory.
+#
+# The state buckets are versioned with force_destroy = false, so before each
+# terraform destroy the script empties that state's buckets (every object
+# version and delete marker). S3 access logs can land after the emptying, so
+# a failed destroy is retried after emptying again. Terraform does the
+# deleting, so nothing it manages (KMS keys, SNS topics) is left orphaned.
+#
+# Safe to re-run after a partial failure. To rebuild later, follow the build
+# order in aws/tfstate/docs/STATUS.md (bootstrap first).
 
-# Full cleanup script for tfstate and single_instance projects
-# Run from /Users/tim/Documents/workspace/sre/terraform/aws/
+set -euo pipefail
 
-EXPECTED_DIR="/Users/tim/Documents/workspace/sre/terraform/aws"
-CURRENT_DIR=$(pwd)
-if [ "$CURRENT_DIR" != "$EXPECTED_DIR" ]; then
-  echo "Error: This script must be run from $EXPECTED_DIR"
-  exit 1
-fi
+ACCOUNT_ID="084375569056"
+ENVS=(prod dev)
+declare -A REGION=([dev]=us-west-2 [prod]=us-west-1)
+MAX_TRIES=5
 
-VERBOSE=${VERBOSE:-false}
+AWS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
 
-# Validate AWS credentials
-if ! aws sts get-caller-identity >/dev/null 2>&1; then
-  echo "Error: Invalid or missing AWS credentials"
-  exit 1
-fi
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+bold() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
-# Function to destroy Terraform Kubernetes resources
-destroy_k8s() {
-  local dir=$1
-  echo "Destroying Kubernetes resources in $dir..."
-  cd "$dir" || { echo "Failed to cd into $dir"; return 1; }
-  if [ ! -f "main.tf" ] && [ ! -f "backend.hcl" ]; then
-    echo "Error: No Terraform configuration found in $dir"
-    return 1
-  fi
-  terraform init -backend-config=backend.hcl || terraform init || { echo "Terraform init failed in $dir"; return 1; }
-  for resource in $(terraform state list | grep '^module.kubernetes_.*kubernetes_'); do
-    terraform state rm "$resource" && echo "Removed $resource" || echo "Failed to remove $resource"
+bucket_exists() { aws s3api head-bucket --bucket "$1" >/dev/null 2>&1; }
+
+# Names of the S3 buckets in the current directory's terraform state.
+state_buckets() {
+  terraform show -json |
+    jq -r '[.. | objects | select(.mode? == "managed" and .type? == "aws_s3_bucket") | .values.bucket] | .[]'
+}
+
+# Delete every object version and delete marker, 1000 at a time.
+empty_bucket() {
+  local bucket=$1 region=$2 batch="$TMP/delete.json"
+  bucket_exists "$bucket" || return 0
+  while :; do
+    aws s3api list-object-versions --bucket "$bucket" --region "$region" --max-items 1000 --output json |
+      jq '{Objects: [(.Versions // [])[], (.DeleteMarkers // [])[] | {Key, VersionId}], Quiet: true}' >"$batch"
+    [ "$(jq '.Objects | length' "$batch")" -eq 0 ] && break
+    echo "  emptying $bucket: $(jq '.Objects | length' "$batch") object versions"
+    aws s3api delete-objects --bucket "$bucket" --region "$region" --delete "file://$batch" >/dev/null
   done
-  if terraform state list | grep -q '^module.kubernetes_.*kubernetes_'; then
-    echo "Warning: Some Kubernetes resources still remain in $dir"
-  else
-    echo "All Kubernetes resources removed in $dir"
-  fi
-  cd - >/dev/null || exit 1
 }
 
-# Function to destroy Terraform resources
-destroy_tf() {
-  local dir=$1
-  echo "Destroying resources in $dir..."
-  cd "$dir" || { echo "Failed to cd into $dir"; return 1; }
-  if [ ! -f "main.tf" ] && [ ! -f "backend.hcl" ]; then
-    echo "Error: No Terraform configuration found in $dir"
-    return 1
-  fi
-  if $VERBOSE; then
-    terraform init -backend-config=backend.hcl || terraform init || { echo "Terraform init failed in $dir"; return 1; }
-    terraform destroy -auto-approve || echo "Terraform destroy failed in $dir"
+# Empty this state's buckets, then terraform destroy; retry on late log objects.
+destroy_dir() {
+  local dir=$1 region=$2 buckets try
+  bold "terraform destroy: $dir"
+  cd "$AWS_DIR/$dir"
+  if [ -f backend.hcl ]; then
+    terraform init -input=false -reconfigure -backend-config=backend.hcl >/dev/null
   else
-    terraform init -backend-config=backend.hcl >/dev/null 2>&1 || terraform init >/dev/null 2>&1 || { echo "Terraform init failed in $dir"; return 1; }
-    terraform destroy -auto-approve >/dev/null 2>&1 || echo "Terraform destroy failed in $dir"
+    terraform init -input=false >/dev/null
   fi
-  cd - >/dev/null || exit 1
+  if [ -z "$(terraform state list)" ]; then
+    echo "  state is empty; nothing to destroy"
+    return 0
+  fi
+  buckets=$(state_buckets)
+  for try in $(seq 1 "$MAX_TRIES"); do
+    for b in $buckets; do empty_bucket "$b" "$region"; done
+    if terraform destroy -auto-approve -input=false; then
+      return 0
+    fi
+    [ "$try" -lt "$MAX_TRIES" ] || break
+    red "  destroy failed (attempt $try of $MAX_TRIES); emptying again in 30s"
+    sleep 30
+  done
+  red "terraform destroy failed in $dir. Fix the error above and re-run."
+  exit 1
 }
 
-# Function to wipe S3 buckets
-wipe_bucket() {
-  local bucket=$1
-  echo "Wiping bucket: $bucket"
-  if ! aws s3api head-bucket --bucket "$bucket" >/dev/null 2>&1; then
-    echo "Bucket $bucket does not exist or is inaccessible"
-    return 1
-  fi
-  # Skip if Terraform state is still active
-  if terraform state list >/dev/null 2>&1; then
-    echo "Warning: Terraform state still active in current directory; skipping $bucket"
-    return 1
-  fi
-  aws s3 cp "s3://$bucket/terraform.tfstate" "/tmp/$bucket-tfstate-backup-$(date +%s)" || echo "Warning: Failed to back up state file from $bucket"
-  if aws s3 rb "s3://$bucket" --force; then
-    echo "Deleted $bucket"
-  else
-    echo "Force delete failed for $bucket, attempting manual cleanup..."
-    aws s3api list-object-versions --bucket "$bucket" --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json > /tmp/objects.json
-    if [ -s /tmp/objects.json ] && [ "$(cat /tmp/objects.json)" != "null" ] && [ "$(cat /tmp/objects.json)" != "[]" ]; then
-      aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/objects.json || echo "Warning: Failed to delete objects in $bucket"
+# Abort if single_instance still has resources in either environment.
+check_single_instance_empty() {
+  local env count
+  for env in "${ENVS[@]}"; do
+    if ! bucket_exists "bluedragon-tfstate-admin-$env"; then
+      continue # bootstrap already gone, so single_instance state is too
     fi
-    aws s3api list-object-versions --bucket "$bucket" --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json > /tmp/markers.json
-    if [ -s /tmp/markers.json ] && [ "$(cat /tmp/markers.json)" != "null" ] && [ "$(cat /tmp/markers.json)" != "[]" ]; then
-      aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/markers.json || echo "Warning: Failed to delete markers in $bucket"
+    cd "$AWS_DIR/single_instance/environments/$env"
+    terraform init -input=false -reconfigure -backend-config=backend.hcl >/dev/null
+    count=$(terraform state list | wc -l | tr -d ' ')
+    if [ "$count" -ne 0 ]; then
+      red "single_instance/environments/$env still has $count resources."
+      echo "Destroy it first:  cd single_instance/environments/$env && terraform destroy"
+      exit 1
     fi
-    if aws s3 rb "s3://$bucket" --force; then
-      echo "Deleted $bucket after manual cleanup"
-    else
-      echo "Failed to delete $bucket"
-    fi
-  fi
+    echo "  single_instance/$env: state empty"
+  done
 }
 
+# Anything billable left in either region.
 verify_cleanup() {
-  echo "Verifying no residual AWS resources..."
-  aws eks list-clusters --region us-west-2 --query 'clusters' --output text | grep -q . && echo "Warning: EKS clusters remain" || echo "No EKS clusters"
-  aws s3api list-buckets --query 'Buckets[].Name' --output text | grep -q . && echo "Warning: Buckets remain" || echo "No buckets"
-  aws ec2 describe-network-interfaces --region us-west-2 --query 'NetworkInterfaces[].NetworkInterfaceId' --output text | grep -q . && echo "Warning: ENIs remain" || echo "No ENIs"
-  aws ec2 describe-vpcs --region us-west-2 --query 'Vpcs[].VpcId' --output text | grep -q . && echo "Warning: VPCs remain" || echo "No VPCs"
-  aws ec2 describe-security-groups --region us-west-2 --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text | grep -q . && echo "Warning: Custom security groups remain" || echo "No custom security groups"
-  aws logs describe-log-groups --region us-west-2 --query 'logGroups[].logGroupName' --output text | grep -q . && echo "Warning: Log groups remain" || echo "No log groups"
-  aws iam list-roles --query 'Roles[?RoleName==`EC2` || RoleName==`ECS` || starts_with(RoleName, `default-eks`) || starts_with(RoleName, `my-eks`)]' --output text | grep -q . && echo "Warning: Custom IAM roles remain" || echo "No custom IAM roles"
-  aws kms list-keys --region us-west-2 --query 'Keys[?KeyState==`Enabled` && KeyManager==`CUSTOMER`].KeyId' --output text | grep -q . && echo "Warning: Billable KMS CMKs remain" || echo "No billable KMS CMKs"
+  local region key leftover=0
+  bold "Checking for leftover resources"
+  check() { # description, output of a list command
+    if [ -n "$2" ] && [ "$2" != "None" ]; then
+      red "  $1: $2"
+      leftover=1
+    fi
+  }
+  for region in "${REGION[@]}"; do
+    echo "  $region"
+    check "EKS clusters" "$(aws eks list-clusters --region "$region" --query 'clusters' --output text)"
+    check "EC2 instances" "$(aws ec2 describe-instances --region "$region" --filters Name=instance-state-name,Values=pending,running,stopping,stopped --query 'Reservations[].Instances[].InstanceId' --output text)"
+    check "NAT gateways" "$(aws ec2 describe-nat-gateways --region "$region" --filter Name=state,Values=pending,available --query 'NatGateways[].NatGatewayId' --output text)"
+    check "Elastic IPs" "$(aws ec2 describe-addresses --region "$region" --query 'Addresses[].PublicIp' --output text)"
+    check "Load balancers" "$(aws elbv2 describe-load-balancers --region "$region" --query 'LoadBalancers[].LoadBalancerName' --output text)"
+    check "ElastiCache clusters" "$(aws elasticache describe-cache-clusters --region "$region" --query 'CacheClusters[].CacheClusterId' --output text)"
+    check "Non-default VPCs" "$(aws ec2 describe-vpcs --region "$region" --filters Name=is-default,Values=false --query 'Vpcs[].VpcId' --output text)"
+    for key in $(aws kms list-keys --region "$region" --query 'Keys[].KeyId' --output text); do
+      if [ "$(aws kms describe-key --region "$region" --key-id "$key" \
+        --query 'join(`/`, [KeyMetadata.KeyManager, KeyMetadata.KeyState])' --output text 2>/dev/null)" = "CUSTOMER/Enabled" ]; then
+        check "Enabled customer KMS key" "$key"
+      fi
+    done
+  done
+  check "bluedragon buckets" "$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `bluedragon-`)].Name' --output text)"
+  if [ "$leftover" -eq 0 ]; then
+    echo "  nothing billable left from this repo (KMS keys pending deletion are free)"
+  fi
 }
 
-# Main cleanup
-echo "Starting full cleanup..."
+# --- main -------------------------------------------------------------------
 
-# Define directories
-DIRS=(
-  "single_instance/environments/dev"
-  "single_instance/environments/prod"
-  "tfstate/environments/dev"
-  "tfstate/environments/prod"
-  "tfstate/bootstrap/dev"
-  "tfstate/bootstrap/prod"
-)
-
-# Destroy resources
-for dir in "${DIRS[@]}"; do
-  if [[ "$dir" == single_instance/* ]]; then
-    destroy_k8s "$dir"
-  fi
-  destroy_tf "$dir"
+for cmd in aws terraform jq; do
+  command -v "$cmd" >/dev/null || { red "$cmd is not installed"; exit 1; }
 done
 
-# Wipe S3 buckets
-echo "Starting S3 bucket cleanup..."
-BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `bluedragon-`)].Name' --output text || true)
-if [ -z "$BUCKETS" ]; then
-  echo "No matching buckets found."
-else
-  for bucket in $BUCKETS; do
-    wipe_bucket "$bucket"
-  done
+account=$(aws sts get-caller-identity --query Account --output text) ||
+  { red "No valid AWS credentials"; exit 1; }
+if [ "$account" != "$ACCOUNT_ID" ]; then
+  red "Logged in to account $account, expected $ACCOUNT_ID. Stopping."
+  exit 1
 fi
 
-verify_cleanup
+bold "Preflight"
+check_single_instance_empty
 
-rm -f /tmp/objects.json /tmp/markers.json
-echo "Full cleanup complete!"
+cat <<EOF
+
+This permanently deletes the tfstate layer in account $ACCOUNT_ID:
+  - tfstate/environments/{prod,dev}: KMS keys, SNS topics, suffixed buckets
+  - tfstate/bootstrap/{prod,dev}:    bluedragon-tfstate-admin-{prod,dev}[-logs]
+    including every state file and access log stored in them.
+Other buckets (grid-meter etc.) are not touched.
+EOF
+read -r -p "Type 'wipe' to continue: " answer
+[ "$answer" = "wipe" ] || { echo "Cancelled."; exit 1; }
+
+for env in "${ENVS[@]}"; do
+  if bucket_exists "bluedragon-tfstate-admin-$env"; then
+    destroy_dir "tfstate/environments/$env" "${REGION[$env]}"
+  else
+    echo "tfstate/environments/$env: bootstrap bucket already gone; skipping"
+  fi
+done
+
+for env in "${ENVS[@]}"; do
+  destroy_dir "tfstate/bootstrap/$env" "${REGION[$env]}"
+done
+
+verify_cleanup
+bold "Done"

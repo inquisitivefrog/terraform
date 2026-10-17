@@ -11,6 +11,9 @@ change log, and update "Current state" and "Open items" when they change.
 
 ## Remember
 
+- **Stop AWS costs between sessions:** destroy single_instance (prod, then
+  dev), then run `aws/scripts/aws_wipe.sh` for the tfstate layer. Rebuild
+  with the build order below, starting at step 1.
 - **Shortcuts:** `aws/scripts/kube_use.sh dev|prod` switches kubectl and
   shows nodes and pods; `aws/scripts/ssh_ec2.sh dev|prod [public|private]`
   SSHes in. kubectl follows the current context, not your directory.
@@ -38,10 +41,10 @@ change log, and update "Current state" and "Open items" when they change.
 
 | Layer | dev (us-west-2) | prod (us-west-1) |
 |---|---|---|
-| `tfstate/bootstrap` (local state) | `bluedragon-tfstate-admin-dev` + `-logs`, SSE-S3 | `bluedragon-tfstate-admin-prod` + `-logs`, SSE-S3 |
-| `tfstate/environments` (state in bootstrap bucket, key `terraform.tfstate`) | suffix `gmeemt5w`: KMS `state_bucket_key` `39173157-…` + `alias/tfstate-dev`, SNS key, `logging-topic`, suffixed buckets | suffix `l4ilb4si`: KMS `state_bucket_key` `5a0c9bd2-…` + `alias/tfstate-prod`, SNS key, `logging-topic`, suffixed buckets |
+| `tfstate/bootstrap` (local state) | **destroyed** 2026-10-16 by `aws_wipe.sh` | **destroyed** 2026-10-16 by `aws_wipe.sh` |
+| `tfstate/environments` (state in bootstrap bucket, key `terraform.tfstate`) | **destroyed** 2026-10-16 (was suffix `gmeemt5w`); KMS keys pending deletion | **destroyed** 2026-10-16 (was suffix `l4ilb4si`); KMS keys pending deletion |
 | EC2 key pair `bluedragon` | ed25519, re-created 2026-10-16 after exposure; matches `~/.aws/bluedragon_uswest2.pem` (old key kept as `.pem.exposed`) | matches `~/.aws/bluedragon_uswest1.pem` (same key as `~/.aws/bluedragon.pem`) |
-| `single_instance` | **applied** 2026-10-16, suffix `pvneok82`: VPC, EKS `eks-multi-pvneok82` (1.36, 4 x t3.micro), 2 EC2 on Ubuntu 24.04 (public `34.220.46.250`, private `10.1.4.26`), ElastiCache, ECS, KMS, S3, SNS, Kubernetes resources. Verified (see change log) | **applied** 2026-10-16, suffix `w0xkpjbs`: VPC, EKS `eks-prod-w0xkpjbs` (1.36, 3 x t3.micro), 2 EC2, ElastiCache, ECS, KMS, S3, SNS, 2 EC2 on Ubuntu 24.04 (public `54.183.161.163`, private `10.0.4.223`). Verified: 3 nodes Ready in us-west-1, kube-system pods Running (context `eks-prod`) |
+| `single_instance` | **destroyed** 2026-10-16 (last suffix `pvneok82`); state empty. Rebuild: `plan -out` + `apply` | **destroyed** 2026-10-16 (last suffix `w0xkpjbs`); state empty. Rebuild after dev |
 | `ecommerce-k8s` | not deployed (us-east-1, own state bucket, which was wiped); stages validate | — |
 
 Unrelated bucket in the same account: `grid-meter-app-tfstate-084375569056`
@@ -83,6 +86,39 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ### 2026-10-16
 
+- **Rewrote `aws/scripts/aws_wipe.sh`** to tear down the tfstate layer (4
+  enabled KMS keys, about $4/month, plus the 8 `bluedragon-tfstate-admin-*`
+  buckets). Refuses to run while either single_instance state has resources
+  and checks it's in account 084375569056. Asks you to type `wipe`, then
+  destroys `tfstate/environments/{prod,dev}` and then
+  `tfstate/bootstrap/{prod,dev}` with Terraform output shown. Before each
+  destroy it empties that state's versioned buckets; it retries if late access
+  logs arrive. Ends with a leftover check in us-west-1 and us-west-2. Old
+  version: hid all output, deleted every `bluedragon-*` bucket outside
+  Terraform (orphaning the KMS keys), and only checked us-west-2.
+- **Ran `aws_wipe.sh`:** all four tfstate roots destroyed (bootstrap dev: 13
+  destroyed), leftover check clean in both regions. The account now holds
+  nothing from this repo except the free EC2 key pairs `bluedragon`; KMS keys
+  are pending deletion. Next rebuild starts at build order step 1.
+- **Destroyed prod, then dev; both stopped partway.** Prod: everything gone
+  except `bluedragon-log-bucket-w0xkpjbs` (BucketNotEmpty: versioned access
+  logs). Dev: node group, instances, IAM and most resources gone; left were the
+  EKS cluster (no nodes), NAT gateway, EIP, VPC, subnets, IGW, cluster SG, EKS
+  KMS key, `app1` namespace, the ingress and `bluedragon-log-bucket-pvneok82`.
+  Causes: (1) log buckets had no `force_destroy`; (2) the ALB controller
+  (helm release) was destroyed before the ingress, so nothing removed the
+  ingress's `ingress.k8s.aws/resources` finalizer and the delete timed out
+  after 20 minutes (no ALB existed). Fixes: `force_destroy = true` on the log
+  bucket, and the ingress `depends_on` the helm release so it's destroyed
+  first. Cleanup: remove the finalizer with kubectl, `apply -target` the log
+  bucket to record `force_destroy`, then destroy again.
+  Prod finished: a full destroy plan failed because prod's IAM data sources
+  look up dev's shared IAM, already deleted; `terraform destroy -target` on the
+  log bucket and `random_string.suffix` removed the last 2. Prod state is empty.
+  Dev finished after removing the ingress finalizer: 15 destroyed, state
+  empty. Checked both regions afterwards: no EKS, NAT, EIP, EC2, non-default
+  VPC, load balancer or ElastiCache left. Remaining: the tfstate buckets and
+  KMS keys (kept for the rebuild) and grid-meter's state bucket.
 - **Private instance had no outbound internet.** Its security group
   (`private_ec2`) only allowed egress to the VPC CIDR on 22 and 443, so
   nothing reached the NAT gateway: the user data's `apt-get install

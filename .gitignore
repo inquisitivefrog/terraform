@@ -29,6 +29,8 @@ bootstrap-dev
 bootstrap-prod
 bucket-dev
 bucket-prod
+destroy-dev
+destroy-prod
 dev-bucket
 prod-bucket
 
