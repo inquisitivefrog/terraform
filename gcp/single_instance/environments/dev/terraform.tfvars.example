@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+
+env                  = "dev"
+my_laptop_cidr_block = "<your public IP>/32" # curl -4 ifconfig.me
+pods_cidr_block      = "10.101.0.0/16"
+project_id           = "<GCP project ID, e.g. bluedragon-sre-vuft1e>"
+region               = "us-west1"
+services_cidr_block  = "10.201.0.0/20"
+vpc_cidr_block       = "10.1.0.0/16"
+zones                = ["us-west1-a", "us-west1-b"]
