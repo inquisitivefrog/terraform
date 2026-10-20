@@ -24,9 +24,59 @@ log, and update "Current state" and "Open items" when they change.
 | Layer | dev (westus2) | prod (westus) |
 |---|---|---|
 | `tfstate/bootstrap` (local state) | **applied** 2026-10-20: `bdtfstatedev`, `bdtflogsdev`, budget; `check_resources.sh dev` 18/18 | **applied** 2026-10-20: `bdtfstateprod`, `bdtflogsprod`; 17/17 |
+| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **applied** 2026-10-20, suffix `kwtq7q1d`: AKS `aks-dev-kwtq7q1d` (1.36.4), public VM `20.69.161.39`; running (~$10/day) | written, validates; not planned |
 | `tfstate/environments` (state in bootstrap account) | **applied** 2026-10-20, suffix `a2oowcjc`: vault `bdtfkvdeva2oowcjc`, state `bdtfstatedeva2oowcjc` (CMK); `check_resources.sh dev` 38/38 | **applied** 2026-10-20, suffix `gw3jhawh`: vault `bdtfkvprodgw3jhawh`, state `bdtfstateprodgw3jhawh` (CMK); 37/37 |
 
 ## Change log
+
+### 2026-10-20: port `single_instance` to Azure
+
+- `azure/scripts/vm_sizes.sh`: the subscription can't use B-series (or most
+  older families) in westus2, westus, westus3, centralus or eastus2; v6/v7
+  are open (10 vCPUs each, 10 per region). Sizes: VMs `Standard_F1als_v7`,
+  AKS nodes `Standard_D2als_v7`.
+- `register_providers.sh` now also registers Network, Compute,
+  ContainerService, Cache, App, OperationalInsights, ServiceBus (done).
+- Added `azure/single_instance` (mapping in its README). azurerm 5.x
+  differences hit: private DNS resources take `private_dns_zone_id`, AKS
+  needs `node_provisioning_profile`, Event Grid uses `service_bus_topic_id`.
+- New SSH key `~/.ssh/bluedragon_azure` (ed25519) for the VMs.
+- Dev plan: 100 to add.
+- Dev apply 1: all but the Container Apps environment (azurerm 5.x needs
+  `logs_destination = "log-analytics"`). Flow logs into a keys-off account
+  worked. Apply 2: 18 added, 2 changed; replan clean.
+- Flow-log retention policy removed: it made Azure add its own rule to the
+  logs account's lifecycle policy, which Terraform then fought.
+- Verified through `az vm run-command` (`azure/scripts/ssh_vm.sh --run`):
+  both VMs bootstrapped; Redis resolves to the private endpoint (10.1.5.4),
+  TLS + key PONG, NOAUTH without; the public VM's identity gets AKS
+  credentials, sees 30 running pods, cluster-admin via Azure RBAC.
+- Container app unreachable from the public VM: its NSG didn't allow the
+  apps subnet (10.1.6.0/27). Fix planned (1 in-place NSG change).
+- Fixed: public VM NSG now allows the apps subnet; container app returns
+  200 from the public VM (first request after scale-to-zero is slow).
+  Added Storage Blob Data Reader for you on the dev and logs accounts.
+- SSH to the public VM: **fixed** 2026-10-20. Cause: `my_laptop_cidr_block`
+  was the PIA exit IP (50.117.36.219) while the laptop connected from home
+  (23.93.161.67, PIA off). Earlier, with PIA on, PIA itself interfered with
+  SSH; a temporary NSG rule for the home IP was probably tested before it
+  took effect. Ruled out on the way: effective routes (defaults),
+  public IP <-> NIC association, sshd (22 and 2222), host firewall (none),
+  the v7 MANA NIC (`ens1` bonded to `eth0`; accelerated networking shows
+  false in ARM but the size supports it, and traffic flows), the empty
+  `networkManager` admin NSG entry (platform default), laptop and ISP
+  (github.com:22 and the AKS ingress reachable).
+- Applied the new laptop IP with a targeted apply: a full plan fails
+  reading the `app1`/`app2` namespaces because the AKS API still only
+  allowed the old IP. `terraform plan -out plan-dev
+  -target=module.aks.azurerm_kubernetes_cluster.this
+  -target=module.networking.azurerm_network_security_group.public_vm`, then
+  apply: 2 changed. `ssh_vm.sh dev` and `ssh_vm.sh dev private` (through
+  the public VM) both log in (Ubuntu 24.04.5).
+- Full (untargeted) dev plan afterwards: no changes.
+- VNet flow logs record only the AKS nodes' NICs, nothing from the two
+  v7 VMs (possibly a v7/Azure Boost limitation; unconfirmed).
+- Not yet: single_instance checks in check_resources.sh, prod plan, commit.
 
 ### 2026-10-20: port `tfstate` to Azure
 
@@ -56,6 +106,12 @@ log, and update "Current state" and "Open items" when they change.
 
 ## Open items
 
+- **Laptop IP drift:** the public VM NSG and AKS authorized IPs allow only
+  `my_laptop_cidr_block` (23.93.161.67/32, home, PIA off, on 2026-10-20).
+  When `curl -4 ifconfig.me` differs, update tfvars and apply with
+  `-target=module.aks.azurerm_kubernetes_cluster.this
+  -target=module.networking.azurerm_network_security_group.public_vm`
+  first; a full plan can't read the Kubernetes resources until then.
 - **Event Grid topics have no subscriber** (like SNS and Pub/Sub here).
 - **Cost Management** not reporting the new subscription yet; re-run
   `azure/scripts/estimate_costs.sh` after 2026-10-22.

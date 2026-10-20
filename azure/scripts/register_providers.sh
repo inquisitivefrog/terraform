@@ -17,6 +17,14 @@ namespaces=(
   Microsoft.EventGrid       # blob event topics
   Microsoft.Insights        # diagnostic settings (access logs)
   Microsoft.Consumption     # budgets
+  # single_instance
+  Microsoft.Network            # VNets, NSGs, NAT gateway, private endpoints, flow logs
+  Microsoft.Compute            # VMs, disks
+  Microsoft.ContainerService   # AKS
+  Microsoft.Cache              # Azure Managed Redis
+  Microsoft.App                # Container Apps
+  Microsoft.OperationalInsights # Log Analytics
+  Microsoft.ServiceBus         # topics and subscriptions
   "$@"
 )
 

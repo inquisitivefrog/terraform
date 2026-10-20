@@ -23,7 +23,9 @@ S=8d75b8ef-999c-4f70-99a9-4eb0197f3a07   # bluedragon-sre
 
 | Script | What it does |
 |---|---|
-| `register_providers.sh [extra…]` | Registers the resource providers this repo uses in `bluedragon-sre` and waits until done. Run once per subscription, before the first apply; safe to re-run |
+| `register_providers.sh [extra…]` | Registers the resource providers this repo uses (tfstate and single_instance) in `bluedragon-sre` and waits until done. Run once per subscription, before the first apply; safe to re-run |
+| `ssh_vm.sh dev\|prod [public\|private]` | SSH with `~/.ssh/bluedragon_azure`; private through public. `SSH_PORT=2222` uses the second port. `--run 'cmd'` runs a command through the Azure API instead (no SSH; works whatever the VPN does) |
+| `vm_sizes.sh [max-vcpus] [region…]` | Lists VM sizes this subscription can actually use per region (not blocked, family quota > 0), with the regional vCPU quota. Default: <= 4 vCPUs in westus2, westus, westus3 |
 | `check_resources.sh dev\|prod` | Confirms every tfstate resource exists and is configured as intended (dev: 18 bootstrap + 20 environments = 38). Exit 1 on any failure |
 | `estimate_costs.sh [days]` | List-price estimate from live resources, plus real billed cost by service from Cost Management (lags a day or two; a new subscription reports nothing for up to 48 hours) |
 
@@ -125,6 +127,68 @@ budget (alerts only; it doesn't stop spending).
 
 `NetworkWatcherRG` appears on its own the first time a virtual network is
 created in a region; Azure manages it.
+
+## VM sizes and quotas
+
+| Command | What it does | gcloud |
+|---|---|---|
+| `az vm list-skus --location westus2 --resource-type virtualMachines --subscription $S` | Lists sizes; `restrictions` shows `NotAvailableForSubscription` for blocked ones | `gcloud compute machine-types list --zones=…` |
+| `az vm list-usage --location westus2 --subscription $S -o table` | vCPU quotas: regional (`cores`) and per family | `gcloud compute regions describe` (quotas) |
+
+Found 2026-10-20: the new subscription is blocked from B-series (and most
+older families) in westus2, westus, westus3, centralus and eastus2; v6/v7
+families are open with 10 vCPUs each and 10 per region. Smallest usable:
+`Standard_F1als_v7` (1 vCPU, 2 GB) and `Standard_D2als_v7` (2 vCPU, 4 GB).
+Quota increases: portal → Quotas → Compute.
+
+## VMs, networking and SSH
+
+| Command | What it does | gcloud |
+|---|---|---|
+| `az vm list -g RG --subscription $S -d -o table` | Lists VMs with power state and IPs | `gcloud compute instances list` |
+| `az vm run-command invoke -g RG -n VM --command-id RunShellScript --scripts 'cmd' --subscription $S` | Runs a shell command on the VM through the Azure API (no SSH) | `gcloud compute ssh … --command` |
+| `az vm boot-diagnostics get-boot-log -g RG -n VM --subscription $S` | Serial/boot log, including cloud-init | `gcloud compute instances get-serial-port-output` |
+| `ssh -i ~/.ssh/bluedragon_azure azureuser@<public-ip>` | SSH to the public VM (key-based; personal accounts can't use Entra SSH login). A timeout usually means `curl -4 ifconfig.me` no longer matches `my_laptop_cidr_block` (see the Azure STATUS.md open items) | `gcloud compute ssh` |
+| `az network nsg rule list -g RG --nsg-name nsg-public-vm-dev -o table` | Lists NSG rules | `gcloud compute firewall-rules list` |
+| `az network nic list-effective-nsg -g RG -n nic-public-vm-dev` | Rules actually applied to a NIC | |
+| `az network nic show-effective-route-table -g RG -n nic-public-vm-dev -o table` | Routes actually applied to a NIC (system defaults plus any route table) | `gcloud compute routes list` |
+| `az network watcher test-ip-flow -g RG --vm VM --direction Inbound --protocol TCP --local <vm-ip>:22 --remote <your-ip>:50000` | Says whether the NSG allows a flow, and which rule decides. It only checks the IP you pass: compare `curl -4 ifconfig.me` with `my_laptop_cidr_block` first (PIA on and off give different IPs) | Connectivity Tests |
+| `az network nic show -g RG -n nic-public-vm-dev --query '{accel:enableAcceleratedNetworking,ipconf:ipConfigurations[].publicIPAddress.id}'` | Accelerated networking and the public IP attached to a NIC | `gcloud compute instances describe` |
+| `az vmss list -g MC_… --query '[].{n:name,accel:virtualMachineProfile.networkProfile.networkInterfaceConfigurations[0].enableAcceleratedNetworking}'` | Same for AKS nodes (scale set in the `MC_` resource group; `az network nic list` doesn't show them) | |
+| `az network public-ip list -g RG -o table` | Public IPs (VM, NAT gateway) | `gcloud compute addresses list` |
+| `az network nat gateway show -g RG -n nat-dev` | NAT gateway | `gcloud compute routers nats describe` |
+| `az storage blob list --account-name bdsilogs… --container-name insights-logs-flowlogflowevent --auth-mode login` | VNet flow log files (can take 10+ minutes to appear) | `gcloud logging read` |
+
+`list-effective-nsg` also lists a `networkManager` entry
+(`adminNetworkSecurityGroups/_…`) with no rules. The subscription has no
+Virtual Network Manager (`az network manager list` is empty), so it's a
+platform default, not a hidden block. That command auto-installs the
+`virtual-network-manager` az extension on first use.
+
+## AKS
+
+| Command | What it does | gcloud |
+|---|---|---|
+| `az aks get-credentials -g RG -n CLUSTER --subscription $S --admin --file ~/.kube/azure-dev` | Admin kubeconfig in its own file (`terraform output kubeconfig_command`) | `gcloud container clusters get-credentials` |
+| `az aks get-credentials … --file F` then `kubelogin convert-kubeconfig -l azurecli` | Entra ID kubeconfig (Azure RBAC decides access); needs `kubelogin` (`brew install Azure/kubelogin/kubelogin`) | `gke-gcloud-auth-plugin` |
+| `az aks show -g RG -n CLUSTER --query '{version:currentKubernetesVersion,state:provisioningState}'` | Cluster version and state | `gcloud container clusters describe` |
+| `az aks nodepool list -g RG --cluster-name CLUSTER -o table` | Node pools | `gcloud container node-pools list` |
+| `az aks get-versions --location westus2 -o table` | Versions available | `gcloud container get-server-config` |
+| `az role assignment list --scope <cluster-id>/namespaces/app1 -o table` | Who may do what in a namespace (Azure RBAC for Kubernetes) | |
+
+On the VM, its identity signs in with `az login --identity`, then
+`az aks get-credentials` + `kubelogin convert-kubeconfig -l azurecli`.
+
+## Managed Redis, Container Apps, Service Bus
+
+| Command | What it does | gcloud |
+|---|---|---|
+| `az redisenterprise show -g RG -n redis-bluedragon-dev-<suffix>` | Managed Redis (needs `az extension add -n redisenterprise`) | `gcloud redis instances describe` |
+| `REDISCLI_AUTH=<key> redis-cli -h <hostname> -p 10000 --tls PING` | From the private VM: TLS + key (`terraform output -raw redis_access_key`) | |
+| `az containerapp show -g RG -n nginx-dev --query properties.configuration.ingress.fqdn` | Container app's internal address | `gcloud run services describe` |
+| `az containerapp env show -g RG -n cae-dev` | Environment (internal load balancer, subnet) | |
+| `az servicebus topic list -g RG --namespace-name sb-bluedragon-dev-<suffix> -o table` | Topics | `gcloud pubsub topics list` |
+| `az servicebus topic subscription show -g RG --namespace-name … --topic-name example-topic -n example-sub --query countDetails` | Message counts waiting in a subscription | |
 
 ## Cost Management
 

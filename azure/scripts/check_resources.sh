@@ -9,10 +9,10 @@
 set -uo pipefail
 
 env=${1:-}
-case "$env" in
-  dev | prod) ;;
+case "$env:$#" in
+  dev:1 | prod:1) ;;
   *)
-    echo "Usage: $0 dev|prod" >&2
+    echo "Usage: $0 dev|prod   (checks azure/tfstate only; takes no other arguments)" >&2
     exit 1
     ;;
 esac
