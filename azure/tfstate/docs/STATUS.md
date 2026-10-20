@@ -24,7 +24,7 @@ log, and update "Current state" and "Open items" when they change.
 | Layer | dev (westus2) | prod (westus) |
 |---|---|---|
 | `tfstate/bootstrap` (local state) | **applied** 2026-10-20: `bdtfstatedev`, `bdtflogsdev`, budget; `check_resources.sh dev` 18/18 | **applied** 2026-10-20: `bdtfstateprod`, `bdtflogsprod`; 17/17 |
-| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **applied** 2026-10-20, suffix `kwtq7q1d`: AKS `aks-dev-kwtq7q1d` (1.36.4), public VM `20.69.161.39`; running (~$10/day) | written, validates; not planned |
+| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **destroyed** 2026-10-20 (was suffix `kwtq7q1d`); state empty. Key Vault `bdsikvdevkwtq7q1d` soft-deleted until 2026-10-27 (free) | written, validates; not planned |
 | `tfstate/environments` (state in bootstrap account) | **applied** 2026-10-20, suffix `a2oowcjc`: vault `bdtfkvdeva2oowcjc`, state `bdtfstatedeva2oowcjc` (CMK); `check_resources.sh dev` 38/38 | **applied** 2026-10-20, suffix `gw3jhawh`: vault `bdtfkvprodgw3jhawh`, state `bdtfstateprodgw3jhawh` (CMK); 37/37 |
 
 ## Change log
@@ -74,6 +74,22 @@ log, and update "Current state" and "Open items" when they change.
   apply: 2 changed. `ssh_vm.sh dev` and `ssh_vm.sh dev private` (through
   the public VM) both log in (Ubuntu 24.04.5).
 - Full (untargeted) dev plan afterwards: no changes.
+- **Dev destroy (102 resources): the `app1`/`app2` namespaces were blocked.**
+  Terraform removed the NAT gateway's public IP association in the first
+  seconds, so the AKS nodes lost their path to the API server and went
+  NotReady; pods stayed Terminating and namespace finalization waited on the
+  unreachable metrics.k8s.io API. Unblocked by force-deleting the four pods
+  and clearing the emptied namespaces' finalizers (`kubectl replace --raw
+  /api/v1/namespaces/<ns>/finalize`). Fix (uncommitted, takes effect on the
+  next apply): `subnet_private_id` in `modules/vpc/outputs.tf` also depends
+  on `azurerm_nat_gateway_public_ip_association.this`, so destroy removes
+  the Kubernetes resources and AKS before the NAT's public IP.
+- First destroy run: 75 destroyed, then failed on the two namespaces'
+  5-minute delete timeout (they finished moments later). The Container Apps
+  environment took 21m29s (`ScheduledForDelete` in Azure meanwhile). Second
+  `plan -destroy`: 27 to destroy (namespaces dropped on refresh); AKS took
+  4m53s; 27 destroyed, state empty. Only the four `bluedragon-tfstate-*`
+  resource groups remain in the subscription.
 - VNet flow logs record only the AKS nodes' NICs, nothing from the two
   v7 VMs (possibly a v7/Azure Boost limitation; unconfirmed).
 - Not yet: single_instance checks in check_resources.sh, prod plan, commit.
@@ -106,6 +122,13 @@ log, and update "Current state" and "Open items" when they change.
 
 ## Open items
 
+- **Next (2026-10-21): test `single_instance/environments/prod`** (westus;
+  written and validates, never planned). Check `curl -4 ifconfig.me`
+  against prod's `my_laptop_cidr_block` first. Then destroy, which also
+  tests the NAT ordering fix (namespaces should delete without the
+  5-minute timeout).
+- **single_instance checks** not yet in `check_resources.sh`.
+- **VNet flow logs** record nothing from the two v7 VMs (unconfirmed why).
 - **Laptop IP drift:** the public VM NSG and AKS authorized IPs allow only
   `my_laptop_cidr_block` (23.93.161.67/32, home, PIA off, on 2026-10-20).
   When `curl -4 ifconfig.me` differs, update tfvars and apply with

@@ -25,8 +25,15 @@ output "subnet_private_cidr_block" {
 }
 
 output "subnet_private_id" {
-  value      = azurerm_subnet.private.id
-  depends_on = [azurerm_subnet_nat_gateway_association.private] # AKS needs NAT in place
+  value = azurerm_subnet.private.id
+  # AKS nodes reach the API server only through the NAT gateway. Waiting on
+  # both associations also makes destroy remove AKS (and the Kubernetes
+  # resources) before the NAT loses its public IP; otherwise the nodes go
+  # NotReady, pods hang in Terminating and namespace deletion never finishes.
+  depends_on = [
+    azurerm_subnet_nat_gateway_association.private,
+    azurerm_nat_gateway_public_ip_association.this,
+  ]
 }
 
 output "subnet_public_cidr_block" {

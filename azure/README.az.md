@@ -179,6 +179,33 @@ platform default, not a hidden block. That command auto-installs the
 On the VM, its identity signs in with `az login --identity`, then
 `az aks get-credentials` + `kubelogin convert-kubeconfig -l azurecli`.
 
+## Tearing down single_instance
+
+`terraform plan -destroy -out plan-dev`, then `terraform apply plan-dev`
+(about 100 resources). Dev on 2026-10-20 took about 40 minutes:
+Container Apps environment 21 minutes, AKS 5, Managed Redis 4, private
+endpoint and DNS links about 2 each.
+
+| Command | What it does | gcloud |
+|---|---|---|
+| `az containerapp env show -g RG -n cae-dev --query properties.provisioningState -o tsv` | `ScheduledForDelete` while Azure works through a slow environment delete (normal; its `ME_…` group goes first) | |
+| `kubectl --kubeconfig ~/.kube/azure-dev get nodes` | `NotReady` during a destroy means the nodes lost their NAT path to the API server | `kubectl get nodes` |
+| `kubectl --kubeconfig ~/.kube/azure-dev get ns app1 -o jsonpath='{range .status.conditions[*]}{.type}={.status}: {.message}{"\n"}{end}'` | Why a namespace is stuck in `Terminating` | same |
+| `kubectl --kubeconfig ~/.kube/azure-dev delete pods --all -n app1 --force --grace-period=0` | Clears pods stuck `Terminating` on dead nodes (teardown only) | same |
+| `kubectl … get ns app1 -o json \| jq '.spec.finalizers=[]' \| kubectl … replace --raw /api/v1/namespaces/app1/finalize -f -` | Finishes an already-empty namespace when discovery fails (`metrics.k8s.io` unreachable) | same |
+| `az group list --subscription $S -o table` | After a destroy: only the `bluedragon-tfstate-*` groups should remain | `gcloud projects list` |
+
+If a destroy fails with `Kubernetes delete error … timeout: 5m0s` on the
+namespaces, run `plan -destroy` and `apply` again: refresh drops what is
+already gone and the rest continues. Before 2026-10-20 the NAT gateway lost
+its public IP first, causing exactly that; `modules/vpc/outputs.tf` now
+makes destroy remove AKS before the NAT's public IP (not yet tested).
+
+When the laptop IP changes, a full plan can't read the Kubernetes resources
+(the AKS API only allows the old IP). Apply the new `my_laptop_cidr_block`
+with `-target=module.aks.azurerm_kubernetes_cluster.this
+-target=module.networking.azurerm_network_security_group.public_vm` first.
+
 ## Managed Redis, Container Apps, Service Bus
 
 | Command | What it does | gcloud |
