@@ -89,6 +89,9 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 - Deleted `aws/scripts/cleanup_aws.sh`: it deleted every S3 bucket in
   whatever account the AWS profile pointed at, without confirmation (risk to
   the live grid-meter account `184375956348`). `aws_wipe.sh` replaces it.
+- Deleted `aws/scripts/cleanup_aws_2.sh`: no account check, and it deleted
+  IAM roles matching `Admin`, `Developer` or `eks-`, which would hit
+  grid-meter's roles if run under its profile. `aws_wipe.sh` replaces it.
 - GCP port started in `gcp/tfstate` (project `bluedragon-sre-vuft1e`); its
   record is `gcp/tfstate/docs/STATUS.md`.
 
