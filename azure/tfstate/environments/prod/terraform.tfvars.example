@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+
+employer        = "<organization name, used in tags>"
+env             = "prod"
+location        = "westus"
+subscription_id = "<bluedragon-sre subscription ID>"

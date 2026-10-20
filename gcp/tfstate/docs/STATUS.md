@@ -29,7 +29,7 @@ change.
 | Layer | dev (us-west1) | prod (us-west2) |
 |---|---|---|
 | `tfstate/bootstrap` (local state) | **applied** 2026-10-19: `bluedragon-tfstate-admin-dev`, `-dev-logs` | **applied** 2026-10-19: `bluedragon-tfstate-admin-prod`, `-prod-logs` |
-| `single_instance` (state in bootstrap bucket, prefix `single_instance`, CMEK `state-bucket-key`) | **destroyed** 2026-10-20 (was suffix `oaxxklen`); VPC + private subnet wait on Cloud Run's serverless IP release, then destroy finishes | **destroyed** 2026-10-20 (was suffix `c3pfltlz`); VPC + private subnet wait on Cloud Run's serverless IP release, then destroy finishes |
+| `single_instance` (state in bootstrap bucket, prefix `single_instance`, CMEK `state-bucket-key`) | **destroyed** 2026-10-20 (was suffix `oaxxklen`); state empty. VPC went about 2 hours after the first destroy, once Cloud Run's serverless IP was released | **destroyed** 2026-10-20 (was suffix `c3pfltlz`); state empty. VPC went about 2 hours after the first destroy |
 | `tfstate/environments` (state in bootstrap bucket, prefix `tfstate`) | **applied** 2026-10-19, suffix `imtcz3jz` | **applied** 2026-10-19, suffix `6wtegjuq` |
 
 KMS keys (`state_bucket_key_id` output; use as `kms_encryption_key` in later
@@ -50,6 +50,12 @@ subscriptions.
 | `single_instance/environments/{env}` | `bluedragon-tfstate-admin-{env}` | `single_instance` | CMEK `state-bucket-key` |
 
 ## Change log
+
+### 2026-10-20: delete the `default` network
+
+- Enabling the Compute API had created the auto-mode `default` VPC (42
+  subnets) with allow-SSH/RDP/ICMP-from-anywhere firewall rules. Nothing
+  used it; deleted the 4 rules and the network with gcloud.
 
 ### 2026-10-20: port `aws/single_instance` to GCP
 
@@ -142,8 +148,6 @@ subscriptions.
 - **Destroy order:** destroy `module.kubernetes` first and wait for the
   ingress load balancer to go; expect a second `terraform destroy` 1-2 hours
   later for the VPC (Cloud Run serverless IP release).
-- **`default` network:** enabling the Compute API created the auto-mode
-  `default` VPC with allow-SSH/RDP/ICMP-from-anywhere rules. Nothing uses it.
 - **Public VM disk:** 10 GB is 65% used after the startup installs.
 - **GKE version floats** on the REGULAR channel (AWS pinned 1.36).
 
