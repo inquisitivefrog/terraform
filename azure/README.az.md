@@ -26,8 +26,8 @@ S=8d75b8ef-999c-4f70-99a9-4eb0197f3a07   # bluedragon-sre
 | `register_providers.sh [extra…]` | Registers the resource providers this repo uses (tfstate and single_instance) in `bluedragon-sre` and waits until done. Run once per subscription, before the first apply; safe to re-run |
 | `ssh_vm.sh dev\|prod [public\|private]` | SSH with `~/.ssh/bluedragon_azure`; private through public. `SSH_PORT=2222` uses the second port. `--run 'cmd'` runs a command through the Azure API instead (no SSH; works whatever the VPN does) |
 | `vm_sizes.sh [max-vcpus] [region…]` | Lists VM sizes this subscription can actually use per region (not blocked, family quota > 0), with the regional vCPU quota. Default: <= 4 vCPUs in westus2, westus, westus3 |
-| `check_resources.sh dev\|prod` | Confirms every tfstate resource exists and is configured as intended (dev: 18 bootstrap + 20 environments = 38). Exit 1 on any failure |
-| `estimate_costs.sh [days]` | List-price estimate from live resources, plus real billed cost by service from Cost Management (lags a day or two; a new subscription reports nothing for up to 48 hours) |
+| `check_resources.sh dev\|prod` | Confirms every resource exists and is configured as intended: tfstate (dev 38, prod 37) and, when applied, single_instance (prod +41, including "NSG/AKS allow this laptop", which catches IP drift). Exit 1 on any failure |
+| `estimate_costs.sh [days]` | List-price estimate per month and per day from live resources (VMs, AKS nodes, disks, NAT, public IPs, load balancer, private endpoint, Managed Redis, Service Bus, storage, key rotation), with hourly prices from the public Retail Prices API; plus real billed cost by service from Cost Management (lags a day or two). AKS node disks and usage charges (data processed, logs) are not included |
 
 ## How Azure is organized (compared with GCP and AWS)
 

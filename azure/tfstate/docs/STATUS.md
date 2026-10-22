@@ -24,10 +24,39 @@ log, and update "Current state" and "Open items" when they change.
 | Layer | dev (westus2) | prod (westus) |
 |---|---|---|
 | `tfstate/bootstrap` (local state) | **applied** 2026-10-20: `bdtfstatedev`, `bdtflogsdev`, budget; `check_resources.sh dev` 18/18 | **applied** 2026-10-20: `bdtfstateprod`, `bdtflogsprod`; 17/17 |
-| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **destroyed** 2026-10-20 (was suffix `kwtq7q1d`); state empty. Key Vault `bdsikvdevkwtq7q1d` soft-deleted until 2026-10-27 (free) | written, validates; not planned |
+| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **destroyed** 2026-10-20 (was suffix `kwtq7q1d`); state empty. Key Vault `bdsikvdevkwtq7q1d` soft-deleted until 2026-10-27 (free) | **applied** 2026-10-21, suffix `2t7f2j97`: AKS `aks-prod-2t7f2j97` (1.36.4), public VM `104.210.63.29`; running (~$11/day); `check_resources.sh prod` 78/78 |
 | `tfstate/environments` (state in bootstrap account) | **applied** 2026-10-20, suffix `a2oowcjc`: vault `bdtfkvdeva2oowcjc`, state `bdtfstatedeva2oowcjc` (CMK); `check_resources.sh dev` 38/38 | **applied** 2026-10-20, suffix `gw3jhawh`: vault `bdtfkvprodgw3jhawh`, state `bdtfstateprodgw3jhawh` (CMK); 37/37 |
 
 ## Change log
+
+### 2026-10-21: single_instance prod; scripts cover single_instance
+
+- **Prod plan: 86 to add** (dev's 100 minus the `kubernetes` module and the
+  custom pods/services role). **Applied first time, no errors** (~15 min:
+  Redis 7m45s, AKS 5m, VMs 4m, private endpoint 4m).
+- Verified via `ssh_vm.sh prod … --run`: both VMs `cloud-init status: done`;
+  Redis resolves to the private endpoint (10.0.5.4), port 10000 open from
+  the private VM; container app HTTP 200 from the public VM; the VM identity
+  gets AKS credentials, 2 nodes Ready.
+- SSH from the laptop (home IP, PIA off): `ssh_vm.sh prod` and
+  `ssh_vm.sh prod private` (through the public VM) both log in, Ubuntu
+  24.04.5. The login banner shows 12-13 pending updates (8-9 security) on a
+  fresh image.
+- `check_resources.sh`: new single_instance section (41 checks: providers,
+  VNet, NAT on the private subnet, NSG and AKS API allow this laptop's IP,
+  flow log, VMs running, Container Apps internal, AKS state/RBAC/KMS/node
+  pool, Managed Redis private only, private endpoint, Service Bus with SAS
+  off, Key Vault, storage CMK). Skipped when not applied. Prod 78/78; dev
+  38/38 (single_instance skipped).
+- `estimate_costs.sh`: prices running resources from the Retail Prices API
+  per region. Prod: VMs 2 x $51.83, AKS nodes 2 x D2als_v7 $137.82, NAT
+  $32.85, load balancer $18.25, Redis B0 $11.68, Service Bus $10, public IPs
+  and private endpoint $7.30 each, VM disks $2.40 each: **$335/month,
+  $11/day**. Before: $1.69 (tfstate only). Cost Management now reports the
+  subscription: $1.13 billed so far.
+- `estimate_costs.sh` retries Cost Management after 20s and 40s on HTTP
+  429 ("Too many requests", hit after several runs in a few minutes) instead
+  of blaming the subscription's age. Retry path not yet exercised.
 
 ### 2026-10-20: port `single_instance` to Azure
 
@@ -122,12 +151,16 @@ log, and update "Current state" and "Open items" when they change.
 
 ## Open items
 
-- **Next (2026-10-21): test `single_instance/environments/prod`** (westus;
-  written and validates, never planned). Check `curl -4 ifconfig.me`
-  against prod's `my_laptop_cidr_block` first. Then destroy, which also
-  tests the NAT ordering fix (namespaces should delete without the
-  5-minute timeout).
-- **single_instance checks** not yet in `check_resources.sh`.
+- **Next: destroy prod** (`plan -destroy -out plan-prod`, `apply`). Prod has
+  no Kubernetes module, so it tests only part of the NAT ordering fix: AKS
+  should be destroyed before `pip-nat-prod`'s association.
+- **Fresh VMs boot with pending security updates** (8-9 on 2026-10-21).
+  Consider `package_upgrade: true` in the cloud-init, or unattended-upgrades.
+- **Leftover "dev" names in prod** (from AWS's `bluedragon-dev-bucket`):
+  Event Grid topic `evgt-dev-storage-<env>` (`modules/messages/servicebus.tf:50`),
+  diagnostic setting `dev-access-logs` (`modules/storage/storage.tf:121`),
+  tag `Name = bluedragon-dev-bucket` (`storage.tf:41`). Cosmetic; renaming
+  the first two replaces them.
 - **VNet flow logs** record nothing from the two v7 VMs (unconfirmed why).
 - **Laptop IP drift:** the public VM NSG and AKS authorized IPs allow only
   `my_laptop_cidr_block` (23.93.161.67/32, home, PIA off, on 2026-10-20).
@@ -136,8 +169,6 @@ log, and update "Current state" and "Open items" when they change.
   -target=module.networking.azurerm_network_security_group.public_vm`
   first; a full plan can't read the Kubernetes resources until then.
 - **Event Grid topics have no subscriber** (like SNS and Pub/Sub here).
-- **Cost Management** not reporting the new subscription yet; re-run
-  `azure/scripts/estimate_costs.sh` after 2026-10-22.
 
 - **New subscriptions:** run `azure/scripts/register_providers.sh` before the
   first apply.
