@@ -199,7 +199,16 @@ If a destroy fails with `Kubernetes delete error … timeout: 5m0s` on the
 namespaces, run `plan -destroy` and `apply` again: refresh drops what is
 already gone and the rest continues. Before 2026-10-20 the NAT gateway lost
 its public IP first, causing exactly that; `modules/vpc/outputs.tf` now
-makes destroy remove AKS before the NAT's public IP (not yet tested).
+makes destroy remove AKS before the NAT's public IP (verified in the
+prod destroy, 2026-10-21).
+
+To remove everything (the tfstate layer too), destroy in this order; each
+root's state lives in the next one's storage account:
+`single_instance/environments/{dev,prod}`, then `tfstate/environments/{dev,prod}`
+(`init -backend-config=backend.hcl -reconfigure` first), then
+`tfstate/bootstrap/{dev,prod}` (local state). Don't destroy an environments
+root while its single_instance destroy is still running: that run writes its
+final state into the account. Key Vaults stay soft-deleted for 7 days (free).
 
 When the laptop IP changes, a full plan can't read the Kubernetes resources
 (the AKS API only allows the old IP). Apply the new `my_laptop_cidr_block`

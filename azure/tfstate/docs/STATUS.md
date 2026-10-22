@@ -19,15 +19,36 @@ log, and update "Current state" and "Open items" when they change.
 - `3caa5ec0-…` was a free trial; upgraded to pay-as-you-go 2026-10-20 (renamed
   "Azure subscription 2"), so grid-meter's state isn't disabled on 2026-10-22.
 
-## Current state (2026-10-20)
+## Current state (2026-10-21): everything destroyed, $0
 
 | Layer | dev (westus2) | prod (westus) |
 |---|---|---|
-| `tfstate/bootstrap` (local state) | **applied** 2026-10-20: `bdtfstatedev`, `bdtflogsdev`, budget; `check_resources.sh dev` 18/18 | **applied** 2026-10-20: `bdtfstateprod`, `bdtflogsprod`; 17/17 |
-| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **destroyed** 2026-10-20 (was suffix `kwtq7q1d`); state empty. Key Vault `bdsikvdevkwtq7q1d` soft-deleted until 2026-10-27 (free) | **applied** 2026-10-21, suffix `2t7f2j97`: AKS `aks-prod-2t7f2j97` (1.36.4), public VM `104.210.63.29`; running (~$11/day); `check_resources.sh prod` 78/78 |
-| `tfstate/environments` (state in bootstrap account) | **applied** 2026-10-20, suffix `a2oowcjc`: vault `bdtfkvdeva2oowcjc`, state `bdtfstatedeva2oowcjc` (CMK); `check_resources.sh dev` 38/38 | **applied** 2026-10-20, suffix `gw3jhawh`: vault `bdtfkvprodgw3jhawh`, state `bdtfstateprodgw3jhawh` (CMK); 37/37 |
+| `tfstate/bootstrap` (local state) | **destroyed** 2026-10-21 (9, incl. budget) | **destroyed** 2026-10-21 (8) |
+| `single_instance` (state in the CMK environments account, key `single_instance/terraform.tfstate`) | **destroyed** 2026-10-20 (was suffix `kwtq7q1d`) | **destroyed** 2026-10-21 (was suffix `2t7f2j97`; 86 in one run) |
+| `tfstate/environments` (state in bootstrap account) | **destroyed** 2026-10-21 (17; was suffix `a2oowcjc`) | **destroyed** 2026-10-21 (17; was suffix `gw3jhawh`) |
 
 ## Change log
+
+### 2026-10-21: everything destroyed
+
+- **Prod single_instance destroy: 86 destroyed in one run** (dev needed two).
+  The NAT ordering fix worked: AKS finished (4m47s) before
+  `nat_gateway_public_ip_association` started, so the nodes kept their API
+  path. Prod has no Kubernetes namespaces, so the namespace symptom itself
+  is only retestable in dev. Container Apps environment 21m34s again.
+- Tore down the tfstate layer in dependency order: `environments/dev` (17),
+  `bootstrap/dev` (9, including the $25 budget), then, after the prod
+  single_instance destroy had written its final state, `environments/prod`
+  (17) and `bootstrap/prod` (8). Every state is empty.
+- Subscription `bluedragon-sre` now has no resource groups, no resources
+  and no budget; `estimate_costs.sh`: $0.00/month. Left over, free: four
+  soft-deleted Key Vaults (purge protection) that purge themselves
+  2026-10-27 to 2026-10-29: `bdsikvdevkwtq7q1d`, `bdsikvprod2t7f2j97`,
+  `bdtfkvdeva2oowcjc`, `bdtfkvprodgw3jhawh`. The subscription itself still
+  exists (pay-as-you-go, $0 while empty); cancel it in the portal if it
+  won't be reused.
+- Rebuild: `register_providers.sh` (already registered), then bootstrap,
+  environments, single_instance, as in the build order.
 
 ### 2026-10-21: single_instance prod; scripts cover single_instance
 
@@ -151,9 +172,8 @@ log, and update "Current state" and "Open items" when they change.
 
 ## Open items
 
-- **Next: destroy prod** (`plan -destroy -out plan-prod`, `apply`). Prod has
-  no Kubernetes module, so it tests only part of the NAT ordering fix: AKS
-  should be destroyed before `pip-nat-prod`'s association.
+- **NAT ordering fix**: verified in the prod destroy; the dev namespace
+  timeout it caused is untested until the next dev destroy.
 - **Fresh VMs boot with pending security updates** (8-9 on 2026-10-21).
   Consider `package_upgrade: true` in the cloud-init, or unattended-upgrades.
 - **Leftover "dev" names in prod** (from AWS's `bluedragon-dev-bucket`):
