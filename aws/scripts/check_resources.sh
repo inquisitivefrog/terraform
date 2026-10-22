@@ -16,11 +16,10 @@ case "$env:$#" in
     ;;
 esac
 
-ACCOUNT_ID="084375569056" # this repo's account; never grid-meter's
-declare -A REGIONS=([dev]=us-west-2 [prod]=us-west-1)
-R="${REGIONS[$env]}"
+source "$(dirname "$0")/aws_env.sh" # ACCOUNT_ID, AWS_PROFILE, REGION, REGIONS, require_account
+R="${REGION[$env]}"
 AWS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BUCKET="bluedragon-tfstate-admin-$env"
+BUCKET="blue-elephant-tfstate-admin-$env"
 
 PASS=0
 FAIL=0
@@ -31,6 +30,7 @@ expect() {
   local label="$1" want="$2" out
   shift 2
   out="$("$@" 2>/dev/null)"
+  out="${out//$'\t'/ }" # --output text separates list values with tabs
   if [[ -n "$out" && "$out" != "None" && "$out" == "$want" ]]; then
     echo "  PASS  $label: $out"
     PASS=$((PASS + 1))
@@ -62,11 +62,7 @@ tf_output() {
   printf '%s' "$val"
 }
 
-account="$(aws sts get-caller-identity --query Account --output text 2>/dev/null)"
-if [[ "$account" != "$ACCOUNT_ID" ]]; then
-  echo "Logged in to account '${account:-none}', expected $ACCOUNT_ID. Stopping." >&2
-  exit 1
-fi
+require_account
 MY_IP="$(curl -4 -s --max-time 5 ifconfig.me)"
 
 echo "== aws $env ($R, account $ACCOUNT_ID) =="
@@ -92,7 +88,6 @@ else
     echo "-- tfstate/environments (alias/tfstate-$env) --"
     expect "State key enabled" "Enabled" aws kms describe-key --region "$R" --key-id "$key" --query KeyMetadata.KeyState --output text
     expect "State key rotation" "True" aws kms get-key-rotation-status --region "$R" --key-id "$key" --query KeyRotationEnabled --output text
-    check "single_instance state object" aws s3api head-object --bucket "$BUCKET" --key single_instance/terraform.tfstate --query LastModified --output text
   fi
 fi
 
@@ -101,22 +96,35 @@ CLUSTER="$(tf_output eks_cluster_name)"
 if [[ -z "$CLUSTER" ]] || ! aws eks describe-cluster --region "$R" --name "$CLUSTER" >/dev/null 2>&1; then
   echo "-- single_instance: not applied; skipped --"
 else
+  # Cluster is eks-<tf env>-<suffix>; tf env is the env variable in tfvars
+  # (dev uses "multi"). Dev and prod share us-east-2, so every check below is
+  # pinned to this environment's VPC or names, never "any in the region".
   SUFFIX="${CLUSTER##*-}"
-  echo "-- single_instance (suffix $SUFFIX) --"
+  TF_ENV="${CLUSTER#eks-}"
+  TF_ENV="${TF_ENV%-*}"
+  VPC="$(tf_output vpc_id)"
+  echo "-- single_instance (env $TF_ENV, suffix $SUFFIX, ${VPC:-vpc_id output missing}) --"
+
+  # State (backend.hcl: kms_key_id = alias/tfstate-<env>)
+  expect "State object KMS-encrypted" "aws:kms" aws s3api head-object --bucket "$BUCKET" --key single_instance/terraform.tfstate \
+    --query ServerSideEncryption --output text
 
   # Network
-  check "VPC (non-default)" aws ec2 describe-vpcs --region "$R" --filters Name=is-default,Values=false --query 'Vpcs[].VpcId' --output text
-  check "NAT gateway available" aws ec2 describe-nat-gateways --region "$R" --filter Name=state,Values=available --query 'NatGateways[].NatGatewayId' --output text
-  check "VPC flow log group KMS-encrypted" aws logs describe-log-groups --region "$R" --log-group-name-prefix /aws/vpc/flow-logs/ --query 'logGroups[0].kmsKeyId' --output text
+  check "VPC (non-default)" aws ec2 describe-vpcs --region "$R" --vpc-ids "$VPC" --filters Name=is-default,Values=false --query 'Vpcs[].VpcId' --output text
+  check "NAT gateway available" aws ec2 describe-nat-gateways --region "$R" --filter Name=state,Values=available "Name=vpc-id,Values=$VPC" --query 'NatGateways[].NatGatewayId' --output text
+  check "VPC flow log group KMS-encrypted" aws logs describe-log-groups --region "$R" --log-group-name-prefix "/aws/vpc/flow-logs/$VPC" --query 'logGroups[0].kmsKeyId' --output text
 
   # EC2 (Project tag; AdminPolicy's ec2:* depends on it)
-  check "EC2 running with Project tag" aws ec2 describe-instances --region "$R" \
-    --filters Name=tag:Project,Values=bluedragon-single-instance Name=instance-state-name,Values=running --query 'Reservations[].Instances[].InstanceId' --output text
-  expect "EC2 IMDSv1 disabled (count with optional tokens)" "0" aws ec2 describe-instances --region "$R" \
-    --filters Name=tag:Project,Values=bluedragon-single-instance Name=instance-state-name,Values=running \
-    --query "length(Reservations[].Instances[?MetadataOptions.HttpTokens!='required'][])" --output text
+  # Both instances (public + private). Count compliant instances rather than
+  # non-compliant ones: "0 with optional tokens" also passes when none exist.
+  expect "EC2 running with Project tag (public + private)" "2" aws ec2 describe-instances --region "$R" \
+    --filters Name=tag:Project,Values=blue-elephant-single-instance Name=instance-state-name,Values=running "Name=vpc-id,Values=$VPC" \
+    --query 'length(Reservations[].Instances[])' --output text
+  expect "EC2 IMDSv2 required (instances with tokens required)" "2" aws ec2 describe-instances --region "$R" \
+    --filters Name=tag:Project,Values=blue-elephant-single-instance Name=instance-state-name,Values=running "Name=vpc-id,Values=$VPC" \
+    --query "length(Reservations[].Instances[?MetadataOptions.HttpTokens=='required'][])" --output text
   check "SSH allowed from this laptop ($MY_IP/32)" aws ec2 describe-security-groups --region "$R" \
-    --filters "Name=ip-permission.cidr,Values=$MY_IP/32" Name=ip-permission.from-port,Values=22 --query 'SecurityGroups[].GroupName' --output text
+    --filters "Name=ip-permission.cidr,Values=$MY_IP/32" Name=ip-permission.from-port,Values=22 "Name=vpc-id,Values=$VPC" --query 'SecurityGroups[].GroupName' --output text
 
   # EKS
   expect "EKS cluster" "ACTIVE" aws eks describe-cluster --region "$R" --name "$CLUSTER" --query cluster.status --output text
@@ -124,19 +132,23 @@ else
     --query "cluster.resourcesVpcConfig.publicAccessCidrs[?@=='$MY_IP/32'] | [0]" --output text
   expect "EKS secrets encrypted with KMS" "secrets" aws eks describe-cluster --region "$R" --name "$CLUSTER" \
     --query 'cluster.encryptionConfig[0].resources[0]' --output text
-  expect "EKS node group" "ACTIVE" aws eks describe-nodegroup --region "$R" --cluster-name "$CLUSTER" --nodegroup-name "ng-$env-$SUFFIX" \
+  expect "EKS node group" "ACTIVE" aws eks describe-nodegroup --region "$R" --cluster-name "$CLUSTER" --nodegroup-name "ng-$TF_ENV-$SUFFIX" \
     --query nodegroup.status --output text
+  # Every node root volume encrypted; "N of N" with N > 0, so no nodes can't pass.
+  read -r NVOL NENC < <(aws ec2 describe-volumes --region "$R" --filters "Name=tag:eks:nodegroup-name,Values=ng-$TF_ENV-$SUFFIX" \
+    --query '[length(Volumes), length(Volumes[?Encrypted])]' --output text 2>/dev/null)
+  expect "EKS node volumes encrypted" "$([[ ${NVOL:-0} -gt 0 ]] && echo "$NVOL of $NVOL" || echo "at least one")" echo "${NENC:-0} of ${NVOL:-0}"
 
   # Redis: TLS and AUTH (group 1, 2026-10-21)
-  expect "Redis replication group" "available" aws elasticache describe-replication-groups --region "$R" --replication-group-id redis-single-instance \
+  expect "Redis replication group" "available" aws elasticache describe-replication-groups --region "$R" --replication-group-id "redis-single-instance-$TF_ENV" \
     --query 'ReplicationGroups[0].Status' --output text
   expect "Redis TLS, at-rest encryption, AUTH" "True True True" aws elasticache describe-replication-groups --region "$R" \
-    --replication-group-id redis-single-instance \
+    --replication-group-id "redis-single-instance-$TF_ENV" \
     --query 'ReplicationGroups[0].[TransitEncryptionEnabled,AtRestEncryptionEnabled,AuthTokenEnabled]' --output text
 
   # Storage, messaging, IAM
-  expect "Dev bucket versioning" "Enabled" aws s3api get-bucket-versioning --bucket "bluedragon-dev-bucket-$SUFFIX" --query Status --output text
-  check "SNS topics" aws sns list-topics --region "$R" --query "Topics[?contains(TopicArn, 'example-topic') || contains(TopicArn, 'custom-topic')].TopicArn" --output text
+  expect "Dev bucket versioning" "Enabled" aws s3api get-bucket-versioning --bucket "blue-elephant-dev-bucket-$SUFFIX" --query Status --output text
+  check "SNS topics" aws sns list-topics --region "$R" --query "Topics[?ends_with(TopicArn, ':example-topic-$TF_ENV') || ends_with(TopicArn, ':custom-topic-$TF_ENV.fifo')].TopicArn" --output text
   check "Shared IAM: DeveloperPolicy and AdminPolicy" aws iam list-policies --scope Local \
     --query "Policies[?PolicyName=='DeveloperPolicy' || PolicyName=='AdminPolicy'].PolicyName" --output text
 fi

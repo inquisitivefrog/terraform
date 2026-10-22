@@ -6,12 +6,15 @@ connections only from `my_laptop_cidr_block` in that environment's
 
 | Env | Region | kubectl context |
 |---|---|---|
-| dev | us-west-2 | `eks-multi` (dev tfvars sets `env = "multi"`) |
-| prod | us-west-1 | `eks-prod` |
+| dev | us-east-2 | `eks-multi` (dev tfvars sets `env = "multi"`) |
+| prod | us-east-2 | `eks-prod` |
+
+Both are in account `650836812595`. On your laptop, `export AWS_PROFILE=blue-elephant`
+first (the scripts and `kubeconfig_command` set it for you).
 
 ## Who can use the cluster
 
-- The IAM identity that ran `terraform apply` (user `bluedragon`) is a
+- The IAM identity that ran `terraform apply` (user `blue-elephant`) is a
   cluster admin; EKS grants this when it creates the cluster. It does not
   appear in the `aws-auth` ConfigMap.
 - dev only: role `EC2Role` (the EC2 instances' profile) is mapped to
@@ -22,7 +25,7 @@ connections only from `my_laptop_cidr_block` in that environment's
 ## From your laptop
 
 Prerequisites: `brew install awscli kubectl` (Apple silicon builds), and
-`aws sts get-caller-identity` shows `user/bluedragon`.
+`aws sts get-caller-identity` shows `user/blue-elephant`.
 
 1. Check your public IP still matches `my_laptop_cidr_block`:
 
@@ -75,13 +78,13 @@ The host already has `aws`, `kubectl` and the Python Kubernetes client. Its
 `EC2Role` credentials are mapped to cluster admin in dev.
 
 ```sh
-IP=$(aws ec2 describe-instances --region us-west-2 \
+IP=$(aws ec2 describe-instances --region us-east-2 \
   --filters Name=instance-state-name,Values=running \
   --query 'Reservations[].Instances[?PublicIpAddress].PublicIpAddress' --output text)
-ssh -i ~/.aws/bluedragon_uswest2.pem ubuntu@$IP
+ssh -i ~/.ssh/aws_ssh ubuntu@$IP
 
 # on the host
-aws eks update-kubeconfig --region us-west-2 --name <cluster name> --alias eks-multi
+aws eks update-kubeconfig --region us-east-2 --name <cluster name> --alias eks-multi
 kubectl get nodes
 ```
 
@@ -108,7 +111,7 @@ public instance's user data used to, until 2026-10-16). To reach the private
 instance, SSH hops through the public one with `-J` (ProxyJump):
 
 ```sh
-ssh-add ~/.aws/bluedragon_uswest2.pem          # dev; prod uses ~/.aws/bluedragon.pem
+ssh-add ~/.ssh/aws_ssh                   # dev and prod
 PUB=<public instance IP>
 PRIV=<private instance IP, 10.1.4.x in dev>
 ssh -J ubuntu@$PUB ubuntu@$PRIV
@@ -117,7 +120,7 @@ ssh -J ubuntu@$PUB ubuntu@$PRIV
 Find both IPs:
 
 ```sh
-aws ec2 describe-instances --region us-west-2 \
+aws ec2 describe-instances --region us-east-2 \
   --filters Name=instance-state-name,Values=running Name=tag:Name,Values=ubuntu-24.04 \
   --query 'Reservations[].Instances[].[PrivateIpAddress,PublicIpAddress]' --output text
 ```
@@ -128,11 +131,11 @@ To skip typing `-J`, add this to `~/.ssh/config`:
 Host si-public
   HostName <public IP>
   User ubuntu
-  IdentityFile ~/.aws/bluedragon_uswest2.pem
+  IdentityFile ~/.ssh/aws_ssh
 Host si-private
   HostName <private IP>
   User ubuntu
-  IdentityFile ~/.aws/bluedragon_uswest2.pem
+  IdentityFile ~/.ssh/aws_ssh
   ProxyJump si-public
 ```
 

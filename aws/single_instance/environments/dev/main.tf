@@ -27,7 +27,9 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region              = var.region
+  profile             = var.aws_profile
+  allowed_account_ids = [var.aws_account_id]
 }
 
 provider "kubernetes" {
@@ -36,7 +38,7 @@ provider "kubernetes" {
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_name]
+    args        = ["eks", "get-token", "--region", var.region, "--profile", var.aws_profile, "--cluster-name", module.eks.eks_cluster_name]
   }
 }
 
@@ -47,7 +49,7 @@ provider "helm" {
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      args        = ["eks", "get-token", "--region", var.region, "--cluster-name", module.eks.eks_cluster_name]
+      args        = ["eks", "get-token", "--region", var.region, "--profile", var.aws_profile, "--cluster-name", module.eks.eks_cluster_name]
     }
   }
 }
@@ -63,6 +65,7 @@ resource "random_string" "suffix" {
 # Cache Module
 module "cache" {
   source                = "../../modules/cache"
+  env                   = var.env
   redis_port            = var.redis_port
   sg_elasticache_id     = module.networking.sg_elasticache_id
   vpc_subnet_private_id = module.vpc.vpc_subnet_private_ids[0]
@@ -71,6 +74,7 @@ module "cache" {
 # Compute Module
 module "compute" {
   source                      = "../../modules/compute"
+  env                         = var.env
   ec2_instance_profile_name   = module.identity.ec2_instance_profile_name
   ec2_keypair                 = var.ec2_keypair
   ecs_task_execution_role_arn = module.identity.ecs_task_execution_role_arn
@@ -95,6 +99,7 @@ module "identity" {
 # Key Message Service Module
 module "kms" {
   source          = "../../modules/kms"
+  env             = var.env
   account_id      = data.aws_caller_identity.current.account_id
   admin_user_name = var.admin_user_name
   region          = var.region

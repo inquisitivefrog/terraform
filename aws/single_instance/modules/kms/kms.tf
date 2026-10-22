@@ -50,7 +50,7 @@ resource "aws_kms_key" "sns_custom_key" {
 }
 
 resource "aws_kms_alias" "sns_custom_key_alias" {
-  name          = "alias/my-custom-sns-key"
+  name          = "alias/my-custom-sns-key-${var.env}"
   target_key_id = aws_kms_key.sns_custom_key.key_id
 }
 

@@ -33,7 +33,7 @@ resource "aws_instance" "public-ec2" {
   tags = {
     Name     = "ubuntu-24.04"
     Redeploy = "20250314-18"
-    Project  = "bluedragon-single-instance" # AdminPolicy's ec2:* matches this tag
+    Project  = "blue-elephant-single-instance" # AdminPolicy's ec2:* matches this tag
   }
   user_data = <<-EOF
     #!/bin/bash
@@ -85,7 +85,7 @@ resource "aws_instance" "private-ec2" {
   tags = {
     Name    = "ubuntu-24.04"
     Debug   = "redeploy-20250314-16"
-    Project = "bluedragon-single-instance" # AdminPolicy's ec2:* matches this tag
+    Project = "blue-elephant-single-instance" # AdminPolicy's ec2:* matches this tag
   }
   user_data = <<-EOF
     #!/bin/bash

@@ -11,9 +11,14 @@ output "eks_cluster_name" {
   value       = module.eks.eks_cluster_name
 }
 
+output "vpc_id" {
+  description = "VPC ID; scripts/check_resources.sh scopes its network checks to it"
+  value       = module.vpc.vpc_id
+}
+
 output "kubeconfig_command" {
   description = "Run this to point kubectl at the EKS cluster"
-  value       = "aws eks update-kubeconfig --region ${var.region} --name ${module.eks.eks_cluster_name} --alias eks-${var.env}"
+  value       = "aws eks update-kubeconfig --region ${var.region} --profile ${var.aws_profile} --name ${module.eks.eks_cluster_name} --alias eks-${var.env}"
 }
 
 output "eks_cluster_ca_certificate" {

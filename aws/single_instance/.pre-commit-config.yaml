@@ -68,16 +68,16 @@ repos:
   - repo: local
     hooks:
       - id: driftctl-scan
-        name: Check drift for dev (us-west-2)
-        entry: bash -c 'cd /Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/dev && driftctl scan --from tfstate+s3://bluedragon-tfstate-admin-dev/terraform.tfstate --filter "Type != \"aws_route_table\" && Type != \"aws_elasticache_cluster\""'
+        name: Check drift for dev (us-east-2)
+        entry: bash -c 'cd /Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/dev && AWS_PROFILE=blue-elephant AWS_REGION=us-east-2 driftctl scan --from tfstate+s3://blue-elephant-tfstate-admin-dev/terraform.tfstate --filter "Type != \"aws_route_table\" && Type != \"aws_elasticache_cluster\""'
         language: system
         files: \.(tf|tfstate)$
         pass_filenames: false
         require_serial: true
         description: Runs driftctl to detect drift between Terraform state and AWS routing and elasticache
       - id: driftctl-scan-prod
-        name: Check drift for prod (us-west-1)
-        entry: bash -c 'cd /Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/prod && driftctl scan --from tfstate+s3://bluedragon-tfstate-admin-prod/terraform.tfstate --filter "Type != \"aws_route_table\" && Type != \"aws_elasticache_cluster\""'
+        name: Check drift for prod (us-east-2)
+        entry: bash -c 'cd /Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/prod && AWS_PROFILE=blue-elephant AWS_REGION=us-east-2 driftctl scan --from tfstate+s3://blue-elephant-tfstate-admin-prod/terraform.tfstate --filter "Type != \"aws_route_table\" && Type != \"aws_elasticache_cluster\""'
         language: system
         files: \.(tf|tfstate)$
         pass_filenames: false

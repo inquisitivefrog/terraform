@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # What aws/ costs in this repo's account, two ways:
-#   1. Estimate: live inventory in us-west-2 (dev) and us-west-1 (prod) x
+#   1. Estimate: live inventory in REGIONS (us-east-2: dev and prod) x
 #      on-demand list prices from the AWS Price List API (free to call).
 #   2. Billed: month-to-date cost by service from Cost Explorer (lags about
 #      a day; each call costs $0.01).
@@ -9,8 +9,7 @@
 
 set -uo pipefail
 
-ACCOUNT_ID="084375569056" # this repo's account; never grid-meter's
-REGIONS=(us-west-2 us-west-1)
+source "$(dirname "$0")/aws_env.sh" # ACCOUNT_ID, AWS_PROFILE, REGION, REGIONS, require_account
 HOURS=730
 # Not worth an API lookup (USD, sourced 2026-10-21):
 IPV4_HOUR=0.005    # every public IPv4 address, attached or not
@@ -18,11 +17,7 @@ KMS_KEY_MONTH=1.00 # each enabled customer managed key
 FARGATE_VCPU_HOUR=0.04048
 FARGATE_GB_HOUR=0.004445
 
-account="$(aws sts get-caller-identity --query Account --output text 2>/dev/null)"
-if [[ "$account" != "$ACCOUNT_ID" ]]; then
-  echo "Logged in to account '${account:-none}', expected $ACCOUNT_ID. Stopping." >&2
-  exit 1
-fi
+require_account
 
 calc() { awk "BEGIN{printf \"%.4f\", $1}"; }
 TOTAL=0
@@ -120,8 +115,8 @@ for r in "${REGIONS[@]}"; do
   [[ "$n" -gt 0 ]] && line "kms customer managed keys (enabled)" "$n x \$$KMS_KEY_MONTH" "$(calc "$KMS_KEY_MONTH*$n")"
 done
 
-n="$(aws s3api list-buckets --query "length(Buckets[?starts_with(Name, 'bluedragon-')])" --output text 2>/dev/null)"
-printf "  %-48s %16s   %s\n" "s3 bluedragon-* buckets (cents unless large)" "${n:-0}" "not priced"
+n="$(aws s3api list-buckets --query "length(Buckets[?starts_with(Name, 'blue-elephant-')])" --output text 2>/dev/null)"
+printf "  %-48s %16s   %s\n" "s3 blue-elephant-* buckets (cents unless large)" "${n:-0}" "not priced"
 printf "\n  Estimated total: \$%.2f/month, \$%.2f/day (plus usage: data processed, requests, logs)\n" "$TOTAL" "$(calc "$TOTAL/30.4")"
 
 echo

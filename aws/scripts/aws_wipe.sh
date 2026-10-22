@@ -23,9 +23,8 @@
 
 set -euo pipefail
 
-ACCOUNT_ID="084375569056"
+source "$(dirname "$0")/aws_env.sh" # ACCOUNT_ID, AWS_PROFILE, REGION, REGIONS, require_account
 ENVS=(prod dev)
-declare -A REGION=([dev]=us-west-2 [prod]=us-west-1)
 MAX_TRIES=5
 
 AWS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -88,7 +87,7 @@ destroy_dir() {
 check_single_instance_empty() {
   local env count
   for env in "${ENVS[@]}"; do
-    if ! bucket_exists "bluedragon-tfstate-admin-$env"; then
+    if ! bucket_exists "blue-elephant-tfstate-admin-$env"; then
       continue # bootstrap already gone, so single_instance state is too
     fi
     cd "$AWS_DIR/single_instance/environments/$env"
@@ -103,7 +102,7 @@ check_single_instance_empty() {
   done
 }
 
-# Anything billable left in either region.
+# Anything billable left in the account's regions.
 verify_cleanup() {
   local region key leftover=0
   bold "Checking for leftover resources"
@@ -113,7 +112,7 @@ verify_cleanup() {
       leftover=1
     fi
   }
-  for region in "${REGION[@]}"; do
+  for region in "${REGIONS[@]}"; do
     echo "  $region"
     check "EKS clusters" "$(aws eks list-clusters --region "$region" --query 'clusters' --output text)"
     check "EC2 instances" "$(aws ec2 describe-instances --region "$region" --filters Name=instance-state-name,Values=pending,running,stopping,stopped --query 'Reservations[].Instances[].InstanceId' --output text)"
@@ -129,7 +128,7 @@ verify_cleanup() {
       fi
     done
   done
-  check "bluedragon buckets" "$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `bluedragon-`)].Name' --output text)"
+  check "blue-elephant buckets" "$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `blue-elephant-`)].Name' --output text)"
   if [ "$leftover" -eq 0 ]; then
     echo "  nothing billable left from this repo (KMS keys pending deletion are free)"
   fi
@@ -141,12 +140,7 @@ for cmd in aws terraform jq; do
   command -v "$cmd" >/dev/null || { red "$cmd is not installed"; exit 1; }
 done
 
-account=$(aws sts get-caller-identity --query Account --output text) ||
-  { red "No valid AWS credentials"; exit 1; }
-if [ "$account" != "$ACCOUNT_ID" ]; then
-  red "Logged in to account $account, expected $ACCOUNT_ID. Stopping."
-  exit 1
-fi
+require_account
 
 bold "Preflight"
 check_single_instance_empty
@@ -155,7 +149,7 @@ cat <<EOF
 
 This permanently deletes the tfstate layer in account $ACCOUNT_ID:
   - tfstate/environments/{prod,dev}: KMS keys, SNS topics, suffixed buckets
-  - tfstate/bootstrap/{prod,dev}:    bluedragon-tfstate-admin-{prod,dev}[-logs]
+  - tfstate/bootstrap/{prod,dev}:    blue-elephant-tfstate-admin-{prod,dev}[-logs]
     including every state file and access log stored in them.
 Other buckets (grid-meter etc.) are not touched.
 EOF
@@ -163,7 +157,7 @@ read -r -p "Type 'wipe' to continue: " answer
 [ "$answer" = "wipe" ] || { echo "Cancelled."; exit 1; }
 
 for env in "${ENVS[@]}"; do
-  if bucket_exists "bluedragon-tfstate-admin-$env"; then
+  if bucket_exists "blue-elephant-tfstate-admin-$env"; then
     destroy_dir "tfstate/environments/$env" "${REGION[$env]}"
   else
     echo "tfstate/environments/$env: bootstrap bucket already gone; skipping"

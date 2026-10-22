@@ -3,7 +3,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic_subscription
 
 resource "aws_sns_topic" "example" {
-  name = "example-topic"
+  name = "example-topic-${var.env}"
   tags = {
     Name        = "example-topic-${var.env}"
     Environment = var.env
@@ -62,7 +62,7 @@ resource "aws_sns_topic_policy" "example_policy" {
 
 resource "aws_sns_topic" "custom" {
   # First In, First Out Policy
-  name = "custom-topic.fifo"
+  name = "custom-topic-${var.env}.fifo"
   tags = {
     Name        = "custom-topic-${var.env}"
     Environment = var.env

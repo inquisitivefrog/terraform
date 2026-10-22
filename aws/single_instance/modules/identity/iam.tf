@@ -8,25 +8,26 @@
 # https://registry.terraform.io/providers/-/aws/latest/docs/resources/iam_group_policy_attachment
 
 # Resource ARNs for DeveloperPolicy and AdminPolicy, matched by name in any
-# region so one copy of these shared policies covers dev (us-west-2) and
-# prod (us-west-1), and replacing an instance doesn't rewrite them. Names
-# come from the storage, cache, compute and messages modules.
+# region so one copy of these shared policies covers dev and prod (both in
+# us-east-2 since 2026-10-22, so regional names end in -<env>), and replacing
+# an instance doesn't rewrite them. Names come from the storage, cache,
+# compute and messages modules.
 locals {
   arns = {
-    s3_bucket     = "arn:aws:s3:::bluedragon-dev-bucket-*" # both envs use this prefix
+    s3_bucket     = "arn:aws:s3:::blue-elephant-dev-bucket-*" # both envs use this prefix
     ec2_instances = "arn:aws:ec2:*:${var.account_id}:instance/*"
     elasticache = [
-      "arn:aws:elasticache:*:${var.account_id}:replicationgroup:redis-single-instance",
+      "arn:aws:elasticache:*:${var.account_id}:replicationgroup:redis-single-instance-*",
       "arn:aws:elasticache:*:${var.account_id}:cluster:redis-single-instance-*",
     ]
     ecs = [
-      "arn:aws:ecs:*:${var.account_id}:cluster/ecs-cluster",
-      "arn:aws:ecs:*:${var.account_id}:service/ecs-cluster/ecs-service",
+      "arn:aws:ecs:*:${var.account_id}:cluster/ecs-cluster-*",
+      "arn:aws:ecs:*:${var.account_id}:service/ecs-cluster-*/ecs-service",
     ]
     kms_keys = "arn:aws:kms:*:${var.account_id}:key/*"
     sns_topics = [
-      "arn:aws:sns:*:${var.account_id}:example-topic",
-      "arn:aws:sns:*:${var.account_id}:custom-topic.fifo",
+      "arn:aws:sns:*:${var.account_id}:example-topic-*",
+      "arn:aws:sns:*:${var.account_id}:custom-topic-*.fifo",
     ]
   }
 }
@@ -45,28 +46,18 @@ resource "aws_iam_user" "dba" {
   # checkov:skip=CKV_AWS_273:SSO not implemented yet, using IAM users temporarily
 }
 
-resource "aws_iam_group" "operations" {
-  count = var.create_iam_resources ? 1 : 0
-  name  = "operations"
-  # tfsec:ignore:aws-iam-enforce-group-mfa
-}
-
 # Shared IAM (one copy per account, so only the environment with
 # create_iam_resources = true manages it; the other would overwrite it, and
 # destroying it would delete it for both).
-resource "aws_iam_group_membership" "operations_membership" {
-  count = var.create_iam_resources ? 1 : 0
-  name  = "operations-membership"
-  users = [
-    aws_iam_user.sre[0].name,
-    aws_iam_user.dba[0].name,
-  ]
-  group = aws_iam_group.operations[0].name
-}
-
-resource "aws_iam_group_policy_attachment" "attach_assume_admin_policy" {
-  count      = var.create_iam_resources ? 1 : 0
-  group      = aws_iam_group.operations[0].name
+#
+# sre and dba may assume the Admin role. Until 2026-10-22 this went through
+# an "operations" IAM group; the Free-plan account's organization SCP
+# (p-q1nvo865) denies iam:CreateGroup and the other group actions, so the
+# policy is attached to each user instead. Same permission.
+resource "aws_iam_user_policy_attachment" "assume_admin" {
+  for_each = var.create_iam_resources ? { sre = aws_iam_user.sre[0].name, dba = aws_iam_user.dba[0].name } : {}
+  # checkov:skip=CKV_AWS_40:groups are denied by the organization SCP
+  user       = each.value
   policy_arn = aws_iam_policy.assume_admin_role_policy[0].arn
 }
 
@@ -252,18 +243,4 @@ resource "aws_iam_instance_profile" "operations_profile" {
   count = var.create_iam_resources ? 1 : 0
   name  = "operations_profile"
   role  = var.create_iam_resources ? aws_iam_role.admin_role[0].name : data.aws_iam_role.admin_role[0].name
-}
-
-resource "aws_iam_group_policy" "operations_assume_role" {
-  count = var.create_iam_resources ? 1 : 0
-  name  = "OperationsAssumeRolePolicy"
-  group = aws_iam_group.operations[0].name
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action   = "sts:AssumeRole"
-      Effect   = "Allow"
-      Resource = aws_iam_role.admin_role[0].arn
-    }]
-  })
 }

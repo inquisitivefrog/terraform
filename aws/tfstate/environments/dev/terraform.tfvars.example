@@ -1,4 +1,4 @@
 # Copy to terraform.tfvars (git-ignored) and fill in.
 
 env            = "dev"
-region         = "us-west-2"
+region         = "us-east-2"

@@ -5,7 +5,7 @@
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
-  name = "ecs-cluster"
+  name = "ecs-cluster-${var.env}"
   setting {
     name  = "containerInsights"
     value = "enabled"
@@ -14,7 +14,7 @@ resource "aws_ecs_cluster" "main" {
 
 # Task Definition
 resource "aws_ecs_task_definition" "service" {
-  family                   = "tasks-prod"
+  family                   = "tasks-${var.env}"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256

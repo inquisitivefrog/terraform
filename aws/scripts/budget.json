@@ -1,6 +1,6 @@
 {
-  "BudgetName": "FreeTierAlert",
-  "BudgetLimit": { "Amount": "1", "Unit": "USD" },
+  "BudgetName": "monthly-5usd",
+  "BudgetLimit": { "Amount": "5", "Unit": "USD" },
   "TimeUnit": "MONTHLY",
   "BudgetType": "COST"
 }

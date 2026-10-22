@@ -5,12 +5,13 @@
 # Docs: single_instance/docs/KUBECTL.md, "Reaching the EC2 instances"
 
 set -euo pipefail
+source "$(dirname "$0")/aws_env.sh"
 
 env=${1:-}
 target=${2:-public}
+key=~/.ssh/aws_ssh # key pair "blue-elephant" in us-east-2, both envs
 case "$env" in
-  dev) key=~/.aws/bluedragon_uswest2.pem ;;
-  prod) key=~/.aws/bluedragon_uswest1.pem ;;
+  dev | prod) ;;
   *)
     echo "Usage: $0 dev|prod [public|private]" >&2
     exit 1

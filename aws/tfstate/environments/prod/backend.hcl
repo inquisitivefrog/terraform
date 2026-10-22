@@ -1,5 +1,6 @@
-bucket         = "bluedragon-tfstate-admin-prod"
+bucket         = "blue-elephant-tfstate-admin-prod"
 key            = "terraform.tfstate"
-region         = "us-west-1"
+region         = "us-east-2"
 use_lockfile   = true
 encrypt        = true
+profile        = "blue-elephant"

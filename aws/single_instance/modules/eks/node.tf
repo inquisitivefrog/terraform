@@ -11,6 +11,7 @@ resource "aws_launch_template" "eks_nodes" {
       volume_size           = 20
       volume_type           = "gp2"
       delete_on_termination = true
+      encrypted             = true # AWS-managed aws/ebs key, as on the EC2 instances
     }
   }
   network_interfaces {

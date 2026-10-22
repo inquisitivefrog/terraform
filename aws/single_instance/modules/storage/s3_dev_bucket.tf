@@ -2,7 +2,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
 
 resource "aws_s3_bucket" "dev_bucket" {
-  bucket = "bluedragon-dev-bucket-${var.random_suffix}"
+  bucket = "blue-elephant-dev-bucket-${var.random_suffix}"
 
   # Ensure the log bucket itself is secure
   # checkov:skip=CKV_AWS_144:Single-region setup, CRR not required
@@ -11,7 +11,7 @@ resource "aws_s3_bucket" "dev_bucket" {
   }
 
   tags = {
-    Name = "bluedragon-dev-bucket"
+    Name = "blue-elephant-dev-bucket"
   }
 }
 

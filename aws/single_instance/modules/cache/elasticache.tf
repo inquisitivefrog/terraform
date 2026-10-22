@@ -8,7 +8,7 @@
 #   REDISCLI_AUTH=<token> redis-cli -h <primary endpoint> -p 6379 --tls PING
 
 resource "aws_elasticache_subnet_group" "private_only" {
-  name       = "prod-private"
+  name       = "${var.env}-private"
   subnet_ids = [var.vpc_subnet_private_id]
 }
 
@@ -20,7 +20,7 @@ resource "random_password" "redis_auth" {
 }
 
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id = "redis-single-instance"
+  replication_group_id = "redis-single-instance-${var.env}"
   description          = "single_instance Redis, TLS and AUTH required"
   engine               = "redis"
   engine_version       = "7.1"

@@ -22,7 +22,7 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
 }
 
 resource "aws_s3_bucket" "log_bucket" {
-  bucket = "bluedragon-log-bucket-${var.random_suffix}"
+  bucket = "blue-elephant-log-bucket-${var.random_suffix}"
   # Access logs only: let terraform destroy delete the bucket with its
   # object versions instead of failing with BucketNotEmpty.
   force_destroy = true
@@ -34,7 +34,7 @@ resource "aws_s3_bucket" "log_bucket" {
   }
 
   tags = {
-    Name = "bluedragon-log-bucket"
+    Name = "blue-elephant-log-bucket"
   }
 }
 

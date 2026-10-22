@@ -12,7 +12,9 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-west-1"
+  region              = "us-east-2"
+  profile             = "blue-elephant"
+  allowed_account_ids = ["650836812595"] # Free-plan account; never grid-meter's
 }
 
 data "aws_caller_identity" "current" {}
@@ -23,5 +25,5 @@ module "storage" {
   employer       = "Fireworks Inc"
   env            = "prod"
   random_suffix  = ""
-  tfstate_bucket = "bluedragon-tfstate-admin-prod"
+  tfstate_bucket = "blue-elephant-tfstate-admin-prod"
 }

@@ -4,9 +4,12 @@ Rolling record of how this repo looked when the rebuild started, what has
 changed since, and what is deployed. Add new entries at the top of the
 change log, and update "Current state" and "Open items" when they change.
 
-- Account: `084375569056`
-- IAM user: `bluedragon`
-- Regions: dev = `us-west-2`, prod = `us-west-1`
+- Account: `650836812595` (Free plan, $120 credits until 2027-04-22) since
+  2026-10-22; before that `084375569056`
+- IAM user / CLI profile: `blue-elephant` (pinned in every provider, backend
+  and script; providers also set `allowed_account_ids`)
+- Region: `us-east-2` for dev, prod and ecommerce-k8s. An SCP from the
+  organization's management account (`100434099521`) denies all other regions
 - Terraform: AWS provider `~> 6.65` (6.69.1 installed)
 
 ## Remember
@@ -24,20 +27,33 @@ change log, and update "Current state" and "Open items" when they change.
   your laptop keeps the key and `ssh -J` hops through:
 
   ```sh
-  ssh -i ~/.aws/bluedragon_uswest2.pem -J ubuntu@<public-ip> ubuntu@<private-ip>
+  ssh -i ~/.ssh/aws_ssh -J ubuntu@<public-ip> ubuntu@<private-ip>
   ```
 
-  Add the key to your agent first (`ssh-add ~/.aws/bluedragon_uswest2.pem`)
+  Add the key to your agent first (`ssh-add ~/.ssh/aws_ssh`)
   so the second hop can use it. Details: `single_instance/docs/KUBECTL.md`,
-  "Reaching the EC2 instances". (prod: `~/.aws/bluedragon.pem`.)
+  "Reaching the EC2 instances". One key pair serves dev and prod.
 - **Apply dev before prod:** prod looks up the IAM roles and users that dev
   creates.
 - **Your home IP changes:** check `curl -4 ifconfig.me` against
   `my_laptop_cidr_block` before plan/apply or kubectl.
 
-## Current state (2026-10-16)
+## Current state (2026-10-22)
 
-### Deployed in AWS
+New account `650836812595` (us-east-2) has:
+
+| Layer | dev | prod |
+|---|---|---|
+| `tfstate/bootstrap` (local state) | **applied** 2026-10-22: `blue-elephant-tfstate-admin-dev` + `-logs`; `check_resources.sh dev` 5/5 PASS | not applied |
+| `tfstate/environments` | **applied** 2026-10-22: `alias/tfstate-dev` (enabled, rotation on); `check_resources.sh dev` 7/7 PASS | not applied |
+| EC2 key pair `blue-elephant` | imported (shared) | imported (shared) |
+| `single_instance` | **applied** 2026-10-22 (env `multi`, suffix `765jm01j`, `vpc-0efe071f9d720d8c8`): `check_resources.sh dev` 23/23 PASS; SSH public and private OK; 4 EKS nodes Ready, all pods Running. Estimate **$211/month, $6.94/day** | not applied |
+| `ecommerce-k8s` | not applied (Pod Identity change in code) | — |
+
+Plus the `monthly-5usd` budget (CLI-created). The table below is the old
+account `084375569056` as last left.
+
+### Deployed in AWS (old account)
 
 | Layer | dev (us-west-2) | prod (us-west-1) |
 |---|---|---|
@@ -55,9 +71,9 @@ holds another project's Terraform state. Do not delete it.
 | Root | Bucket | Key | Encryption |
 |---|---|---|---|
 | `tfstate/bootstrap/{env}` | local `terraform.tfstate` | — | — |
-| `tfstate/environments/{env}` | `bluedragon-tfstate-admin-{env}` | `terraform.tfstate` | SSE-S3 |
-| `single_instance/environments/{env}` | `bluedragon-tfstate-admin-{env}` | `single_instance/terraform.tfstate` | SSE-KMS via `alias/tfstate-{env}` |
-| `ecommerce-k8s/*` | `bluedragon-ecommerce-terraform-state` (us-east-1) | per stage | — |
+| `tfstate/environments/{env}` | `blue-elephant-tfstate-admin-{env}` | `terraform.tfstate` | SSE-S3 |
+| `single_instance/environments/{env}` | `blue-elephant-tfstate-admin-{env}` | `single_instance/terraform.tfstate` | SSE-KMS via `alias/tfstate-{env}` |
+| `ecommerce-k8s/*` | `blue-elephant-ecommerce-terraform-state` (us-east-2) | per stage | — |
 
 Locking uses S3 native lock files (`use_lockfile = true`); no DynamoDB table.
 
@@ -65,9 +81,9 @@ Locking uses S3 native lock files (`use_lockfile = true`); no DynamoDB table.
 
 1. `tfstate/bootstrap/{dev,prod}`: `terraform init`, `plan -out bootstrap-{env}`, `apply bootstrap-{env}`
 2. `tfstate/environments/{dev,prod}`: `terraform init -upgrade -backend-config=backend.hcl -reconfigure`, `plan -out bucket-{env}`, `apply bucket-{env}`
-3. Import the EC2 key pair per region:
-   `ssh-keygen -y -f ~/.aws/<key>.pem > /tmp/<key>.pub` then
-   `aws ec2 import-key-pair --key-name bluedragon --public-key-material fileb:///tmp/<key>.pub --region <region>`
+3. EC2 key pair `blue-elephant` in us-east-2 (one for dev and prod): imported
+   2026-10-22 from `~/.ssh/aws_ssh.pub`. Command and checks:
+   `README.aws.md`, "EC2 SSH key pair"
 4. `single_instance/environments/dev`, then `prod` (prod reads dev's IAM): check `curl -4 ifconfig.me` matches
    `my_laptop_cidr_block` in `terraform.tfvars`, then
    `terraform init -upgrade -backend-config=backend.hcl -reconfigure`, then plan/apply
@@ -83,6 +99,175 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-10-22: single_instance/dev applied and verified
+
+Second `plan -out bucket-dev`: 5 to add (2 EC2 `t3.small`, `ec2_policy`,
+`assume_admin` for sre and dba); applied. Verified with
+`check_resources.sh dev` (23 passed), `ssh_ec2.sh dev [private]`,
+`kube_use.sh dev`, `inspect_aws.sh`, `scan_aws.sh`.
+`estimate_costs.sh`: $210.91/month ($6.94/day): EKS $73, NAT $32.85, EC2
+$60.74, Fargate $9, Redis $12.41, EBS $9.60, IPv4 $7.30, KMS $6. At that
+rate the $120 Free-plan credits last about 17 days.
+
+- **scan_aws.sh:** removed `aws kms schedule-key-deletion --key-id <key-id>`
+  from this read-only scan (it only failed because `<key-id>` became a shell
+  redirect); `Tags` columns in table output (which crashed the CLI with
+  "list index out of range" / "Row should have 4 elements") replaced by the
+  Name tag; `iam list-policies --scope Local`.
+- **aws_env.sh:** `AWS_PAGER=""`, so long output no longer stops in `less`.
+- **EKS node volumes encrypted (fixed same day):** the `eks_nodes` launch
+  template's `ebs` block had no `encrypted = true`, so node root volumes
+  were unencrypted. Added it (AWS-managed `aws/ebs` key, as on the EC2
+  instances). Plan: 0 add, 2 change (launch template v2, node group). EKS's
+  managed rolling update (not kubectl/kubeadm) surged new nodes, drained
+  and terminated the old ones; `VersionUpdate` Successful about 15 min.
+  `check_resources.sh` has a new check, "EKS node volumes encrypted: N of
+  N" (needs N > 0); dev now 24 passed, 0 failed.
+
+### 2026-10-22: org SCP also denies IAM groups and OIDC providers
+
+The single_instance/dev apply's third error: `iam:CreateGroup` denied by
+SCP `p-q1nvo865` (organization `o-dgbvkwy7f6`). IAM policy simulator
+(`aws iam simulate-principal-policy`) with
+`--context-entries ContextKeyName=aws:RequestedRegion,ContextKeyValues=us-east-2,ContextKeyType=string`
+shows the real denies are only `iam:CreateGroup` and the other group actions,
+`iam:CreateLoginProfile` and `iam:CreateOpenIDConnectProvider`. EKS (incl.
+Pod Identity, add-ons, access entries), ELB, S3, EC2, KMS and the rest of IAM
+are allowed. Without the region context the simulator wrongly reports
+almost everything as denied (the region SCP's condition matches a missing
+key).
+
+- **single_instance:** the `operations` group, its membership, inline policy
+  and group attachment are gone; `aws_iam_user_policy_attachment.assume_admin`
+  attaches `AssumeAdminRolePolicy` to `sre` and `dba` directly (same
+  permission). dev plans 5 to add (2 EC2 at `t3.small`, `ec2_policy`, 2
+  attachments).
+- **ecommerce-k8s:** the load-balancer controller moves from IRSA (OIDC
+  provider) to EKS Pod Identity: `modules/eks` adds the
+  `eks-pod-identity-agent` add-on (after the node groups) instead of the OIDC
+  provider; `files/iam-alb-controller-role.json` trusts
+  `pods.eks.amazonaws.com`; stage1 adds `aws_eks_pod_identity_association`
+  for `kube-system/aws-load-balancer-controller`; stage2 drops the
+  `role-arn` annotation and the web-identity token settings. Node groups
+  `t3.medium` → `t3.small` (tfvars) with a Free Tier validation.
+  `modules/alb-controller` and `files/values.yaml` (unused by the stages)
+  still carry the old annotation.
+
+### 2026-10-22: single_instance/dev apply; Free plan rejects t3.medium
+
+`plan -out bucket-dev` (110 to add), `apply bucket-dev` started 18:14Z. Both
+EC2 instances failed at launch: CloudTrail RunInstances
+`Client.InvalidParameterCombination`, "The specified instance type is not
+eligible for Free Tier" (`t3.medium`). The rest of the apply carried on.
+
+- **Free plan limits EC2 to Free Tier types.** In us-east-2 on 2026-10-22:
+  `t3/t4g/t8i.micro` (1 GiB), `t3/t4g/t8i.small` (2 GiB), `c7i-flex.large`
+  (4 GiB), `m7i-flex.large` (8 GiB). Check with
+  `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true`.
+- **dev `instance_type`:** `t3.medium` → `t3.small` (local tfvars). Prod was
+  already `t3.micro`. EKS nodes use `t3.micro` (eligible).
+- **Validation:** `instance_type` and `eks_node_instance_type` in both
+  single_instance environments now fail at plan unless Free Tier eligible.
+- **ecommerce-k8s** stage1 node group is `t3.medium` × 4: must change before
+  its apply.
+- **check_resources.sh:** the EC2 checks now expect 2 running instances and
+  2 with IMDSv2 required. The old IMDS check counted non-compliant instances
+  and expected 0, which also passed with no instances at all (as here).
+- **Next:** let the apply finish (it will report 2 errors), then plan again:
+  expect 2 to add (the instances).
+
+### 2026-10-22: tfstate/environments/dev applied in the new account
+
+`init -upgrade -reconfigure -backend-config=backend.hcl` (the saved backend
+still pointed at the old us-west-2 bucket, so a plain `plan` failed with
+"S3 bucket bluedragon-tfstate-admin-dev does not exist"), `plan -out
+bucket-dev` (2 to add: KMS key + `alias/tfstate-dev`), `apply bucket-dev`.
+`check_resources.sh dev`: 7 passed, 0 failed. AWS provider now 6.70.0 in
+this root's lock file.
+
+- **Re-init after the move:** `tfstate/environments/prod` and
+  `single_instance/environments/prod` still have the old us-west-1 backend
+  saved in `.terraform/`; re-init each once `tfstate/bootstrap/prod` exists.
+  `single_instance/environments/dev` was re-initialized 2026-10-22 (empty).
+- **check_resources.sh:** the "single_instance state object" check moved
+  from the tfstate/environments section (it failed whenever single_instance
+  wasn't applied) into the single_instance section, and now expects the
+  object to be `aws:kms` encrypted.
+
+### 2026-10-22: tfstate/bootstrap/dev applied in the new account
+
+`plan -out bootstrap-dev` (13 to add, S3 only), `apply bootstrap-dev`: 13
+added. `check_resources.sh dev`: 5 passed, 0 failed.
+
+- **check_resources.sh fix:** `expect` now turns tabs into spaces before
+  comparing. `--output text` separates list values with tabs, so the
+  multi-value checks (public access block, Redis TLS/at-rest/AUTH) could
+  never pass before.
+
+### 2026-10-22: everything in aws/ moved to the Free-plan account; $5 budget
+
+Code only at the time; nothing applied in the new account. All nine roots
+`validate`; `tfstate/bootstrap/dev` plans 13 to add against the new account.
+
+New AWS account `650836812595` (Free plan, $120 credits, expires
+2027-04-22) replaces `084375569056` for tfstate, single_instance,
+ecommerce-k8s and the upcoming `aws/datastore-clusters` tree.
+
+- **Region:** the account is in organization `o-dgbvkwy7f6` (management
+  account `100434099521`), whose SCP denies every region except us-east-2
+  (global endpoints such as IAM, Budgets and the Price List API in us-east-1
+  still work). dev, prod and ecommerce-k8s all move to us-east-2. AZs: dev
+  `us-east-2a/b`, prod `us-east-2b/c`, ecommerce `us-east-2a/b`.
+- **Credentials pinned:** every AWS provider sets `profile = "blue-elephant"`
+  and `allowed_account_ids = ["650836812595"]` (variables `aws_profile` and
+  `aws_account_id` in the environment roots, inline in bootstrap and
+  ecommerce-k8s), so a wrong profile fails at plan time. Every backend.hcl
+  sets `profile`. The EKS token exec and `kubeconfig_command` pass
+  `--profile`.
+- **Name collisions (dev and prod now share a region):** regional names
+  that had no env now end in `-<env>`: `redis-single-instance-<env>`,
+  subnet group `<env>-private`, `ecs-cluster-<env>`, task family
+  `tasks-<env>`, `alias/eks-key-<env>`, `alias/my-custom-sns-key-<env>`,
+  `example-topic-<env>`, `custom-topic-<env>.fifo`. The cache, compute and
+  kms modules take a new `env` variable. DeveloperPolicy and AdminPolicy
+  match these with wildcards.
+- **Scripts:** new `scripts/aws_env.sh` holds `ACCOUNT_ID`, `AWS_PROFILE`
+  (exported, not inherited), `REGION` per env, `REGIONS` and
+  `require_account`; every script sources it. `check_resources.sh` now pins
+  network, EC2, Redis, SNS and node group checks to the env's VPC (new output
+  `vpc_id`) and tf env name, so dev can't pass on prod's resources.
+  `ssh_ec2.sh` uses one key, `~/.ssh/aws_ssh`.
+- **IAM user:** `admin_user_name` (KMS key admin, ecommerce aws-auth and
+  access entry) is `blue-elephant`; the ecommerce kubectl RBAC YAML subjects
+  follow.
+- **ecommerce-k8s:** live config only (stages, modules, files, scripts):
+  account, region, profile and user replaced. `docs/`, `deprecated/`,
+  `*.orig` and logs are left as history. Scripts with hard-coded old resource
+  IDs (`02_alb_health.sh`, `06_share.sh`, `residue_check.sh`) only had
+  account and region swapped; their IDs are stale until a redeploy.
+
+- **CLI profile:** `blue-elephant` (IAM user `blue-elephant`,
+  AdministratorAccess), region `us-east-2`. Verify with
+  `aws sts get-caller-identity --profile blue-elephant`.
+- **Budget:** `monthly-5usd`, created with the CLI (not Terraform yet; import
+  it once this account has a state backend). $5/month cost budget. Emails
+  `allinonegulp@gmail.com` when actual spend or the month's forecast goes
+  over $5.
+- **Prefix renamed `bluedragon` → `blue-elephant`** in all live config
+  (not history): state buckets `blue-elephant-tfstate-admin-{dev,prod}`,
+  `blue-elephant-dev-bucket-*`, `blue-elephant-log-bucket-*`, Project tag
+  `blue-elephant-single-instance`, ecommerce state bucket
+  `blue-elephant-ecommerce-terraform-state`, app bucket
+  `blue-elephant-ecommerce-app-us-east-2-prod`, Kubernetes roles
+  `blue-elephant-admin`/`-impersonator`, `ecommerce-k8s/files/blue-elephant-*.yaml`
+  (git mv) and Terraform addresses `blue_elephant_*`. `aws_wipe.sh` and
+  `estimate_costs.sh` now look for `blue-elephant-` buckets. All bucket names
+  were free on 2026-10-22.
+- **Key pair:** `blue-elephant` (ed25519) imported into us-east-2 from
+  `~/.ssh/aws_ssh.pub`; details in `README.aws.md`, "EC2 SSH key pair".
+- **Next:** follow the build order from step 1. Watch credits: EKS, NAT
+  gateways and ElastiCache in both envs run well past $5/month.
 
 ### 2026-10-21: security fixes (group 1) and cleanup (group 3); not applied
 

@@ -39,6 +39,6 @@ variable "random_suffix" {
 
 variable "project_tag" {
   type        = string
-  default     = "bluedragon-single-instance"
+  default     = "blue-elephant-single-instance"
   description = "Value of the Project tag on EC2 instances; AdminPolicy's ec2:* is limited to it"
 }
