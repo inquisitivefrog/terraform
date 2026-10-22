@@ -64,6 +64,7 @@ resource "google_compute_instance" "public" {
     }
   }
 
+  # trivy:ignore:GCP-0031 bastion; its firewall admits only the laptop /32
   network_interface {
     subnetwork = var.subnet_public_id
     access_config {} # ephemeral public IP (AWS: associate_public_ip_address)

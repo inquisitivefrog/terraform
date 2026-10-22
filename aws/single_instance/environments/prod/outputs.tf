@@ -25,3 +25,14 @@ output "sns_topic_example_arn" {
   description = "The ARN of the example SNS topic"
   value       = module.messages.sns_topic_example_arn
 }
+
+output "redis_primary_endpoint" {
+  description = "Redis primary endpoint; connect with TLS and the AUTH token"
+  value       = module.cache.redis_primary_endpoint
+}
+
+output "redis_auth_token" {
+  description = "Redis AUTH token (terraform output -raw redis_auth_token)"
+  value       = module.cache.redis_auth_token
+  sensitive   = true
+}

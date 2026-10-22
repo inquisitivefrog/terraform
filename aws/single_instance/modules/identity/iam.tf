@@ -7,7 +7,29 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_group_membership
 # https://registry.terraform.io/providers/-/aws/latest/docs/resources/iam_group_policy_attachment
 
-data "aws_region" "current" {}
+# Resource ARNs for DeveloperPolicy and AdminPolicy, matched by name in any
+# region so one copy of these shared policies covers dev (us-west-2) and
+# prod (us-west-1), and replacing an instance doesn't rewrite them. Names
+# come from the storage, cache, compute and messages modules.
+locals {
+  arns = {
+    s3_bucket     = "arn:aws:s3:::bluedragon-dev-bucket-*" # both envs use this prefix
+    ec2_instances = "arn:aws:ec2:*:${var.account_id}:instance/*"
+    elasticache = [
+      "arn:aws:elasticache:*:${var.account_id}:replicationgroup:redis-single-instance",
+      "arn:aws:elasticache:*:${var.account_id}:cluster:redis-single-instance-*",
+    ]
+    ecs = [
+      "arn:aws:ecs:*:${var.account_id}:cluster/ecs-cluster",
+      "arn:aws:ecs:*:${var.account_id}:service/ecs-cluster/ecs-service",
+    ]
+    kms_keys = "arn:aws:kms:*:${var.account_id}:key/*"
+    sns_topics = [
+      "arn:aws:sns:*:${var.account_id}:example-topic",
+      "arn:aws:sns:*:${var.account_id}:custom-topic.fifo",
+    ]
+  }
+}
 
 resource "aws_iam_user" "sre" {
   count = var.create_iam_resources ? 1 : 0
@@ -29,21 +51,6 @@ resource "aws_iam_group" "operations" {
   # tfsec:ignore:aws-iam-enforce-group-mfa
 }
 
-data "aws_iam_user" "sre" {
-  count     = var.create_iam_resources ? 0 : 1
-  user_name = "sre"
-}
-
-data "aws_iam_user" "dba" {
-  count     = var.create_iam_resources ? 0 : 1
-  user_name = "dba"
-}
-
-data "aws_iam_group" "operations" {
-  count      = var.create_iam_resources ? 0 : 1
-  group_name = "operations"
-}
-
 # Shared IAM (one copy per account, so only the environment with
 # create_iam_resources = true manages it; the other would overwrite it, and
 # destroying it would delete it for both).
@@ -55,11 +62,6 @@ resource "aws_iam_group_membership" "operations_membership" {
     aws_iam_user.dba[0].name,
   ]
   group = aws_iam_group.operations[0].name
-}
-
-data "aws_iam_policy" "assume_admin_role_policy" {
-  count = var.create_iam_resources ? 0 : 1
-  name  = "AssumeAdminRolePolicy"
 }
 
 resource "aws_iam_group_policy_attachment" "attach_assume_admin_policy" {
@@ -90,11 +92,6 @@ data "aws_iam_role" "developer_role" {
   name  = "Developer"
 }
 
-data "aws_iam_policy" "developer_policy" {
-  count = var.create_iam_resources ? 0 : 1
-  name  = "DeveloperPolicy"
-}
-
 resource "aws_iam_policy" "developer_policy" {
   count       = var.create_iam_resources ? 1 : 0
   name        = "DeveloperPolicy"
@@ -103,20 +100,18 @@ resource "aws_iam_policy" "developer_policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Describe actions don't support resource-level permissions.
         Action   = ["ec2:Describe*"]
         Effect   = "Allow"
-        Resource = var.ec2_arns
+        Resource = "*"
       },
       {
         Action = [
           "s3:ListBucket",
           "s3:GetObject"
         ]
-        Effect = "Allow"
-        Resource = [
-          var.s3_bucket_arn,
-          "${var.s3_bucket_arn}/*"
-        ]
+        Effect   = "Allow"
+        Resource = [local.arns.s3_bucket, "${local.arns.s3_bucket}/*"]
       }
     ]
   })
@@ -166,11 +161,6 @@ resource "aws_iam_policy" "assume_admin_role_policy" {
   })
 }
 
-data "aws_iam_policy" "admin_policy" {
-  count = var.create_iam_resources ? 0 : 1
-  name  = "AdminPolicy"
-}
-
 resource "aws_iam_policy" "admin_policy" {
   count       = var.create_iam_resources ? 1 : 0
   name        = "AdminPolicy"
@@ -179,9 +169,22 @@ resource "aws_iam_policy" "admin_policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        Effect   = "Allow"
+        Action   = ["ec2:Describe*"]
+        Resource = "*"
+      },
+      {
+        # Instance IDs aren't known in advance; match this project's tag.
+        Effect   = "Allow"
+        Action   = ["ec2:*"]
+        Resource = local.arns.ec2_instances
+        Condition = {
+          StringEquals = { "aws:ResourceTag/Project" = var.project_tag }
+        }
+      },
+      {
         Effect = "Allow"
         Action = [
-          "ec2:*",
           "s3:*",
           "elasticache:*",
           "ecs:*",
@@ -189,12 +192,11 @@ resource "aws_iam_policy" "admin_policy" {
           "sns:*",
         ]
         Resource = concat(
-          var.ec2_arns,
-          [var.s3_bucket_arn, "${var.s3_bucket_arn}/*"],
-          [var.elasticache_arn],
-          [var.ecs_cluster_arn, var.ecs_service_arn],
-          ["arn:aws:kms:${data.aws_region.current.region}:${var.account_id}:key/*"],
-          var.sns_topic_arns
+          [local.arns.s3_bucket, "${local.arns.s3_bucket}/*"],
+          local.arns.elasticache,
+          local.arns.ecs,
+          [local.arns.kms_keys],
+          local.arns.sns_topics,
         )
       },
       {

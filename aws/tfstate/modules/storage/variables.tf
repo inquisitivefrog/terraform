@@ -28,20 +28,9 @@ variable "random_suffix" {
   type        = string
 }
 
-variable "region" {
-  type        = string
-  description = "AWS Region"
-}
-
 variable "sns_topic_logging_arn" {
   default     = ""
   description = "ARN of the SNS topic for bucket notifications"
-  type        = string
-}
-
-variable "sns_topic_logging_policy_arn" {
-  default     = ""
-  description = "ARN of the example SNS topic logging policy"
   type        = string
 }
 

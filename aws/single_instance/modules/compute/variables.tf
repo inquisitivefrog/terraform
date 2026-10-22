@@ -19,7 +19,6 @@ variable "ecs_task_execution_role_arn" {
 
 variable "instance_type" {
   type        = string
-  default     = ""
   description = "AWS instance_type. VM footprint"
 }
 

@@ -2,6 +2,7 @@
 # Azure counterpart of aws/tfstate/modules/storage/s3_state_log_bucket.tf
 # Diagnostic logs land in containers named insights-logs-<category>.
 
+# trivy:ignore:AZU-0012 Entra ID only (shared keys off); an IP deny rule would lock out the laptop
 resource "azurerm_storage_account" "logs" {
   name                     = local.logs_account_name
   resource_group_name      = var.resource_group_name

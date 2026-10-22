@@ -38,3 +38,43 @@ jobs:
 
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff .
+
+  # Report only for now: findings are printed but never fail the run. Make a
+  # step blocking (drop continue-on-error / soft-fail) once its count is 0.
+  # Local equivalents: aws/README.aws.test.md
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cloud: [aws, gcp, azure]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+
+      - name: tflint (${{ matrix.cloud }})
+        continue-on-error: true
+        working-directory: ${{ matrix.cloud }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # avoids rate limits fetching rulesets
+        run: |
+          tflint --init --config "$PWD/.tflint.hcl"
+          tflint --recursive --config "$PWD/.tflint.hcl" --format compact
+
+      - name: trivy config (${{ matrix.cloud }})
+        continue-on-error: true
+        env:
+          TRIVY_VERSION: 0.76.1
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz trivy
+          ./trivy config --severity MEDIUM,HIGH,CRITICAL --exit-code 0 ${{ matrix.cloud }}
+
+      - name: checkov (${{ matrix.cloud }})
+        continue-on-error: true
+        run: |
+          pip install --quiet checkov==3.3.20
+          checkov -d ${{ matrix.cloud }} --framework terraform --compact --quiet --soft-fail

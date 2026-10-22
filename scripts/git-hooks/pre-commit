@@ -49,6 +49,22 @@ if [ -n "$tf_files" ] && command -v terraform >/dev/null 2>&1; then
   fi
 fi
 
+# 5. Report only (never blocks): tflint and trivy for each cloud with staged
+#    Terraform changes. Each is skipped if not installed (see
+#    aws/README.aws.test.md). checkov runs in the GitHub Action only (slow).
+for cloud in $(echo "$tf_files" | cut -d/ -f1 | grep -xE 'aws|gcp|azure' | sort -u); do
+  if command -v tflint >/dev/null 2>&1 && [ -f "$cloud/.tflint.hcl" ]; then
+    n=$(cd "$cloud" && tflint --recursive --config "$PWD/.tflint.hcl" --format compact 2>/dev/null |
+      grep -cE ': (Error|Warning|Notice) - ')
+    echo "pre-commit (report only): tflint $cloud: $n issue(s)"
+  fi
+  if command -v trivy >/dev/null 2>&1; then
+    n=$(trivy config --quiet --severity MEDIUM,HIGH,CRITICAL --format json "$cloud" 2>/dev/null |
+      jq '[.Results[]?.Misconfigurations[]? | select(.Status=="FAIL")] | length' 2>/dev/null)
+    echo "pre-commit (report only): trivy $cloud: ${n:-?} finding(s) (MEDIUM+)"
+  fi
+done
+
 if [ "$fail" -ne 0 ]; then
   red "Commit blocked by scripts/git-hooks/pre-commit."
   exit 1

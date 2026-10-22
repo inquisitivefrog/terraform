@@ -66,7 +66,6 @@ module "cache" {
   redis_port            = var.redis_port
   sg_elasticache_id     = module.networking.sg_elasticache_id
   vpc_subnet_private_id = module.vpc.vpc_subnet_private_ids[0]
-  vpc_subnet_public_id  = module.vpc.vpc_subnet_public_id
 }
 
 # Compute Module
@@ -87,12 +86,6 @@ module "identity" {
   source               = "../../modules/identity"
   account_id           = data.aws_caller_identity.current.account_id
   create_iam_resources = true
-  ec2_arns             = module.compute.ec2_arns
-  ecs_cluster_arn      = module.compute.ecs_cluster_arn
-  ecs_service_arn      = module.compute.ecs_service_arn
-  elasticache_arn      = module.cache.elasticache_arn
-  s3_bucket_arn        = module.storage.s3_bucket_arn
-  sns_topic_arns       = module.messages.sns_topic_arns
   private_ec2_arn      = module.compute.private_ec2_arn
   public_ec2_arn       = module.compute.public_ec2_arn
   env                  = var.env
@@ -105,7 +98,6 @@ module "kms" {
   account_id      = data.aws_caller_identity.current.account_id
   admin_user_name = var.admin_user_name
   region          = var.region
-  vpc_id          = module.vpc.vpc_id
 }
 
 # Messages Module
@@ -148,14 +140,11 @@ module "storage" {
 # VPC Module
 module "vpc" {
   source                = "../../modules/vpc"
-  account_id            = data.aws_caller_identity.current.account_id
   availability_zones    = var.availability_zones
   create_iam_resources  = true
   kms_key_resource      = module.kms.vpc_flow_logs_key_resource
-  region                = var.region
   vpc_cidr_block        = var.vpc_cidr_block
   vpc_flow_logs_key_arn = module.kms.vpc_flow_logs_key_arn
-  vpc_flow_logs_key_id  = module.kms.vpc_flow_logs_key_id
 }
 
 module "eks" {
@@ -174,20 +163,16 @@ module "eks" {
   node_max_size                  = var.eks_node_max_size
   node_security_group_ids        = [module.networking.sg_eks_cluster_id]
   random_suffix                  = random_string.suffix.result
-  vpc_cidr_block                 = var.vpc_cidr_block
-  vpc_id                         = module.vpc.vpc_id
   vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids
 }
 
 module "kubernetes" {
-  source                 = "../../modules/kubernetes"
-  cluster_endpoint       = module.eks.eks_cluster_endpoint
-  cluster_ca_certificate = module.eks.eks_cluster_ca_certificate
-  cluster_name           = module.eks.eks_cluster_name
-  enable_ingress         = true
-  namespaces             = ["app1", "app2"]
-  region                 = var.region
-  vpc_id                 = module.vpc.vpc_id
+  source         = "../../modules/kubernetes"
+  cluster_name   = module.eks.eks_cluster_name
+  enable_ingress = true
+  namespaces     = ["app1", "app2"]
+  region         = var.region
+  vpc_id         = module.vpc.vpc_id
   rbac_roles = [
     {
       user       = "sre"

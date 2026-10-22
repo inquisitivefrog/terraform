@@ -84,6 +84,59 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ## Change log
 
+### 2026-10-21: security fixes (group 1) and cleanup (group 3); not applied
+
+Code only; AWS stays destroyed. All six roots `validate`; scratch-copy plans
+with a local backend (the S3 backends are gone): single_instance dev 110 to
+add, each bootstrap 13, each tfstate environment 2. Prod single_instance
+can't be planned until dev's shared IAM exists.
+
+- **Redis:** `aws_elasticache_replication_group` (one node, Redis 7.1,
+  `default.redis7`) replaces `aws_elasticache_cluster`, which can't do TLS
+  or AUTH for Redis. In-transit and at-rest encryption on; 32-character AUTH
+  token from `random_password`, output `redis_auth_token` (sensitive; in the
+  KMS-encrypted state). Outputs `redis_primary_endpoint`. Test from the
+  private EC2: `REDISCLI_AUTH=<token> redis-cli -h <endpoint> -p 6379 --tls PING`.
+- **IAM:** DeveloperPolicy and AdminPolicy no longer take dev's ARNs
+  (`ec2_arns`, `s3_bucket_arn`, `elasticache_arn`, `ecs_*_arn`,
+  `sns_topic_arns`, all removed). They match resources by name in any region
+  (`bluedragon-dev-bucket-*`, `redis-single-instance`, `ecs-cluster`,
+  `example-topic`, KMS keys) and EC2 instances by the new tag
+  `Project = bluedragon-single-instance`, so one copy covers dev and prod and
+  instance replacements don't rewrite them. `ec2:Describe*` is on `*` (it
+  has no resource-level permissions).
+- **IMDSv2** on the EKS node launch template (`http_tokens = required`, hop
+  limit 2); the EC2 instances already had it.
+- **VPC flow logs encrypted** with their KMS key: `kms_key_id` was commented
+  out and used the key ID; CloudWatch Logs needs the ARN. Restored the key
+  policy's encryption-context condition.
+- **tfstate/environments** now creates only the state KMS key and
+  `alias/tfstate-{env}`. Removed the unused suffixed state and log buckets,
+  the SNS topic and its KMS key (`tfstate/modules/messages` deleted): about
+  $2/month less, 2 resources per env instead of 21.
+- **Cleanup:** removed 28 unused variables/data sources (tflint), made the
+  compute module's `instance_type` required (default was `""`), added
+  `required_version` to the bootstraps, deleted the 2025 experiments
+  `single_instance/environments/dev/eks/{terraform,yaml}` (a second EKS
+  cluster, `eks_cluster2`).
+- **Provider lock files committed** for the six AWS roots
+  (darwin_arm64 + linux_amd64); un-ignored in `.gitignore`.
+- **Scripts:** `aws/scripts/check_resources.sh dev|prod` and
+  `aws/scripts/estimate_costs.sh` (AWS versions of Azure's). Only the
+  "not applied" paths and the price lookups are tested so far (both regions:
+  EC2, EBS, EKS, NAT, ElastiCache, ALB); the rest needs a rebuild. Price
+  lookups showed Redis 6 now carries ElastiCache extended-support charges
+  ($0.018-0.035 per node-hour extra), which the move to 7.1 avoids.
+- **Docs:** rewrote `README.AWS.md` (layout, build and teardown order, links);
+  fixed `environment/` paths in `aws/tfstate/README.md`.
+- **Scanners:** installed tflint 0.64.0 (GitHub release), trivy 0.76.1,
+  checkov 3.3.20. `.tflint.hcl` per cloud (`aws/` moved up from
+  `aws/single_instance/`; AWS ruleset pin fixed: 0.50.0 never existed, now
+  0.49.0). `trivy.yaml` reported MEDIUM only; now MEDIUM, HIGH, CRITICAL.
+  Hook and GitHub Action run them report-only. Accepted exceptions inline
+  (`# trivy:ignore:AWS-0040` for the laptop-only EKS endpoint). Guide:
+  `aws/README.aws.test.md`.
+
 ### 2026-10-19
 
 - Deleted `aws/scripts/cleanup_aws.sh`: it deleted every S3 bucket in
@@ -343,11 +396,6 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 
 ## Open items
 
-- **ElastiCache:** Redis 6.2 with no in-transit encryption or AUTH.
-- **`DeveloperPolicy` and `AdminPolicy` list only dev's EC2 instances**
-  (`var.ec2_arns`), so the Developer and Admin roles can't act on prod's
-  instances, and every dev instance replacement rewrites both policies.
-
 - **Dev ingress has no load balancer:** `app-ingress` shows no ADDRESS. The
   ALB controller (chart 1.6.0) has no IAM role (no IRSA) and the public
   subnets have no `kubernetes.io/role/elb` tag, so it can't create an ALB.
@@ -359,18 +407,19 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
   slots and all 8 are used. Any new workload needs more nodes or bigger nodes.
 - **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
   chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
-- **Suffixed tfstate buckets unused:** nothing stores state in
-  `bluedragon-tfstate-admin-{env}-{suffix}`; candidates for removal, or fold
-  the KMS key/alias into the bootstrap and drop the tfstate stage.
 - **ecommerce-k8s not plan-tested:** validates, but its state bucket
   `bluedragon-ecommerce-terraform-state` must be re-created (`terraform-state`
   root, whose local state is stale) before init with the backend.
   `stage2-k8s/statefile.json` (old Terraform state) is committed. stage1
   tfvars uses 4 `t3.medium` nodes; the default endpoint CIDR is `0.0.0.0/0`.
-- **Docs:** `README.AWS.md` build steps predate the bootstrap/environments
-  split; `aws/tfstate/README.md` is the accurate procedure.
-- **Lock files:** git-ignored; consider committing multi-platform locks
-  (`terraform providers lock -platform=darwin_arm64 -platform=linux_amd64`).
-- **Security scanners not wired in:** trivy/checkov/tflint from the 2025
-  pre-commit config aren't installed; see `docs/REPO_CHECKS.md` for adding
-  trivy.
+- **EKS control-plane logging off** (trivy AWS-0038, checkov CKV_AWS_37):
+  set `enabled_cluster_log_types`; small CloudWatch cost.
+- **Kubernetes pod hardening** (most checkov/trivy findings): no security
+  context, NET_RAW allowed, root user, `:latest` tags in the `kubernetes`
+  module. Fold into the ALB/ingress work (group 2).
+- **Remaining scanner findings before making them blocking:**
+  single_instance trivy 10 MEDIUM, checkov 24; `ecommerce-k8s` tflint 40.
+- **Group 1 untested in AWS:** Redis TLS/AUTH, the tag- and name-based IAM
+  policies and the flow-log KMS key need a dev rebuild to confirm.
+- **EKS node volumes are gp2;** gp3 is 20% cheaper ($0.08 vs $0.10 per GB-month
+  in us-west-2) and at least as fast.

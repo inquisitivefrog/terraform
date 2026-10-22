@@ -2,6 +2,7 @@
 # create AWS S3 buckets to store terraform.tfstate files
 
 terraform {
+  required_version = ">= 1.5.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -22,6 +23,5 @@ module "storage" {
   employer       = "Fireworks Inc"
   env            = "prod"
   random_suffix  = ""
-  region         = "us-west-1"
   tfstate_bucket = "bluedragon-tfstate-admin-prod"
 }

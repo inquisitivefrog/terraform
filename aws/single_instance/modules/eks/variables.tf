@@ -79,16 +79,6 @@ variable "random_suffix" {
   description = "Random suffix for resource names"
 }
 
-variable "vpc_cidr_block" {
-  type        = string
-  description = "VPC CIDR block"
-}
-
-variable "vpc_id" {
-  type        = string
-  description = "VPC ID"
-}
-
 variable "vpc_subnet_private_ids" {
   type        = list(string)
   description = "Private subnet IDs for EKS"

@@ -64,18 +64,6 @@ variable "vpc_subnet_private_cidr_blocks" {
   description = "List of private subnet CIDR blocks"
 }
 
-variable "vpc_subnet_private_cidr_block" {
-  type        = string
-  default     = ""
-  description = "Deprecated: Use vpc_subnet_private_cidr_blocks instead"
-}
-
-variable "vpc_subnet_private_id" {
-  type        = string
-  default     = ""
-  description = "Deprecated: Use vpc_subnet_private_ids instead"
-}
-
 variable "vpc_subnet_public_cidr_block" {
   type        = string
   default     = ""

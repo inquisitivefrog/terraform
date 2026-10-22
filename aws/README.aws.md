@@ -26,6 +26,8 @@ Tips:
 | `aws_wipe.sh` | Tears down the tfstate layer (environments, then bootstrap) after single_instance is destroyed. Only runs on account `084375569056`; only touches `bluedragon-` resources |
 | `kube_use.sh dev\|prod` | Points kubectl at the single_instance EKS cluster and shows nodes and pods. Leaves the grid-meter context alone |
 | `ssh_ec2.sh dev\|prod [public\|private]` | SSHes to an EC2 instance; the private one through the public one (ProxyJump) |
+| `check_resources.sh dev\|prod` | Confirms tfstate and single_instance resources exist and are configured as intended (Redis TLS/AUTH, IMDSv2, KMS, EKS API and SSH allow this laptop's IP). Skips what isn't applied. Exit 1 on any failure |
+| `estimate_costs.sh` | Monthly and daily list-price estimate of what's running in both regions (Price List API, free), plus billed month-to-date cost by service (Cost Explorer, $0.01 per call) |
 | `inspect_aws.sh`, `scan_aws.sh` | Read-only listings of resources across regions, plus budget spend |
 | `make_docs.sh` | Generates module READMEs with terraform-docs |
 

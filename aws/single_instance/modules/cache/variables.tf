@@ -19,8 +19,3 @@ variable "vpc_subnet_private_id" {
   description = "AWS vpc_subnet ID"
 }
 
-variable "vpc_subnet_public_id" {
-  type        = string
-  default     = ""
-  description = "AWS vpc_subnet ID"
-}

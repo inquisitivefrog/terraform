@@ -1,6 +1,6 @@
 # Next session: start here
 
-Updated 2026-10-21. Rolling records: `aws/tfstate/docs/STATUS.md`,
+Updated 2026-10-21 (evening). Rolling records: `aws/tfstate/docs/STATUS.md`,
 `gcp/tfstate/docs/STATUS.md`, `azure/tfstate/docs/STATUS.md`. Command guides:
 `aws/README.aws.md`, `gcp/README.gcloud.md`, `azure/README.az.md`.
 
@@ -8,7 +8,7 @@ Updated 2026-10-21. Rolling records: `aws/tfstate/docs/STATUS.md`,
 
 | Cloud | State | Cost |
 |---|---|---|
-| AWS (account 084375569056) | Everything destroyed, tfstate layer too (`aws/scripts/aws_wipe.sh`) | $0 |
+| AWS (account 084375569056) | Everything destroyed; groups 1 and 3 changed in code, not yet applied | $0 (no free credits left; ~$4 billed in October) |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
@@ -30,19 +30,32 @@ it won't be reused.
 - **NAT ordering fix** (`modules/vpc/outputs.tf`) verified in prod; the dev
   namespace timeout it caused is retestable only in a dev destroy.
 
-## Possible next work
+## Next: AWS
 
-- **AWS open items** (`aws/tfstate/docs/STATUS.md`): DeveloperPolicy and
-  AdminPolicy cover only dev's instances; ElastiCache Redis has no TLS or
-  AUTH; dev ALB controller lacks IRSA, subnet tags and a current chart;
-  ecommerce-k8s never plan-tested; suffixed tfstate buckets unused.
-- **GCP open items** (`gcp/tfstate/docs/STATUS.md`): destroy needs a second
-  pass for the Cloud Run serverless IP; public VM disk 65% full; GKE version
-  floats on REGULAR; key rings pile up.
-- **Azure (if rebuilt)**: VMs boot with pending security updates (cloud-init
-  `package_upgrade`); leftover "dev" names in prod resources; VNet flow logs
-  record nothing from the v7 VMs.
-- **Repo**: wire trivy/tflint into the checks (`docs/REPO_CHECKS.md`).
+Groups 1 and 3 are done in code (committed, not applied); see
+`aws/tfstate/docs/STATUS.md`, 2026-10-21 entry.
+
+- Group 1 (security): Redis TLS + AUTH (replication group, 7.1), IAM
+  policies by name pattern and `Project` tag, IMDSv2 on EKS nodes, flow logs
+  KMS-encrypted.
+- Group 3 (cleanup): tfstate/environments is now just the KMS key; unused
+  declarations removed; lock files committed; tflint/trivy/checkov installed
+  and wired in report-only; `aws/scripts/check_resources.sh` and
+  `estimate_costs.sh`; README.AWS.md rewritten; `aws/README.aws.test.md`.
+
+Then:
+1. **Group 2:** dev ALB ingress: IRSA role + OIDC provider for the ALB
+   controller, `kubernetes.io/role/elb` subnet tags, chart 1.6.0 to current,
+   bigger dev nodes (t3.micro is full); fold in pod hardening (security
+   context, no `:latest`) and EKS control-plane logging; gp2 to gp3.
+2. **Decide how to deploy to confirm** (cheapest: dev only, same-day destroy;
+   prod plan only works after dev's shared IAM exists). Verify with
+   `aws/scripts/check_resources.sh dev`.
+3. Later: ecommerce-k8s (group 4; tflint shows 40 issues); make scanners
+   blocking once findings are fixed or accepted.
+
+Other clouds' open items: `gcp/tfstate/docs/STATUS.md`,
+`azure/tfstate/docs/STATUS.md`.
 
 ## Never touch
 

@@ -17,6 +17,13 @@ resource "aws_launch_template" "eks_nodes" {
     associate_public_ip_address = false
     security_groups             = length(var.node_security_group_ids) > 0 ? var.node_security_group_ids : [var.eks_cluster_sg_id]
   }
+  # IMDSv2 only, as on the EC2 instances. Hop limit 2 so pods (VPC CNI,
+  # ALB controller) can still reach the metadata service through the node.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
   lifecycle {
     create_before_destroy = true
   }

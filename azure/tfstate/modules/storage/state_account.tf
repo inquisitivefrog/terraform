@@ -13,6 +13,7 @@ locals {
   }
 }
 
+# trivy:ignore:AZU-0012 Entra ID only (shared keys off); an IP deny rule would lock out the laptop
 resource "azurerm_storage_account" "state" {
   name                     = local.state_account_name
   resource_group_name      = var.resource_group_name

@@ -26,11 +26,11 @@ resource "aws_kms_key" "vpc_flow_logs_key" {
           "kms:DescribeKey"
         ]
         Resource = "*"
-        #Condition = {
-        #  ArnLike = {
-        #    "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.region}:${var.account_id}:log-group:/aws/vpc/flow-logs/*"
-        #  }
-        #}
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.region}:${var.account_id}:log-group:/aws/vpc/flow-logs/*"
+          }
+        }
       }
     ]
   })

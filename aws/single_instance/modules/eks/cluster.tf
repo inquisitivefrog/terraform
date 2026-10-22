@@ -10,6 +10,7 @@ resource "aws_eks_cluster" "this" {
     security_group_ids = [var.eks_cluster_sg_id]
     # Public endpoint limited to public_access_cidrs (your laptop) so Terraform
     # and kubectl can run from outside the VPC; nodes use the private endpoint.
+    # trivy:ignore:AWS-0040 public endpoint is limited to public_access_cidrs (laptop /32)
     endpoint_public_access  = true
     endpoint_private_access = true
     public_access_cidrs     = var.public_access_cidrs

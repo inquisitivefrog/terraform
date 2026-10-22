@@ -2,8 +2,10 @@ misconf:
   scanners:
     - terraform
 report: "all"
-severity:
+severity: # was MEDIUM only, which hid HIGH and CRITICAL findings
   - MEDIUM
+  - HIGH
+  - CRITICAL
 scan:
   compliance: ""
   scanners:

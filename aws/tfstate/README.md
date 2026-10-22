@@ -25,7 +25,7 @@ tim@Tims-MBP dev % pwd
 5. aws s3 ls s3://bluedragon-tfstate-admin-dev --region us-west-2
 
 tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environment/prod
+/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/prod
 
 1. terraform init -backend-config=backend.hcl -reconfigure
 2. terraform validate
@@ -35,7 +35,7 @@ tim@Tims-MBP % pwd
 6. terraform state list
 
 tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environment/dev
+/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/dev
 
 1. terraform init -backend-config=backend.hcl -reconfigure
 2. terraform validate
@@ -45,7 +45,7 @@ tim@Tims-MBP % pwd
 6. terraform state list
 
 tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environment/prod
+/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/prod
 
 1. terraform init -backend-config=backend.hcl  -reconfigure
 2. terraform validate
@@ -55,7 +55,7 @@ tim@Tims-MBP % pwd
 6. terraform state list
 
 tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environment/dev
+/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/dev
 
 1. terraform init -backend-config=backend.hcl  -reconfigure
 2. terraform validate
@@ -67,12 +67,12 @@ tim@Tims-MBP % pwd
 DESTROY
 -------
 tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environment/prod
+/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/prod
 
 1. terraform destroy
 
 tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environment/dev
+/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/dev
 
 1. terraform destroy
 

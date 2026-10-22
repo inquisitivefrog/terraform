@@ -40,7 +40,6 @@ module "cache" {
   redis_port            = var.redis_port
   sg_elasticache_id     = module.networking.sg_elasticache_id
   vpc_subnet_private_id = module.vpc.vpc_subnet_private_ids[0]
-  vpc_subnet_public_id  = module.vpc.vpc_subnet_public_id
 }
 
 module "compute" {
@@ -59,13 +58,7 @@ module "identity" {
   source               = "../../modules/identity"
   account_id           = data.aws_caller_identity.current.account_id
   create_iam_resources = false # IAM is global; dev creates the shared roles and users
-  ec2_arns             = module.compute.ec2_arns
-  ecs_cluster_arn      = module.compute.ecs_cluster_arn
-  ecs_service_arn      = module.compute.ecs_service_arn
-  elasticache_arn      = module.cache.elasticache_arn
   enable_ingress       = true
-  s3_bucket_arn        = module.storage.s3_bucket_arn
-  sns_topic_arns       = module.messages.sns_topic_arns
   private_ec2_arn      = module.compute.private_ec2_arn
   public_ec2_arn       = module.compute.public_ec2_arn
   env                  = var.env
@@ -77,7 +70,6 @@ module "kms" {
   account_id      = data.aws_caller_identity.current.account_id
   admin_user_name = var.admin_user_name
   region          = var.region
-  vpc_id          = module.vpc.vpc_id
 }
 
 module "messages" {
@@ -116,14 +108,11 @@ module "storage" {
 
 module "vpc" {
   source                = "../../modules/vpc"
-  account_id            = data.aws_caller_identity.current.account_id
   create_iam_resources  = false # dev creates vpc-flow-logs-role
   availability_zones    = var.availability_zones
   kms_key_resource      = module.kms.vpc_flow_logs_key_resource
-  region                = var.region
   vpc_cidr_block        = var.vpc_cidr_block
   vpc_flow_logs_key_arn = module.kms.vpc_flow_logs_key_arn
-  vpc_flow_logs_key_id  = module.kms.vpc_flow_logs_key_id
 }
 
 module "eks" {
@@ -135,8 +124,6 @@ module "eks" {
   node_desired_size              = var.eks_node_desired_size
   node_max_size                  = var.eks_node_max_size
   public_access_cidrs            = [var.my_laptop_cidr_block]
-  vpc_id                         = module.vpc.vpc_id
-  vpc_cidr_block                 = var.vpc_cidr_block
   vpc_subnet_private_ids         = module.vpc.vpc_subnet_private_ids
   eks_cluster_sg_id              = module.networking.sg_eks_cluster_id
   eks_cluster_role_arn           = module.identity.eks_cluster_role_arn

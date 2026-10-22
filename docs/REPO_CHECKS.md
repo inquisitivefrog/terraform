@@ -5,6 +5,7 @@
 | What | Location | When it runs |
 |---|---|---|
 | Pre-commit hook | `scripts/git-hooks/pre-commit` | On your machine, every `git commit` |
+| tflint configs | `aws/.tflint.hcl`, `gcp/.tflint.hcl`, `azure/.tflint.hcl` | Hook and Action (scan job) |
 | GitHub Action | `.github/workflows/repo-checks.yml` | On GitHub, every push and pull request |
 | Accepted old findings | `.gitleaksignore` | Read by gitleaks in both places |
 | Ignore rules | `.gitignore` | Whenever git decides what to track |
@@ -18,6 +19,12 @@ Both run the same checks:
    anything else gitleaks recognizes. The hook scans staged changes; the
    Action scans all of history.
 3. **`terraform fmt`**: Terraform files are formatted.
+4. **Scanners, report only** (print findings, never block yet):
+   - pre-commit hook: tflint and trivy, for each cloud (`aws`, `gcp`,
+     `azure`) with staged `.tf` changes; skipped if the tool isn't installed.
+   - GitHub Action `scan` job: tflint, trivy and checkov for every cloud.
+   Make a scanner blocking once its findings are fixed or accepted. Install
+   and run them locally: `aws/README.aws.test.md`.
 
 ## Setup on a new clone (once)
 
@@ -68,10 +75,10 @@ below through the `pre-commit` framework. That config is no longer installed
 | **pre-commit** | Framework that downloads and runs other checks before each commit, configured in `.pre-commit-config.yaml` | Runner | Not installed; replaced here by a plain bash hook |
 | **terraform fmt** | Rewrites `.tf` files into standard formatting | Formatter | Built into terraform; in these checks |
 | **terraform validate** | Checks syntax, types and references without contacting AWS | Correctness | Built in; run it per directory |
-| **tflint** | Linter: catches mistakes validate misses, like invalid instance types or unused variables (config `aws/single_instance/.tflint.hcl`) | Lint | Not installed |
+| **tflint** | Linter: catches mistakes validate misses, like invalid instance types or unused variables (one `.tflint.hcl` per cloud) | Lint | Installed 0.64.0 (GitHub release; not in Homebrew core); hook + Action, report only |
 | **tfsec** | Scans Terraform for insecure settings, like unencrypted buckets or open security groups | Security | Merged into trivy; use trivy |
-| **trivy** | Aqua Security scanner: Terraform misconfigurations (tfsec's checks), container images, and dependencies with known vulnerabilities (configs `aws/single_instance/trivy.yaml`, `.trivyignore`) | Security | Not installed; `brew install trivy`, `trivy config .` |
-| **checkov** | Another IaC security scanner (Prisma Cloud) with its own large rule set; overlaps with trivy | Security | Not installed; `pip install checkov`, `checkov -d .` |
+| **trivy** | Aqua Security scanner: Terraform misconfigurations (tfsec's checks), container images, and dependencies with known vulnerabilities. Accepted findings: inline `# trivy:ignore:<ID> <why>` | Security | Installed 0.76.1; hook + Action, report only |
+| **checkov** | Another IaC security scanner (Prisma Cloud) with its own large rule set; overlaps with trivy | Security | Installed 3.3.20; Action only (slow), report only |
 | **gitleaks** | Finds secrets (keys, tokens, passwords) in files and git history | Secrets | Installed; in these checks |
 | **detect-private-key / detect-aws-credentials** | Small hooks from `pre-commit-hooks` that look for keys in staged files | Secrets | Covered by the bash hook and gitleaks |
 | **terraform-docs** | Generates the input/output tables in each module's `README.md` from its variables and outputs | Docs | Not installed; the READMEs predate recent changes |
@@ -83,6 +90,5 @@ correct, **trivy / checkov** check whether it's secure, **gitleaks** checks
 whether you're leaking secrets, and **terraform plan -refresh-only** checks
 whether AWS still matches state.
 
-To add trivy to these checks later, add `trivy config --exit-code 1 .` to the
-hook and the Action. Expect a first run to report many existing findings to
-fix or accept.
+First scan (2026-10-21) and what's left to fix before making the scanners
+blocking: `aws/README.aws.test.md`, "First scan".

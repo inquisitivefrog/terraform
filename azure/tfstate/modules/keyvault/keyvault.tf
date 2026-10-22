@@ -7,6 +7,7 @@
 
 data "azurerm_client_config" "current" {}
 
+# trivy:ignore:AZU-0013 RBAC-only vault reached from a laptop whose IP changes; an IP ACL would lock out state
 resource "azurerm_key_vault" "tfstate" {
   name                       = "bdtfkv${var.env}${var.random_suffix}"
   location                   = var.location
