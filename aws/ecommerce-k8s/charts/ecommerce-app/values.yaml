@@ -37,5 +37,5 @@ resources:
 # serving for shutdownDelaySeconds while the ALB deregisters it; new pods are
 # ready only once http-echo answers (and, with the readiness gate stage2
 # enables, once their ALB target is healthy).
-shutdownDelaySeconds: 15
-terminationGracePeriodSeconds: 30
+shutdownDelaySeconds: 30 # the ALB still routed to a deregistered target after 19 s
+terminationGracePeriodSeconds: 45
