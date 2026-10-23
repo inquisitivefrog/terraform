@@ -19,6 +19,7 @@ spec:
         {{- end }}
     spec:
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -35,3 +36,15 @@ spec:
             - name: http
               containerPort: 5678
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              # Built-in sleep action: the image is a lone static binary with
+              # no shell or sleep command.
+              sleep:
+                seconds: {{ .Values.shutdownDelaySeconds }}

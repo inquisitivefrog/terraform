@@ -33,3 +33,9 @@ resources:
   limits:
     cpu: 100m
     memory: 32Mi
+# Zero-gap rollouts behind the ALB (IP targets). On SIGTERM the pod keeps
+# serving for shutdownDelaySeconds while the ALB deregisters it; new pods are
+# ready only once http-echo answers (and, with the readiness gate stage2
+# enables, once their ALB target is healthy).
+shutdownDelaySeconds: 15
+terminationGracePeriodSeconds: 30
