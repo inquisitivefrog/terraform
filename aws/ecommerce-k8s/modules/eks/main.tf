@@ -25,7 +25,11 @@ resource "aws_eks_cluster" "this" {
   enabled_cluster_log_types = var.cluster_enabled_log_types
   depends_on                = [aws_cloudwatch_log_group.cluster]
   access_config {
-    authentication_mode                         = "API_AND_CONFIG_MAP"
+    # Access entries only: no aws-auth ConfigMap, whose system:masters
+    # mappings can't be audited or revoked through the EKS API. One-way: EKS
+    # can't switch back to CONFIG_MAP. Managed node groups get their access
+    # entry automatically.
+    authentication_mode                         = "API"
     bootstrap_cluster_creator_admin_permissions = false
   }
   tags = {

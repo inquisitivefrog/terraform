@@ -52,3 +52,4 @@ aws/ecommerce-k8s/terraform-state/destroy-bucket
 *statefile*.json
 *.pem
 *.key
+aws/ecommerce-k8s/README.creds.txt

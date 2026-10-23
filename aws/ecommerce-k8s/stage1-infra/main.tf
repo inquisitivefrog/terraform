@@ -66,8 +66,9 @@ resource "aws_eks_pod_identity_association" "alb_controller" {
 }
 
 # Upstream's policy, unmodified: kubernetes-sigs/aws-load-balancer-controller
-# docs/install/iam_policy.json at main c250dc4 (2026-10-23). The v2.9.1 copy
-# lacks ec2:GetSecurityGroupsForVpc, which ELB now checks on CreateLoadBalancer.
+# docs/install/iam_policy.json at tag v3.6.1, the controller version stage2
+# installs (identical to main c250dc4 on 2026-10-23). The v2.9.1 copy lacked
+# ec2:GetSecurityGroupsForVpc, which ELB now checks on CreateLoadBalancer.
 resource "aws_iam_policy" "alb_controller_policy" {
   name   = "${var.cluster_name}-AWSLoadBalancerControllerPolicy"
   policy = file("${path.module}/../files/iam-alb-controller-policy.json")

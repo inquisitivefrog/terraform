@@ -38,13 +38,14 @@ change log, and update "Current state" and "Open items" when they change.
 - **Your home IP changes:** check `curl -4 ifconfig.me` against
   `my_laptop_cidr_block` before plan/apply or kubectl.
 
-## Current state (2026-10-23): ecommerce-k8s up (~$0.25/h)
+## Current state (2026-10-23, evening): ecommerce-k8s up with the upgrade set (~$0.25/h)
 
-Account `650836812595` (us-east-2) is empty again after the ecommerce-k8s
-test run (swept 2026-10-23, after its teardown): no S3
-buckets, VPCs, EC2, EKS, ElastiCache or log groups; no IAM roles from this
-repo. Left: the `monthly-5usd` budget (CLI-created) and 17 customer KMS keys
-in PendingDeletion (free).
+Account `650836812595` (us-east-2) is empty (swept after the final
+ecommerce-k8s teardown): no EKS, EC2, NAT, EIPs, load balancers, target
+groups, VPCs, security groups, ENIs, EBS, S3 buckets, log groups, or IAM
+roles and policies from this repo. Left: the `monthly-5usd` budget
+(CLI-created) and 19 customer KMS keys in PendingDeletion (free); the two
+ecommerce keys go on 2026-10-30.
 
 | Layer | dev | prod |
 |---|---|---|
@@ -52,7 +53,7 @@ in PendingDeletion (free).
 | `tfstate/environments` | **destroyed** 2026-10-22 (CMK PendingDeletion) | **destroyed** 2026-10-22 (CMK PendingDeletion) |
 | EC2 key pair `blue-elephant` | imported 2026-10-22 from `~/.ssh/aws_ssh.pub` (shared by dev and prod) | |
 | `single_instance` | applied, verified 24/24, **destroyed** 2026-10-22 | applied, verified, **destroyed** 2026-10-22 |
-| `ecommerce-k8s` | first run applied, verified and destroyed 2026-10-23; **redeployed** 2026-10-23 with the scanner fixes (terraform-state 6, stage1 71) | — |
+| `ecommerce-k8s` | applied, verified and destroyed twice 2026-10-23 (second run: scanner fixes, Argo CD GitOps, 34/34). **upgrade set deployed and verified 36/36** (Argo CD v3.5.6, controller v3.6.1, auth mode `API`, RBAC cleanup); up | — |
 
 Rebuild from step 1 of the build order (`aws/README.aws.md`, "Build and
 tear-down order").
@@ -103,6 +104,82 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-10-23: upgrade set deployed and verified (36/36)
+
+Fresh deploy: terraform-state 6, stage1 68 (cluster 8m05s, node group
+1m47s), stage2 4 (controller 27s, Argo CD 1m14s, argocd-apps 3s, Ingress
+4s with its hostname set).
+- **Auth `API`:** EKS created the node role's `EC2_LINUX` access entry
+  while the node group was created; nodes joined; ACTIVE in 1m47s.
+- **Argo CD v3.5.6:** server, repo-server, applicationset controller,
+  redis and the application-controller StatefulSet all Running. The
+  Application is Synced Healthy at `5532a03` (= `main`). The admin password
+  comes from `argocd-initial-admin-secret`.
+- **Controller v3.6.1:** ALB and NLB built with no AccessDenied.
+- **RBAC:** old roles absent; `kubectl auth can-i impersonate users` as
+  the controller's service account = no.
+- `check_resources.sh`: 32/36 straight after the apply, because both load
+  balancers were still `provisioning`; 36/36 about 2 minutes later.
+
+### 2026-10-23: final teardown clean; upgrade set written (not applied)
+
+**Rollout test with 2 replicas** (`a7d6fe7`, then `5532a03`): Argo CD
+scaled to 2 within 2 min 17 s. The next message change rolled out about
+5 min 45 s after the push (its 3-minute poll had just missed it). 330
+requests, one a second: **2 got `502`**, at the start of the rollover.
+Cause: the pods quit on SIGTERM before the ALB deregisters them, and with
+no readiness probe they count as ready before the ALB health check passes.
+Fix not done yet: a `preStop` sleep (Kubernetes `sleep` action),
+`terminationGracePeriodSeconds`, a readiness probe, and the controller's
+pod readiness gate (namespace label
+`elbv2.k8s.aws/pod-readiness-gate-inject=enabled`).
+
+**Teardown** (stage2, then stage1 71, then terraform-state 6): the Argo CD
+Application finalizer removed the app before Argo CD went. The controller
+deleted the ALB and NLB before its own release. **Both Terraform-managed
+log groups** (EKS control plane, flow logs) went with destroy, so for the
+first time nothing needed manual cleanup. Sweep: account empty; both KMS
+keys PendingDeletion until 2026-10-30. `check_resources.sh` skips every
+stage.
+
+**Upgrade set, in code and validated, not yet applied or committed:**
+- `.gitignore`: `aws/ecommerce-k8s/README.creds.txt` (the user's local file).
+- **Load-balancer controller** chart 1.9.1 → **3.6.1** (controller v3.6.1;
+  chart and controller versions match from v3). Breaking changes in v3.0.0
+  don't apply to a fresh install. The IAM policy is identical to upstream's
+  v3.6.1 tag, so only its source comment changed.
+- **Argo CD** chart 2.17.0 → **10.11.1** (Argo CD 1.8.4 → **v3.5.6**). An
+  in-place upgrade would fail: the new chart manages its 3 CRDs as
+  templates, the old one installed them outside Helm, and Helm won't adopt
+  objects it didn't create. So stage2 is redeployed rather than upgraded.
+  Values rewritten: `configs.params."server.insecure"` replaces
+  `--insecure`; no `random_password`, because Argo CD generates its own
+  server key and `argocd-initial-admin-secret`, so neither is in Terraform
+  state. Dex and notifications are off; resources raised for 3.x. The
+  `random` provider was removed once stage2 state was empty. The chart also
+  adds 4 NetworkPolicies, which have no effect here: the VPC CNI doesn't
+  enforce network policies by default.
+- **RBAC:**
+  - Removed `blue-elephant-impersonator`, which was bound to the
+    controller's service account, so that pod could impersonate any user,
+    `system:masters` included.
+  - Removed `terraform-admin` (wildcard) and `blue-elephant-admin` (could
+    create ClusterRoleBindings).
+  - Removed the `aws-auth` ConfigMap with its `system:masters` mappings.
+  - stage1: `authentication_mode = "API"`, access entries only. This is
+    **one-way**: EKS can't switch back to CONFIG_MAP.
+  - One access policy per principal (`AmazonEKSClusterAdminPolicy`); 3
+    redundant associations dropped.
+  - stage2's `admin_user_name` variable and two outputs removed.
+- **check_resources.sh:**
+  - new checks: auth mode `API`; old roles gone; `kubectl auth can-i
+    impersonate users --as=<controller SA>` = no; controller `v3.6.1`;
+    Argo CD `v3.5.6`;
+  - `aws-auth` and RBAC-presence checks removed;
+  - Completed pods (Argo CD's redis-secret-init Job) no longer counted.
+- **Next deploy:** terraform-state 6, stage1 about 68 (71 − 3
+  associations), stage2 4 (controller, Argo CD, argocd-apps, Ingress).
 
 ### 2026-10-23: GitOps test passed (chart change rolled out by Argo CD alone)
 
@@ -1030,12 +1107,11 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 - **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
   chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
 - **ecommerce-k8s follow-ups** (full run verified 2026-10-23):
-  - Argo CD chart `2.17.0` (Argo CD 1.8.4, 2021) → 10.x. Argo CD now
-    deploys the app, so the upgrade needs a sync test.
-  - Controller chart 1.9.1 (v2.9.1) is behind the policy (upstream main).
+  - Zero-gap rollouts: preStop sleep, grace period, readiness probe,
+    readiness gate (2 × 502 in the 2-replica test).
+  - `argocd-cm` URL is the chart placeholder `argocd.example.com`
+    (`global.domain`); only matters for SSO and notification links.
   - `logs/` (2025, old account; git-ignored, local only) can go.
-  - Live RBAC in stage2: wildcard `terraform-admin` ClusterRole and the
-    impersonator binding to the controller's service account (unscanned).
   - KSV-0125 (Docker Hub image): pick an ignore mechanism, or a registry,
     before trivy blocks.
   - Not yet tested: destroy now removes the EKS and flow-log log groups

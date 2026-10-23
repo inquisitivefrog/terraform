@@ -8,7 +8,7 @@ Updated 2026-10-23. Rolling records: `aws/tfstate/docs/STATUS.md`,
 
 | Cloud | State | Cost |
 |---|---|---|
-| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (checked 2026-10-23). single_instance dev and prod applied, verified and destroyed on 2026-10-22 | $0; budget `monthly-5usd` |
+| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-23 evening). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
@@ -37,24 +37,29 @@ renamed `bluedragon` to `blue-elephant`, applied and verified groups 1 and 3
 in dev and prod, fixed destroy ordering (aws-auth, Ingress), ECS crash loop
 and log-group leftovers, then tore everything down.
 
-Done on 2026-10-23 (uncommitted): ecommerce-k8s repointed, applied in the
-new account (terraform-state 4, stage1 64, stage2 12), verified (app answered
-through the ALB) and destroyed; account swept empty. Fixes from the run:
-access-policy associations wait for their entries, `aws-auth` is patched
-(`kubernetes_config_map_v1_data`), controller policy gained 3 EC2 read
-actions, EKS log group now managed (untested). Also uncommitted: the
-`aws_wipe.sh` preflight fix, doc updates, `.gitignore` plan names.
+Done on 2026-10-23 (pushed, through `5532a03`): ecommerce-k8s in the new
+account, deployed twice and verified with `scripts/check_resources.sh` (34/34).
+Scanner fixes: tflint 0, trivy 1, KMS, flow logs, chart hardening. Dead code
+removed. **Argo CD now deploys the app from this repo's `main`**: a pushed
+chart change rolls out with no Terraform run. Helper scripts `kube_use.sh`,
+`helm_status.sh` and `argocd_use.sh`. Teardown was clean, with no manual
+steps.
+
+Then (2026-10-23 evening) the **upgrade set**: Argo CD v3.5.6, load-balancer
+controller v3.6.1, access-entries-only auth (`API`), RBAC cleanup. It was
+deployed fresh and verified 36/36, and is committed.
 
 Then:
-1. **Commit** the above once reviewed.
+1. **ecommerce-k8s:** zero-gap rollouts (preStop sleep, readiness probe,
+   ALB readiness gate), then tear down. See STATUS.md for anything still
+   up.
 2. **datastore-clusters:** new `aws/datastore-clusters` tree; decide which
    datastores first. Free-plan limits: only Free Tier EC2 types; SCP denies
    IAM groups, login profiles and OIDC providers (use Pod Identity).
-3. **Group 2** (dev ALB ingress): the controller never creates an ALB here;
-   needs Pod Identity for the controller, subnet tags, a current chart.
-4. **ecommerce-k8s clean-up:** see STATUS.md open items (check script untested live,
-   Argo CD chart, upstream controller policy, tflint/trivy).
-5. Later: make scanners blocking; regenerate module READMEs (terraform-docs).
+3. **Group 2** (single_instance dev ALB ingress): copy ecommerce-k8s's
+   working pattern (Pod Identity, current chart, upstream policy).
+4. Later: make scanners blocking (KSV-0125 needs an ignore mechanism for
+   Helm templates); regenerate module READMEs (terraform-docs).
 
 Other clouds' open items: `gcp/tfstate/docs/STATUS.md`,
 `azure/tfstate/docs/STATUS.md`.

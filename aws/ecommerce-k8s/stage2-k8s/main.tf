@@ -2,8 +2,6 @@ data "aws_eks_cluster" "this" {
   name = "ecommerce-cluster"
 }
 
-data "aws_caller_identity" "current" {}
-
 data "terraform_remote_state" "stage1_infra" {
   backend = "s3"
   config = {
@@ -14,45 +12,16 @@ data "terraform_remote_state" "stage1_infra" {
   }
 }
 
-# EKS creates aws-auth with the node role when the node group joins, so
-# Terraform takes over its keys (force) rather than creating the ConfigMap.
-# Access entries (stage1) grant the same access; this keeps CONFIG_MAP auth
-# working too.
-resource "kubernetes_config_map_v1_data" "aws_auth" {
-  force = true
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
-  }
-  data = {
-    mapRoles = yamlencode([
-      {
-        rolearn  = data.terraform_remote_state.stage1_infra.outputs.node_role_arn
-        username = "system:node:{{EC2PrivateDNSName}}"
-        groups   = ["system:bootstrappers", "system:nodes"]
-      },
-      {
-        rolearn  = data.terraform_remote_state.stage1_infra.outputs.terraform_role_arn
-        username = "terraform-admin"
-        groups   = ["system:masters"]
-      }
-    ])
-    mapUsers = yamlencode([
-      {
-        userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.admin_user_name}"
-        username = var.admin_user_name
-        groups   = ["system:masters"]
-      }
-    ])
-  }
-}
+# No aws-auth: the cluster uses access entries only (stage1,
+# authentication_mode = "API"). Every principal's access is visible and
+# revocable through the EKS API.
 
 resource "helm_release" "aws_load_balancer_controller" {
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
-  version    = "1.9.1"
+  version    = "3.6.1" # controller v3.6.1; chart and controller versions match from v3 on
   timeout    = 1200
   wait       = true
 
@@ -90,11 +59,6 @@ resource "helm_release" "aws_load_balancer_controller" {
   }
 }
 
-resource "random_password" "argocd_secretkey" {
-  length  = 32
-  special = false
-}
-
 resource "helm_release" "argocd" {
   # Its server Service is a LoadBalancer: remove it while the controller runs.
   depends_on       = [helm_release.aws_load_balancer_controller]
@@ -102,15 +66,23 @@ resource "helm_release" "argocd" {
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
   namespace        = "argocd"
-  version          = "2.17.0"
+  version          = "10.11.1" # Argo CD v3.5.6
   create_namespace = true
   timeout          = 1200
   wait             = true
 
+  # Argo CD generates its own server key and initial admin password
+  # (Secret argocd-initial-admin-secret; argocd_use.sh prints it), so neither
+  # passes through Terraform state.
   values = [
     yamlencode({
+      configs = {
+        params = {
+          "server.insecure" = true # plain HTTP behind the NLB, which only admits the laptop
+        }
+      }
       dex = {
-        enabled = false
+        enabled = false # no SSO; the built-in admin user is enough here
       }
       notifications = {
         enabled = false
@@ -118,65 +90,40 @@ resource "helm_release" "argocd" {
       server = {
         service = {
           type                     = "LoadBalancer"
-          loadBalancerSourceRanges = [var.my_laptop_cidr_block] # the UI is plain HTTP (--insecure)
+          loadBalancerSourceRanges = [var.my_laptop_cidr_block]
           annotations = {
             "service.beta.kubernetes.io/aws-load-balancer-subnets" = join(",", data.terraform_remote_state.stage1_infra.outputs.vpc_public_subnets)
             # The controller turns this Service into an NLB, internal unless told otherwise
             "service.beta.kubernetes.io/aws-load-balancer-scheme" = "internet-facing"
           }
         }
-        extraArgs = [
-          "--insecure"
-        ]
-        secret = {
-          create          = true
-          serverSecretKey = random_password.argocd_secretkey.result
-        }
         resources = {
-          limits = {
-            cpu    = "250m"
-            memory = "256Mi"
-          }
-          requests = {
-            cpu    = "100m"
-            memory = "128Mi"
-          }
+          limits   = { cpu = "250m", memory = "256Mi" }
+          requests = { cpu = "50m", memory = "128Mi" }
         }
       }
       controller = {
         resources = {
-          limits = {
-            cpu    = "250m"
-            memory = "256Mi"
-          }
-          requests = {
-            cpu    = "100m"
-            memory = "128Mi"
-          }
+          limits   = { cpu = "500m", memory = "512Mi" }
+          requests = { cpu = "100m", memory = "256Mi" }
         }
       }
       repoServer = {
         resources = {
-          limits = {
-            cpu    = "250m"
-            memory = "256Mi"
-          }
-          requests = {
-            cpu    = "100m"
-            memory = "128Mi"
-          }
+          limits   = { cpu = "500m", memory = "512Mi" }
+          requests = { cpu = "50m", memory = "128Mi" }
+        }
+      }
+      applicationSet = {
+        resources = {
+          limits   = { cpu = "100m", memory = "128Mi" }
+          requests = { cpu = "10m", memory = "64Mi" }
         }
       }
       redis = {
         resources = {
-          limits = {
-            cpu    = "250m"
-            memory = "128Mi"
-          }
-          requests = {
-            cpu    = "50m"
-            memory = "64Mi"
-          }
+          limits   = { cpu = "250m", memory = "128Mi" }
+          requests = { cpu = "50m", memory = "64Mi" }
         }
       }
     })
@@ -272,134 +219,9 @@ resource "kubernetes_ingress_v1" "ecommerce_app" {
   depends_on = [helm_release.aws_load_balancer_controller, helm_release.argocd_apps]
 }
 
-resource "kubernetes_manifest" "blue_elephant_admin_clusterrole" {
-  manifest = {
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRole"
-    metadata = {
-      name = "blue-elephant-admin"
-    }
-    rules = [
-      {
-        apiGroups = [""]
-        resources = ["nodes", "pods", "services", "namespaces"]
-        verbs     = ["get", "list", "watch", "create", "update", "delete"]
-      },
-      {
-        apiGroups = ["apps"]
-        resources = ["deployments", "replicasets"]
-        verbs     = ["get", "list", "watch", "create", "update", "delete"]
-      },
-      {
-        apiGroups = ["rbac.authorization.k8s.io"]
-        resources = ["clusterroles", "clusterrolebindings"]
-        verbs     = ["get", "list", "watch", "create", "update", "delete"]
-      },
-      {
-        apiGroups = [""]
-        resources = ["users", "groups"]
-        verbs     = ["impersonate"]
-      }
-    ]
-  }
-}
-
-resource "kubernetes_manifest" "blue_elephant_admin_clusterrolebinding" {
-  manifest = {
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRoleBinding"
-    metadata = {
-      name = "blue-elephant-admin"
-    }
-    subjects = [
-      {
-        kind     = "User"
-        name     = var.admin_user_name
-        apiGroup = "rbac.authorization.k8s.io"
-      }
-    ]
-    roleRef = {
-      kind     = "ClusterRole"
-      name     = "blue-elephant-admin"
-      apiGroup = "rbac.authorization.k8s.io"
-    }
-  }
-}
-
-resource "kubernetes_manifest" "blue_elephant_impersonator_clusterrole" {
-  manifest = {
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRole"
-    metadata = {
-      name = "blue-elephant-impersonator"
-    }
-    rules = [
-      {
-        apiGroups = [""]
-        resources = ["users", "groups"]
-        verbs     = ["impersonate"]
-      }
-    ]
-  }
-}
-
-resource "kubernetes_manifest" "blue_elephant_impersonator_clusterrolebinding" {
-  manifest = {
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRoleBinding"
-    metadata = {
-      name = "blue-elephant-impersonator"
-    }
-    subjects = [
-      {
-        kind      = "ServiceAccount"
-        name      = "aws-load-balancer-controller"
-        namespace = "kube-system"
-      }
-    ]
-    roleRef = {
-      kind     = "ClusterRole"
-      name     = "blue-elephant-impersonator"
-      apiGroup = "rbac.authorization.k8s.io"
-    }
-  }
-}
-
-resource "kubernetes_manifest" "terraform_admin_clusterrole" {
-  manifest = {
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRole"
-    metadata = {
-      name = "terraform-admin"
-    }
-    rules = [
-      {
-        apiGroups = ["*"]
-        resources = ["*"]
-        verbs     = ["*"]
-      }
-    ]
-  }
-}
-
-resource "kubernetes_manifest" "terraform_admin_clusterrolebinding" {
-  manifest = {
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRoleBinding"
-    metadata = {
-      name = "terraform-admin"
-    }
-    subjects = [
-      {
-        kind     = "User"
-        name     = "terraform-admin"
-        apiGroup = "rbac.authorization.k8s.io"
-      }
-    ]
-    roleRef = {
-      kind     = "ClusterRole"
-      name     = "terraform-admin"
-      apiGroup = "rbac.authorization.k8s.io"
-    }
-  }
-}
+# No custom ClusterRoles. Humans and the terraform-admin role get cluster
+# admin from EKS access policies (stage1). The previous roles duplicated that
+# and added risk: blue-elephant-impersonator let the load-balancer
+# controller's service account impersonate any user (system:masters
+# included), and terraform-admin and blue-elephant-admin could create new
+# ClusterRoleBindings. The controller's own chart grants what it needs.

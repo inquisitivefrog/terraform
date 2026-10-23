@@ -93,6 +93,8 @@ else
 
   # EKS
   expect "EKS cluster" "ACTIVE" aws eks describe-cluster --name "$CLUSTER" --query cluster.status --output text
+  expect "EKS authentication: access entries only" "API" aws eks describe-cluster --name "$CLUSTER" \
+    --query cluster.accessConfig.authenticationMode --output text
   expect "EKS API allows only this laptop" "$MY_IP/32" aws eks describe-cluster --name "$CLUSTER" \
     --query 'cluster.resourcesVpcConfig.publicAccessCidrs' --output text
   expect "EKS secrets encrypted with alias/$CLUSTER" "$(aws kms describe-key --key-id "alias/$CLUSTER" --query KeyMetadata.Arn --output text 2>/dev/null)" \
@@ -133,20 +135,26 @@ else
     read -r NODES READY < <(k get nodes --no-headers 2>/dev/null |
       awk '{n++; if ($2 == "Ready") r++} END {print n+0, r+0}')
     expect "Nodes Ready" "$([[ ${NODES:-0} -gt 0 ]] && echo "$NODES of $NODES" || echo "at least one")" echo "${READY:-0} of ${NODES:-0}"
+    # Completed pods (one-off Jobs, e.g. Argo CD's redis-secret-init) don't count.
     read -r PODS RUNNING < <(k get pods -A --no-headers 2>/dev/null |
-      awk '{n++; split($3, c, "/"); if ($4 == "Running" && c[1] == c[2]) r++} END {print n+0, r+0}')
+      awk '$4 != "Completed" {n++; split($3, c, "/"); if ($4 == "Running" && c[1] == c[2]) r++} END {print n+0, r+0}')
     expect "Pods Running and ready" "$([[ ${PODS:-0} -gt 0 ]] && echo "$PODS of $PODS" || echo "at least one")" echo "${RUNNING:-0} of ${PODS:-0}"
 
-    # Auth and RBAC
-    check "aws-auth maps the node role" sh -c "kubectl --kubeconfig '$KC' get cm -n kube-system aws-auth -o jsonpath='{.data.mapRoles}' |
-      grep -o 'role/ecommerce-cluster-node-role'"
-    check "ClusterRoles" k get clusterroles blue-elephant-admin blue-elephant-impersonator terraform-admin -o name
-    check "ClusterRoleBindings" k get clusterrolebindings blue-elephant-admin blue-elephant-impersonator terraform-admin -o name
+    # RBAC: access comes from EKS access entries only; the old custom roles,
+    # which allowed impersonation and creating ClusterRoleBindings, are gone.
+    expect "Old custom ClusterRoles and bindings removed" "0" sh -c "kubectl --kubeconfig '$KC' get clusterroles,clusterrolebindings \
+      -o name | grep -c -E '/(blue-elephant-admin|blue-elephant-impersonator|terraform-admin)\$'"
+    expect "Controller service account can't impersonate users" "no" k auth can-i impersonate users \
+      --as=system:serviceaccount:kube-system:aws-load-balancer-controller
 
     # Helm releases (Terraform's helm_release resources)
     expect "Load-balancer controller ready" "2/2" k get deploy -n kube-system aws-load-balancer-controller \
       -o jsonpath='{.status.readyReplicas}/{.spec.replicas}'
+    expect "Load-balancer controller version" "v3.6.1" sh -c "kubectl --kubeconfig '$KC' get deploy -n kube-system aws-load-balancer-controller \
+      -o jsonpath='{.spec.template.spec.containers[0].image}' | sed 's/.*://'"
     check "Argo CD server ready" k get deploy -n argocd -l app.kubernetes.io/name=argocd-server -o jsonpath='{.items[0].status.readyReplicas}'
+    expect "Argo CD version" "v3.5.6" sh -c "kubectl --kubeconfig '$KC' get deploy -n argocd -l app.kubernetes.io/name=argocd-server \
+      -o jsonpath='{.items[0].spec.template.spec.containers[0].image}' | sed 's/.*://'"
     ARGO_HOST="$(k get svc -n argocd argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
     expect "Argo CD NLB active, internet-facing" "active internet-facing" aws elbv2 describe-load-balancers \
       --query "LoadBalancers[?DNSName=='${ARGO_HOST:-none}'].[State.Code,Scheme] | [0]" --output text
