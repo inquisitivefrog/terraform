@@ -5,10 +5,10 @@ output "ingress_hostname" {
 
 output "aws_auth_configmap" {
   description = "AWS auth ConfigMap details"
-  value       = kubernetes_config_map_v1.aws_auth.metadata
+  value       = kubernetes_config_map_v1_data.aws_auth.metadata
 }
 
-output "bluedragon_admin_role" {
+output "blue_elephant_admin_role" {
   description = "Bluedragon admin ClusterRoleBinding details"
-  value       = kubernetes_manifest.bluedragon_admin_clusterrolebinding.manifest.metadata
+  value       = kubernetes_manifest.blue_elephant_admin_clusterrolebinding.manifest.metadata
 }

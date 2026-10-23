@@ -12,7 +12,7 @@
     {
       "Effect": "Allow",
       "Action": "iam:PassRole",
-      "Resource": "arn:aws:iam::084375569056:role/ecommerce-cluster-alb-controller",
+      "Resource": "arn:aws:iam::650836812595:role/ecommerce-cluster-alb-controller",
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": "elasticloadbalancing.amazonaws.com"
@@ -22,7 +22,7 @@
     {
       "Effect": "Allow",
       "Action": ["elasticloadbalancing:Describe*"],
-      "Resource": "arn:aws:elasticloadbalancing:us-east-1:084375569056:loadbalancer/*"
+      "Resource": "arn:aws:elasticloadbalancing:us-east-2:650836812595:loadbalancer/*"
     },
     {
       "Effect": "Allow",

@@ -1,12 +1,13 @@
 #!/bin/bash
+export AWS_PROFILE=blue-elephant # account 650836812595 (Free plan, us-east-2 only)
 set -e
 
 # Configuration
-REGION="us-east-1"
+REGION="us-east-2"
 CLUSTER_NAME="ecommerce-cluster"
 VPC_NAME="ecommerce-vpc"
-STATE_BUCKET="bluedragon-ecommerce-terraform-state"
-APP_BUCKET="blued-ecommerce-app-us-east-1-prod"
+STATE_BUCKET="blue-elephant-ecommerce-terraform-state"
+APP_BUCKET="blue-elephant-ecommerce-app-us-east-2-prod"
 roles=("ecommerce-cluster-cluster-role" "ecommerce-cluster-node-role" "terraform-admin" "ecommerce-cluster-alb-controller")
 
 echo "Checking for existing resources..."
@@ -47,13 +48,7 @@ echo "Deploying stage2-k8s..."
 cd ../stage2-k8s
 terraform init -backend-config=backend.hcl -reconfigure
 
-echo "Checking for existing aws-auth ConfigMap..."
-aws eks update-kubeconfig --name ecommerce-cluster --region us-east-1
-if kubectl get configmap aws-auth -n kube-system >/dev/null 2>&1; then
-  echo "Importing existing aws-auth ConfigMap into Terraform state..."
-  terraform import kubernetes_config_map_v1.aws_auth kube-system/aws-auth || \
-    echo "Failed to import aws-auth ConfigMap, it may already be managed"
-fi
+# aws-auth needs no import: stage2 patches it (kubernetes_config_map_v1_data).
 
 # Retry Terraform apply up to 3 times for stage2-k8s
 max_attempts=3
@@ -75,10 +70,10 @@ if [ $attempt -gt $max_attempts ]; then
 fi
 
 echo "Waiting for EKS cluster to be active..."
-aws eks wait cluster-active --name ecommerce-cluster --region us-east-1
+aws eks wait cluster-active --name ecommerce-cluster --region us-east-2
 
 echo "Updating kubeconfig..."
-aws eks update-kubeconfig --name ecommerce-cluster --region us-east-1
+aws eks update-kubeconfig --name ecommerce-cluster --region us-east-2
 
 echo "Checking AWS Load Balancer Controller logs..."
 kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --all-containers

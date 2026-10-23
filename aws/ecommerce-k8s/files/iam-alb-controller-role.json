@@ -4,15 +4,12 @@
     {
       "Effect": "Allow",
       "Principal": {
-        "Federated": "${oidc_provider_arn}"
+        "Service": "pods.eks.amazonaws.com"
       },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "${oidc_issuer_id}:sub": "system:serviceaccount:kube-system:aws-load-balancer-controller",
-          "${oidc_issuer_id}:aud": "sts.amazonaws.com"
-        }
-      }
+      "Action": [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
     }
   ]
 }

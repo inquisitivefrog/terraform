@@ -1,13 +1,14 @@
 #!/bin/bash
+export AWS_PROFILE=blue-elephant # account 650836812595 (Free plan, us-east-2 only)
 
 # ecommerce-k8s-cleanup.sh
-# Cleanup script for EKS cluster and related resources in us-east-1
+# Cleanup script for EKS cluster and related resources in us-east-2
 
 # Configuration
-REGION="us-east-1"
+REGION="us-east-2"
 CLUSTER_NAME="ecommerce-cluster"
-STATE_BUCKET="bluedragon-ecommerce-terraform-state"
-APP_BUCKET="blued-ecommerce-app-us-east-1-prod"
+STATE_BUCKET="blue-elephant-ecommerce-terraform-state"
+APP_BUCKET="blue-elephant-ecommerce-app-us-east-2-prod"
 VPC_NAME="ecommerce-vpc"
 LOG_FILE="/Users/tim/logs/ecommerce-cleanup-$(date +%Y%m%d-%H%M%S).log"
 

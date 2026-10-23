@@ -6,10 +6,6 @@ variable "cluster_version" {
   type = string
 }
 
-variable "vpc_id" {
-  type = string
-}
-
 variable "subnet_ids" {
   type = list(string)
 }
@@ -41,4 +37,9 @@ variable "node_groups" {
     max_size       = number
     instance_types = list(string)
   }))
+}
+
+variable "kms_key_arn" {
+  description = "KMS key for envelope encryption of Kubernetes secrets"
+  type        = string
 }

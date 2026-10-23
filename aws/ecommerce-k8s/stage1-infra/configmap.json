@@ -5,12 +5,12 @@ metadata:
   namespace: kube-system
 data:
   mapRoles: |
-    - rolearn: arn:aws:iam::084375569056:role/ecommerce-cluster-node-role
+    - rolearn: arn:aws:iam::650836812595:role/ecommerce-cluster-node-role
       username: system:node:{{EC2PrivateDNSName}}
       groups:
         - system:bootstrappers
         - system:nodes
-    - rolearn: arn:aws:iam::084375569056:role/terraform-admin
+    - rolearn: arn:aws:iam::650836812595:role/terraform-admin
       username: terraform-admin
       groups:
         - system:masters

@@ -1,6 +1,0 @@
-# terraform-admin-sa.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: terraform-admin
-  namespace: default

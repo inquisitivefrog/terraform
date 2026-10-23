@@ -18,5 +18,13 @@ module "vpc" {
     "kubernetes.io/role/internal-elb"           = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
-  tags = { Name = var.vpc_name }
+  # Rejected traffic only, kept a week: enough to debug security groups, for
+  # very little CloudWatch cost. The module creates the log group and role,
+  # so destroy removes them.
+  enable_flow_log                                 = true
+  flow_log_traffic_type                           = "REJECT"
+  create_flow_log_cloudwatch_log_group            = true
+  create_flow_log_cloudwatch_iam_role             = true
+  flow_log_cloudwatch_log_group_retention_in_days = 7
+  tags                                            = { Name = var.vpc_name }
 }

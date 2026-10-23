@@ -18,8 +18,3 @@ variable "terraform_role_arn" {
   type        = string
   description = "ARN of the IAM role for Terraform admin access"
 }
-
-variable "eks_cluster" {
-  type        = any
-  description = "Reference to the EKS cluster resource"
-}

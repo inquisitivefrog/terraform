@@ -4,7 +4,7 @@
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::084375569056:user/bluedragon"
+        "AWS": "arn:aws:iam::650836812595:user/blue-elephant"
       },
       "Action": "sts:AssumeRole"
     }

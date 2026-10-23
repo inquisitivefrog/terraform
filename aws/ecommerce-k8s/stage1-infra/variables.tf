@@ -10,7 +10,7 @@ variable "cluster_version" {
 
 variable "region" {
   type    = string
-  default = "us-east-1"
+  default = "us-east-2"
 }
 
 variable "cluster_endpoint_private_access" {
@@ -19,8 +19,8 @@ variable "cluster_endpoint_private_access" {
 }
 
 variable "cluster_endpoint_public_access_cidrs" {
-  type    = list(string)
-  default = ["0.0.0.0/0"]
+  type        = list(string)
+  description = "CIDRs allowed to reach the public EKS API, e.g. [\"<laptop IP>/32\"] (curl -4 ifconfig.me). No default: it used to be 0.0.0.0/0"
 }
 
 variable "cluster_enabled_log_types" {
@@ -42,6 +42,14 @@ variable "node_groups" {
       max_size       = 1
       instance_types = ["t3.micro"]
     }
+  }
+  # Free-plan accounts reject other types at launch ("not eligible for Free
+  # Tier"); same list as single_instance's instance_type validation.
+  validation {
+    condition = alltrue([for g in values(var.node_groups) : alltrue([
+      for t in g.instance_types : contains(["t3.micro", "t3.small", "t4g.micro", "t4g.small", "t8i.micro", "t8i.small", "c7i-flex.large", "m7i-flex.large"], t)
+    ])])
+    error_message = "Free plan account: node group instance_types must be Free Tier eligible (t3/t4g/t8i micro or small, c7i-flex.large, m7i-flex.large)."
   }
 }
 

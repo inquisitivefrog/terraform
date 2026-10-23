@@ -1,3 +1,10 @@
+# EKS writes control-plane logs here. Created first so Terraform owns it and
+# deletes it on destroy; otherwise EKS creates it and it outlives the cluster.
+resource "aws_cloudwatch_log_group" "cluster" {
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = 7
+}
+
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = var.cluster_role_arn
@@ -5,10 +12,18 @@ resource "aws_eks_cluster" "this" {
   vpc_config {
     subnet_ids              = var.subnet_ids
     endpoint_private_access = var.cluster_endpoint_private_access
-    endpoint_public_access  = true
-    public_access_cidrs     = var.cluster_endpoint_public_access_cidrs
+    # trivy:ignore:AWS-0040 kubectl and Terraform run from the laptop; public_access_cidrs limits the API to its /32
+    endpoint_public_access = true
+    public_access_cidrs    = var.cluster_endpoint_public_access_cidrs
+  }
+  encryption_config {
+    provider {
+      key_arn = var.kms_key_arn
+    }
+    resources = ["secrets"]
   }
   enabled_cluster_log_types = var.cluster_enabled_log_types
+  depends_on                = [aws_cloudwatch_log_group.cluster]
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
     bootstrap_cluster_creator_admin_permissions = false
@@ -44,8 +59,11 @@ resource "aws_eks_node_group" "default" {
   }
 }
 
-resource "aws_iam_openid_connect_provider" "oidc_provider" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
-  url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
+# Pods get IAM roles through EKS Pod Identity, not IRSA: the account's
+# organization SCP denies iam:CreateOpenIDConnectProvider. The agent is a
+# DaemonSet, so it needs nodes before it can go ACTIVE.
+resource "aws_eks_addon" "pod_identity_agent" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "eks-pod-identity-agent"
+  depends_on   = [aws_eks_node_group.default]
 }

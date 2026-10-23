@@ -10,23 +10,7 @@ variable "admin_user_name" {
   type        = string
 }
 
-variable "terraform_role_arn" {
-  description = "ARN of the terraform-admin IAM role"
+variable "my_laptop_cidr_block" {
   type        = string
-}
-
-variable "node_role_arn" {
-  description = "ARN of the node group IAM role"
-  type        = string
-}
-
-variable "alb_controller_role_arn" {
-  description = "ARN of the ALB controller IAM role"
-  type        = string
-}
-
-variable "region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
+  description = "Only source allowed through the Argo CD load balancer and the app ALB, e.g. \"<laptop IP>/32\" (curl -4 ifconfig.me)"
 }
