@@ -10,7 +10,10 @@
 set -euo pipefail
 source "$(dirname "$0")/../../scripts/aws_env.sh" # ACCOUNT_ID, AWS_PROFILE, require_account
 CTX="ecommerce-cluster"
-declare -A NAMESPACE=([aws-load-balancer-controller]=kube-system [argocd]=argocd [ecommerce-app]=default)
+# ecommerce-app is not a Helm release: Argo CD renders its chart from git and
+# applies it (see argocd_use.sh). argocd-apps is the release that creates the
+# Argo CD Application for it.
+declare -A NAMESPACE=([aws-load-balancer-controller]=kube-system [argocd]=argocd [argocd-apps]=argocd)
 
 require_account
 if ! kubectl config get-contexts -o name | grep -x "$CTX" >/dev/null; then
@@ -41,3 +44,4 @@ for release in "${!NAMESPACE[@]}"; do
   echo
 done
 echo "Details for one release: $0 <release>"
+echo "ecommerce-app is deployed by Argo CD, not Helm: see argocd_use.sh"

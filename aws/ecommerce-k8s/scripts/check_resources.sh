@@ -152,6 +152,14 @@ else
       --query "LoadBalancers[?DNSName=='${ARGO_HOST:-none}'].[State.Code,Scheme] | [0]" --output text
     expect "Argo CD UI answers through the NLB from this laptop" "200" curl -s -o /dev/null -m 10 -w '%{http_code}' "http://${ARGO_HOST:-none}/"
 
+    # GitOps: Argo CD deploys the app from git (stage2's argocd-apps release).
+    expect "Argo CD Application ecommerce-app" "Synced Healthy" k get applications.argoproj.io -n argocd ecommerce-app \
+      -o jsonpath='{.status.sync.status} {.status.health.status}'
+    REPO="$(k get applications.argoproj.io -n argocd ecommerce-app -o jsonpath='{.spec.source.repoURL} {.spec.source.targetRevision}' 2>/dev/null)"
+    # shellcheck disable=SC2086 # REPO is "<url> <branch>", split on purpose
+    expect "Argo CD deployed the latest commit of ${REPO:-its repo}" "$(git ls-remote ${REPO:-none} 2>/dev/null | cut -c1-12)" \
+      sh -c "kubectl --kubeconfig '$KC' get applications.argoproj.io -n argocd ecommerce-app -o jsonpath='{.status.sync.revision}' | cut -c1-12"
+
     # Ingress -> ALB -> pods. The controller must not have hit IAM denials.
     HOST="$(k get ingress -n default ecommerce-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
     expect "Ingress has no AccessDenied events" "0" sh -c "kubectl --kubeconfig '$KC' get events -n default \

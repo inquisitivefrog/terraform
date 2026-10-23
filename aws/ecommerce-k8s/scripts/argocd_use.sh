@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Show how to reach the ecommerce-k8s Argo CD: UI URL, admin login, health
-# of its components, and its Applications.
+# of its components, and its Applications (ecommerce-app, deployed from git).
 # Usage: aws/ecommerce-k8s/scripts/argocd_use.sh [--login]   (run from anywhere)
 #   --login  also log the argocd CLI in (brew install argocd), if installed
 # The UI is plain HTTP (server runs --insecure) behind an NLB that only
@@ -51,7 +51,11 @@ echo
 
 echo "== Applications"
 apps="$(k get applications.argoproj.io 2>/dev/null || true)"
-echo "${apps:-  none: no Application resources yet (stage2 installs the app with Helm, not Argo CD)}"
+echo "${apps:-  none: the argocd-apps release in stage2 creates them}"
+if [[ -n "$apps" ]]; then
+  echo
+  k get applications.argoproj.io -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.source.repoURL} {.spec.source.path} @ {.spec.source.targetRevision}, deployed {.status.sync.revision}{"\n"}{end}'
+fi
 
 if [[ "${1:-}" == "--login" ]]; then
   echo

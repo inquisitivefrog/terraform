@@ -64,7 +64,7 @@ Build `terraform-state`, then `stage1-infra`, then `stage2-k8s`; verify with
 While it's up, from `ecommerce-k8s/scripts/`:
 `kube_use.sh` (kubectl context `ecommerce-cluster`; nodes, pods, load
 balancers), `helm_status.sh [release]` (releases, versions, values with
-secrets redacted) and `argocd_use.sh [--login]` (UI URL and admin login,
+secrets redacted; the app itself is deployed by Argo CD from git, not Helm) and `argocd_use.sh [--login]` (UI URL and admin login,
 components, Applications). The Helm and Argo CD scripts use that context
 explicitly and never change the current one.
 

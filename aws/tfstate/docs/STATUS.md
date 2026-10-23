@@ -104,6 +104,50 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ## Change log
 
+### 2026-10-23: Argo CD deploys the app (GitOps); applied and verified
+
+Until now, Argo CD was installed but managed nothing. stage2 installed the
+app with `helm_release.ecommerce_app`, and the 2025 `ecommerce-app.yaml`
+Application was never applied by anything. It also pointed at
+`inquisitivefrog/apps`, path `charts/ecommerce-app`, which is 404 on `main`.
+The "Synced/Healthy" in `deprecated/terminal.log` is Grok's expected
+output, not a real result; the log ends with `argocd login` failing.
+
+- **stage2:** `helm_release.ecommerce_app` replaced by
+  `helm_release.argocd_apps` (argo-helm `argocd-apps` 2.0.7). It creates the
+  Application `ecommerce-app`:
+  - source: this repo (public), `main`, `aws/ecommerce-k8s/charts/ecommerce-app`
+    (`app_repo_url` and `app_target_revision` variables);
+  - Helm release name `ecommerce-app`, so the Service stays
+    `ecommerce-app-service`;
+  - automated sync with prune and selfHeal;
+  - `resources-finalizer.argocd.argoproj.io`.
+
+  A `kubernetes_manifest` can't be used here: it needs the Application CRD
+  at plan time, before the Argo CD release installs it. The Ingress stays in
+  Terraform and now depends on `argocd_apps`. Rendered and server-side
+  dry-run against the live Argo CD 1.8 CRD: accepted.
+- **Chart (`8b32b2b`, pushed first because Argo CD reads git):**
+  `podLabels` repeated the selector labels, which gave duplicate YAML keys.
+  That commit also deleted the dead `ecommerce-app.yaml`; its message
+  doesn't say so.
+- **Scripts:** `check_resources.sh` checks that the Application is `Synced
+  Healthy` and that its deployed revision equals `git ls-remote` of the
+  repo's `main`. `helm_status.sh` follows `argocd-apps` instead of
+  `ecommerce-app` (no longer a Helm release). `argocd_use.sh` lists each
+  Application's source and deployed commit.
+- **Applied:** stage2 plan 1 to add (`argocd_apps`), 1 to destroy
+  (`ecommerce_app`). Argo CD recreated the app after Helm removed its copy
+  (new pod about 3 minutes old at check time).
+- **Verified:** `check_resources.sh` 34/34. The Application is Synced
+  Healthy at `8b32b2b`, which equals `main` on GitHub. `helm list` no longer
+  has `ecommerce-app`. Argo CD 1.8 marks what it manages with
+  `argocd.argoproj.io/instance` (2.x uses `app.kubernetes.io/instance`).
+  **selfHeal:** a hand `kubectl scale --replicas=2` was reverted to 1
+  within 6 seconds.
+- **To check on destroy:** the finalizer should delete the app before the
+  Application and Argo CD go. Check `default` for leftovers.
+
 ### 2026-10-23: ecommerce-k8s kubectl, Helm and Argo CD helper scripts
 
 `ecommerce-k8s/scripts/`:
@@ -973,7 +1017,8 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 - **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
   chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
 - **ecommerce-k8s follow-ups** (full run verified 2026-10-23):
-  - Argo CD chart `2.17.0` (Argo CD 1.8.4, 2021) → 10.x.
+  - Argo CD chart `2.17.0` (Argo CD 1.8.4, 2021) → 10.x. Argo CD now
+    deploys the app, so the upgrade needs a sync test.
   - Controller chart 1.9.1 (v2.9.1) is behind the policy (upstream main).
   - `logs/` (2025, old account; git-ignored, local only) can go.
   - Live RBAC in stage2: wildcard `terraform-admin` ClusterRole and the

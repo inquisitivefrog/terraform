@@ -183,31 +183,50 @@ resource "helm_release" "argocd" {
   ]
 }
 
-resource "helm_release" "ecommerce_app" {
-  depends_on       = [helm_release.aws_load_balancer_controller]
-  name             = "ecommerce-app"
-  chart            = "./../charts/ecommerce-app"
-  namespace        = "default"
-  create_namespace = true
-  timeout          = 600
-  wait             = true
+# Argo CD deploys the app (GitOps): it renders charts/ecommerce-app from
+# git and keeps the cluster in sync with it, so a pushed chart change rolls
+# out with no Terraform run. Terraform only creates the Application, through
+# the argocd-apps chart: a kubernetes_manifest would need the Application
+# CRD at plan time, before the Argo CD release above has installed it.
+resource "helm_release" "argocd_apps" {
+  depends_on = [helm_release.argocd]
+  name       = "argocd-apps"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argocd-apps"
+  version    = "2.0.7"
+  namespace  = "argocd"
+  wait       = true
 
-  set {
-    name  = "replicaCount"
-    value = "1"
-  }
-  set {
-    name  = "image.repository"
-    value = "hashicorp/http-echo"
-  }
-  set {
-    name  = "service.port"
-    value = "80"
-  }
-  set {
-    name  = "service.targetPort"
-    value = "5678"
-  }
+  values = [
+    yamlencode({
+      applications = {
+        ecommerce-app = {
+          namespace = "argocd"
+          project   = "default"
+          # Destroy deletes the app's resources before the Application goes
+          finalizers = ["resources-finalizer.argocd.argoproj.io"]
+          source = {
+            repoURL        = var.app_repo_url
+            targetRevision = var.app_target_revision
+            path           = "aws/ecommerce-k8s/charts/ecommerce-app"
+            helm = {
+              releaseName = "ecommerce-app" # Service ecommerce-app-service, which the Ingress targets
+            }
+          }
+          destination = {
+            server    = "https://kubernetes.default.svc"
+            namespace = "default"
+          }
+          syncPolicy = {
+            automated = {
+              prune    = true # remove what was deleted from git
+              selfHeal = true # undo changes made by hand
+            }
+          }
+        }
+      }
+    })
+  ]
 }
 
 resource "kubernetes_ingress_v1" "ecommerce_app" {
@@ -250,7 +269,7 @@ resource "kubernetes_ingress_v1" "ecommerce_app" {
   # ingress.k8s.aws/resources finalizer; otherwise the Ingress hangs and the
   # ALB is orphaned, blocking stage1's VPC destroy (single_instance dev hit
   # the hang 2026-10-22).
-  depends_on = [helm_release.aws_load_balancer_controller, helm_release.ecommerce_app]
+  depends_on = [helm_release.aws_load_balancer_controller, helm_release.argocd_apps]
 }
 
 resource "kubernetes_manifest" "blue_elephant_admin_clusterrole" {
