@@ -172,8 +172,10 @@ else
         --query "LoadBalancers[?DNSName=='$HOST'].[State.Code,Scheme] | [0]" --output text
       ALB_ARN="$(aws elbv2 describe-load-balancers --query "LoadBalancers[?DNSName=='$HOST'].LoadBalancerArn | [0]" --output text 2>/dev/null)"
       TG_ARN="$(aws elbv2 describe-target-groups --load-balancer-arn "$ALB_ARN" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)"
-      expect "ALB targets healthy" "healthy" sh -c "aws elbv2 describe-target-health --target-group-arn '$TG_ARN' \
-        --query 'TargetHealthDescriptions[].TargetHealth.State' --output text | tr '\t' '\n' | sort -u"
+      # Draining targets are old pods after a rollout (300 s deregistration
+      # delay); every other target must be healthy.
+      expect "ALB targets healthy (ignoring draining)" "healthy" sh -c "aws elbv2 describe-target-health --target-group-arn '$TG_ARN' \
+        --query 'TargetHealthDescriptions[?TargetHealth.State!=\`draining\`].TargetHealth.State' --output text | tr '\t' '\n' | sort -u"
       expect "App answers through the ALB from this laptop" "200" curl -s -o /dev/null -m 10 -w '%{http_code}' "http://$HOST/"
     fi
   fi

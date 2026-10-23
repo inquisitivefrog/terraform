@@ -104,6 +104,19 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ## Change log
 
+### 2026-10-23: GitOps test passed (chart change rolled out by Argo CD alone)
+
+- Chart: `values.yaml` `message` is passed to http-echo as `-text`
+  (quoted, so colons are safe). Commit `5981780` set it to "hello from
+  Argo CD (GitOps test 2026-10-23)" and was pushed at 15:33:51.
+- Argo CD picked up `5981780` and the ALB answered with the new text at
+  15:34:21, **30 seconds after the push**, with no Terraform or kubectl.
+  The app returned an empty response for about 12 s during the rollover
+  (one replica). Two replicas, or a PodDisruptionBudget, would avoid that.
+- `check_resources.sh` failed once on "ALB targets healthy": the old pod's
+  IP was `draining` (300 s deregistration delay), which is normal after any
+  rollout. The check now ignores draining targets; 34/34 again.
+
 ### 2026-10-23: Argo CD deploys the app (GitOps); applied and verified
 
 Until now, Argo CD was installed but managed nothing. stage2 installed the
