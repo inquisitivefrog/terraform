@@ -1,7 +1,7 @@
 replicaCount: 2 # two, so a rolling update never leaves the ALB without a ready pod
 # What the app answers with (http-echo -text). Change it, push to main, and
 # Argo CD rolls it out within about 3 minutes.
-message: "hello from Argo CD (GitOps test 2026-10-23)"
+message: "hello from Argo CD (2 replicas, rolling update)"
 image:
   repository: hashicorp/http-echo
   tag: "1.0.0"
