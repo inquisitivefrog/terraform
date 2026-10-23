@@ -40,7 +40,6 @@ No modules.
 | <a name="input_availability_zones"></a> [availability\_zones](#input\_availability\_zones) | AWS Availability Zones within Region where resources deployed | `list(string)` | `[]` | no |
 | <a name="input_create_iam_resources"></a> [create\_iam\_resources](#input\_create\_iam\_resources) | Whether to create IAM resources or reference existing ones | `bool` | `true` | no |
 | <a name="input_kms_key_resource"></a> [kms\_key\_resource](#input\_kms\_key\_resource) | The KMS key resource for VPC Flow Logs encryption | `any` | n/a | yes |
-| <a name="input_region"></a> [region](#input\_region) | AWS Region where resources deployed | `string` | `"us-west-1"` | no |
 | <a name="input_vpc_cidr_block"></a> [vpc\_cidr\_block](#input\_vpc\_cidr\_block) | IPv4 address range | `string` | `""` | no |
 | <a name="input_vpc_flow_logs_key_arn"></a> [vpc\_flow\_logs\_key\_arn](#input\_vpc\_flow\_logs\_key\_arn) | ARN of the KMS key for VPC Flow Logs encryption | `string` | n/a | yes |
 | <a name="input_vpc_flow_logs_key_id"></a> [vpc\_flow\_logs\_key\_id](#input\_vpc\_flow\_logs\_key\_id) | ID of the KMS key for VPC Flow Logs encryption | `string` | n/a | yes |

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Full cleanup script for tfstate and single_instance projects
+# Regenerate README.md in each root and module with terraform-docs
 # Run from /Users/tim/Documents/workspace/sre/terraform/aws/
 
 # Check if script is run from the correct directory

@@ -44,7 +44,7 @@
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | AWS EC2 instance\_type | `string` | `""` | no |
 | <a name="input_my_laptop_cidr_block"></a> [my\_laptop\_cidr\_block](#input\_my\_laptop\_cidr\_block) | SSH client access IPv4 range | `string` | `""` | no |
 | <a name="input_redis_port"></a> [redis\_port](#input\_redis\_port) | Redis network cache port | `number` | `6379` | no |
-| <a name="input_region"></a> [region](#input\_region) | AWS Region where resources deployed | `string` | `"us-west-2"` | no |
+| <a name="input_region"></a> [region](#input\_region) | AWS Region where resources deployed | `string` | `"us-east-2"` | no |
 | <a name="input_vpc_cidr_block"></a> [vpc\_cidr\_block](#input\_vpc\_cidr\_block) | IPv4 network address range | `string` | `"10.1.0.0/16"` | no |
 
 ## Outputs

@@ -38,6 +38,15 @@ destroy-dev
 destroy-prod
 dev-bucket
 prod-bucket
+# ecommerce-k8s
+state-bucket
+stage1
+stage2
+destroy-stage1
+destroy-stage2
+destroy-state
+aws/ecommerce-k8s/terraform-state/bucket
+aws/ecommerce-k8s/terraform-state/destroy-bucket
 
 # Old state dumps and private keys
 *statefile*.json

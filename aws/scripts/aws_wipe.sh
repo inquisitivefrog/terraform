@@ -92,7 +92,8 @@ check_single_instance_empty() {
     fi
     cd "$AWS_DIR/single_instance/environments/$env"
     terraform init -input=false -reconfigure -backend-config=backend.hcl >/dev/null
-    count=$(terraform state list | wc -l | tr -d ' ')
+    # No state object at all (never applied, or deleted) exits 1: count it as 0.
+    count=$({ terraform state list 2>/dev/null || true; } | wc -l | tr -d ' ')
     if [ "$count" -ne 0 ]; then
       red "single_instance/environments/$env still has $count resources."
       echo "Destroy it first:  cd single_instance/environments/$env && terraform destroy"

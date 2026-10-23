@@ -1,99 +1,38 @@
+# aws/tfstate
 
-BUILD
------
-tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate
+The state layer every other AWS root depends on. Account `650836812595`,
+profile `blue-elephant`, region `us-east-2` (see `../../README.AWS.md`).
 
-1. aws configure
+| Root | Creates | State |
+|---|---|---|
+| `bootstrap/{dev,prod}` | `blue-elephant-tfstate-admin-{env}` (versioned, encrypted, public access blocked) and `-logs` | local `terraform.tfstate` |
+| `environments/{dev,prod}` | KMS key + `alias/tfstate-{env}`, used by `single_instance/environments/{env}/backend.hcl` | the bootstrap bucket, key `terraform.tfstate` |
 
-tim@Tims-MBP prod % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/bootstrap/prod
+## Build (per env)
 
-1. terraform init
-2. terraform validate
-3. terraform plan -out=bootstrap-prod
-4. terraform apply bootstrap-prod
-5. aws s3 ls s3://bluedragon-tfstate-admin-prod --region us-west-1
+```sh
+cd aws/tfstate/bootstrap/dev        # then prod
+terraform init
+terraform plan -out bootstrap-dev && terraform apply bootstrap-dev
 
-tim@Tims-MBP dev % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/bootstrap/dev
+cd ../../environments/dev           # then prod
+terraform init -reconfigure -backend-config=backend.hcl
+terraform plan -out bucket-dev && terraform apply bucket-dev
 
-1. terraform init
-2. terraform validate
-3. terraform plan -out=bootstrap-dev
-4. terraform apply bootstrap-dev
-5. aws s3 ls s3://bluedragon-tfstate-admin-dev --region us-west-2
+../../../scripts/check_resources.sh dev
+```
 
-tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/prod
+## Tear down
 
-1. terraform init -backend-config=backend.hcl -reconfigure
-2. terraform validate
-3. terraform plan -out bucket-prod
-4. terraform apply bucket-prod
-5. aws s3 ls --region us-west-1
-6. terraform state list
+Destroy `single_instance` first (prod, then dev). Then either run
+`aws/scripts/aws_wipe.sh`, which does the rest in order and empties the
+versioned buckets, or by hand per env:
 
-tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/dev
+1. Delete `single_instance/terraform.tfstate` from the bootstrap bucket (it
+   is encrypted with the state CMK; once the CMK is gone it can't be read).
+2. `environments/<env>`: `terraform plan -destroy -out d && terraform apply d`.
+3. Empty the versioned buckets (`force_destroy = false`), then destroy
+   `bootstrap/<env>` the same way.
 
-1. terraform init -backend-config=backend.hcl -reconfigure
-2. terraform validate
-3. terraform plan -out bucket-dev
-4. terraform apply bucket-dev
-5. aws s3 ls --region us-west-2
-6. terraform state list
-
-tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/prod
-
-1. terraform init -backend-config=backend.hcl  -reconfigure
-2. terraform validate
-3. terraform plan -out plan-prod
-4. terraform apply plan-prod
-5. aws s3 ls --region us-west-1
-6. terraform state list
-
-tim@Tims-MBP % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/single_instance/environments/dev
-
-1. terraform init -backend-config=backend.hcl  -reconfigure
-2. terraform validate
-3. terraform plan -out plan-dev
-4. terraform apply plan-dev
-5. aws s3 ls --region us-west-2
-6. terraform state list
-
-DESTROY
--------
-tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/prod
-
-1. terraform destroy
-
-tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/environments/dev
-
-1. terraform destroy
-
-tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/bootstrap/dev
-
-1. terraform destroy
-
-tim@Tims-MBP tfstate % pwd
-/Users/tim/Documents/workspace/sre/terraform/aws/tfstate/bootstrap/prod
-
-1. terraform destroy
-
-01. aws s3 ls
-02. aws s3api list-object-versions --bucket bluedragon-tfstate-admin-5fgetyet --region us-west-1
-03. aws s3api list-object-versions --bucket bluedragon-tfstate-admin-5fgetyet --region us-west-1 --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' > objects.json
-04. cat objects.json 
-05. aws s3api delete-objects --bucket bluedragon-tfstate-admin-5fgetyet --delete file://objects.json --region us-west-1
-06. aws s3api list-object-versions --bucket bluedragon-tfstate-admin-5fgetyet --region us-west-1 --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' > markers.json
-07. aws s3api delete-objects --bucket bluedragon-tfstate-admin-5fgetyet --delete file://markers.json --region us-west-1
-08. aws s3api list-object-versions --bucket bluedragon-tfstate-admin-5fgetyet --region us-west-1
-09. aws s3 rb s3://bluedragon-tfstate-admin-5fgetyet --force --region us-west-1
-10. aws s3 ls
-
+Full table and the reasons for each step: `../README.aws.md`, "Build and
+tear-down order". History: `docs/STATUS.md`.

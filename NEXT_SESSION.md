@@ -1,6 +1,6 @@
 # Next session: start here
 
-Updated 2026-10-21 (evening). Rolling records: `aws/tfstate/docs/STATUS.md`,
+Updated 2026-10-23. Rolling records: `aws/tfstate/docs/STATUS.md`,
 `gcp/tfstate/docs/STATUS.md`, `azure/tfstate/docs/STATUS.md`. Command guides:
 `aws/README.aws.md`, `gcp/README.gcloud.md`, `azure/README.az.md`.
 
@@ -8,7 +8,7 @@ Updated 2026-10-21 (evening). Rolling records: `aws/tfstate/docs/STATUS.md`,
 
 | Cloud | State | Cost |
 |---|---|---|
-| AWS (account 084375569056) | Everything destroyed; groups 1 and 3 changed in code, not yet applied | $0 (no free credits left; ~$4 billed in October) |
+| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (checked 2026-10-23). single_instance dev and prod applied, verified and destroyed on 2026-10-22 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
@@ -32,27 +32,29 @@ it won't be reused.
 
 ## Next: AWS
 
-Groups 1 and 3 are done in code (committed, not applied); see
-`aws/tfstate/docs/STATUS.md`, 2026-10-21 entry.
+Done on 2026-10-22 (commits `2774441`, `b1a7fd9`): moved to the new account,
+renamed `bluedragon` to `blue-elephant`, applied and verified groups 1 and 3
+in dev and prod, fixed destroy ordering (aws-auth, Ingress), ECS crash loop
+and log-group leftovers, then tore everything down.
 
-- Group 1 (security): Redis TLS + AUTH (replication group, 7.1), IAM
-  policies by name pattern and `Project` tag, IMDSv2 on EKS nodes, flow logs
-  KMS-encrypted.
-- Group 3 (cleanup): tfstate/environments is now just the KMS key; unused
-  declarations removed; lock files committed; tflint/trivy/checkov installed
-  and wired in report-only; `aws/scripts/check_resources.sh` and
-  `estimate_costs.sh`; README.AWS.md rewritten; `aws/README.aws.test.md`.
+Done on 2026-10-23 (uncommitted): ecommerce-k8s repointed, applied in the
+new account (terraform-state 4, stage1 64, stage2 12), verified (app answered
+through the ALB) and destroyed; account swept empty. Fixes from the run:
+access-policy associations wait for their entries, `aws-auth` is patched
+(`kubernetes_config_map_v1_data`), controller policy gained 3 EC2 read
+actions, EKS log group now managed (untested). Also uncommitted: the
+`aws_wipe.sh` preflight fix, doc updates, `.gitignore` plan names.
 
 Then:
-1. **Group 2:** dev ALB ingress: IRSA role + OIDC provider for the ALB
-   controller, `kubernetes.io/role/elb` subnet tags, chart 1.6.0 to current,
-   bigger dev nodes (t3.micro is full); fold in pod hardening (security
-   context, no `:latest`) and EKS control-plane logging; gp2 to gp3.
-2. **Decide how to deploy to confirm** (cheapest: dev only, same-day destroy;
-   prod plan only works after dev's shared IAM exists). Verify with
-   `aws/scripts/check_resources.sh dev`.
-3. Later: ecommerce-k8s (group 4; tflint shows 40 issues); make scanners
-   blocking once findings are fixed or accepted.
+1. **Commit** the above once reviewed.
+2. **datastore-clusters:** new `aws/datastore-clusters` tree; decide which
+   datastores first. Free-plan limits: only Free Tier EC2 types; SCP denies
+   IAM groups, login profiles and OIDC providers (use Pod Identity).
+3. **Group 2** (dev ALB ingress): the controller never creates an ALB here;
+   needs Pod Identity for the controller, subnet tags, a current chart.
+4. **ecommerce-k8s clean-up:** see STATUS.md open items (check script untested live,
+   Argo CD chart, upstream controller policy, tflint/trivy).
+5. Later: make scanners blocking; regenerate module READMEs (terraform-docs).
 
 Other clouds' open items: `gcp/tfstate/docs/STATUS.md`,
 `azure/tfstate/docs/STATUS.md`.

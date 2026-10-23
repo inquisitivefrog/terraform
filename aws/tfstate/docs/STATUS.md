@@ -38,20 +38,24 @@ change log, and update "Current state" and "Open items" when they change.
 - **Your home IP changes:** check `curl -4 ifconfig.me` against
   `my_laptop_cidr_block` before plan/apply or kubectl.
 
-## Current state (2026-10-22)
+## Current state (2026-10-23): ecommerce-k8s up (~$0.25/h)
 
-New account `650836812595` (us-east-2) has:
+Account `650836812595` (us-east-2) is empty again after the ecommerce-k8s
+test run (swept 2026-10-23, after its teardown): no S3
+buckets, VPCs, EC2, EKS, ElastiCache or log groups; no IAM roles from this
+repo. Left: the `monthly-5usd` budget (CLI-created) and 17 customer KMS keys
+in PendingDeletion (free).
 
 | Layer | dev | prod |
 |---|---|---|
-| `tfstate/bootstrap` (local state) | **applied** 2026-10-22: `blue-elephant-tfstate-admin-dev` + `-logs`; `check_resources.sh dev` 5/5 PASS | **applied** 2026-10-22: `blue-elephant-tfstate-admin-prod` + `-logs`; `check_resources.sh prod` 5/5 PASS |
-| `tfstate/environments` | **applied** 2026-10-22: `alias/tfstate-dev` (enabled, rotation on); `check_resources.sh dev` 7/7 PASS | **applied** 2026-10-22: `alias/tfstate-prod` (enabled, rotation on); `check_resources.sh prod` 7/7 PASS |
-| EC2 key pair `blue-elephant` | imported (shared) | imported (shared) |
-| `single_instance` | applied 2026-10-22 and verified (24/24); **destroyed** 2026-10-22, except the 9 shared IAM resources re-created for prod | **applied** 2026-10-22 (suffix `3zv478av`, `vpc-02eb0f860cc986f48`): 71 added; `check_resources.sh prod` 23/24 (only fail: DeveloperPolicy/AdminPolicy, not targeted in dev) |
-| `ecommerce-k8s` | not applied (Pod Identity change in code) | — |
+| `tfstate/bootstrap` (local state) | **destroyed** 2026-10-22 (state empty) | **destroyed** 2026-10-22 (state empty) |
+| `tfstate/environments` | **destroyed** 2026-10-22 (CMK PendingDeletion) | **destroyed** 2026-10-22 (CMK PendingDeletion) |
+| EC2 key pair `blue-elephant` | imported 2026-10-22 from `~/.ssh/aws_ssh.pub` (shared by dev and prod) | |
+| `single_instance` | applied, verified 24/24, **destroyed** 2026-10-22 | applied, verified, **destroyed** 2026-10-22 |
+| `ecommerce-k8s` | first run applied, verified and destroyed 2026-10-23; **redeployed** 2026-10-23 with the scanner fixes (terraform-state 6, stage1 71) | — |
 
-Plus the `monthly-5usd` budget (CLI-created). The table below is the old
-account `084375569056` as last left.
+Rebuild from step 1 of the build order (`aws/README.aws.md`, "Build and
+tear-down order").
 
 ### Deployed in AWS (old account)
 
@@ -99,6 +103,225 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-10-23: ecommerce-k8s kubectl, Helm and Argo CD helper scripts
+
+`ecommerce-k8s/scripts/`:
+- `kube_use.sh`: context `ecommerce-cluster` (alias), shows nodes, pods,
+  the Ingress and LoadBalancer Services. It is the counterpart of
+  `aws/scripts/kube_use.sh`, and like it, changes only the current context.
+- `helm_status.sh [release]`: `helm list`, recent history per release; with
+  a release name, status with resources and the values Terraform set (keys
+  matching secret/password/key redacted).
+- `argocd_use.sh [--login]`: components, UI URL (with an HTTP check),
+  admin password (from `argocd-initial-admin-secret` on Argo CD 2.x+, else
+  the server pod name on 1.x), Applications. `--login` uses the argocd CLI
+  if installed (it isn't).
+
+The Helm and Argo CD scripts pass `--kube-context`/`--context
+ecommerce-cluster` and never use the current context. All three were run
+against the live cluster. Fixed while testing: `grep -q` under `pipefail`
+made the context check fail intermittently (SIGPIPE to kubectl), and an
+empty Applications list printed nothing.
+
+### 2026-10-23: ecommerce-k8s redeployed with the scanner fixes
+
+- terraform-state: the user destroyed the 13:30 bucket (old code) and
+  rebuilt it: 6 added (key and alias included).
+- stage1-infra: 71 added (64 − app SG + KMS key and alias + EKS log group +
+  5 flow-log resources). Cluster 8m26s, node group 1m16s; no errors.
+- `scripts/check_resources.sh`, first live run: 19 passed, 0 failed
+  (stage2 skipped, not yet applied). This confirms the state CMK, the EKS
+  secrets CMK, app bucket SSE-KMS, the flow log (ACTIVE, REJECT) and the
+  Terraform-owned control-plane log group (7 days).
+- stage2-k8s: 12 added (controller 24s, app 8s, Ingress 4s, Argo CD 45s).
+  `ingress_hostname` is now filled in by the apply.
+- `check_resources.sh` full run: **30 passed, 0 failed**. All of these
+  passed: nodes 4/4, pods 21/21 (so the hardened app pod runs as non-root
+  with a read-only root filesystem), `aws-auth`, RBAC, controller 2/2, Argo
+  CD, **no AccessDenied on the Ingress** (upstream policy works), ALB
+  active and internet-facing, healthy targets, HTTP 200. Added two checks
+  for the Argo CD NLB (internet-facing, UI HTTP 200 from the laptop); both
+  pass, so the re-run gives 32/32.
+
+### 2026-10-23: ecommerce-k8s scanner fixes before redeploy (not applied)
+
+tflint 40 → 0, trivy (MEDIUM+) 23 → 1. All roots validate.
+
+- **Removed dead code.** Six modules (`alb-controller`, `helm`, `ingress`,
+  `rbac`, `sample-app`, `tiller`) were never called by any stage: not in
+  the first commit with stages (`24ce037`, 2025-07-22), nor in the
+  2025-06-13 stage2 apply log, where every resource was direct (no
+  `module.*`). The stage2 → Helm chart → Argo CD evolution happened inside
+  stage2's own resources. Tiller is Helm 2, removed in Helm 3 (2019).
+  Also removed: the RBAC YAMLs, `ingress.yaml` and `values.yaml` in
+  `files/` (used only by `modules/rbac`, or by nothing),
+  `stage2-k8s/main.tf.orig`, and the unused app security group in
+  `modules/networking` (the AWS-0104 egress finding). No deployed resource
+  changes from the deletions. **The live RBAC (inline `kubernetes_manifest`
+  in stage2, including the wildcard `terraform-admin` ClusterRole) still
+  exists; trivy doesn't scan it, so deleting the YAMLs hid those findings
+  rather than fixing them.**
+- **tflint:** `required_version = ">= 1.11.0"` and `required_providers`
+  (aws `~> 6.65`) in every module (`terraform.tf`, as in single_instance)
+  and root. Removed unused variables: `eks.vpc_id`,
+  `cluster-config.eks_cluster`, and stage2's `terraform_role_arn`,
+  `node_role_arn`, `alb_controller_role_arn` and `region` (plus their
+  tfvars lines). Removed the unused `time` provider from stage1.
+- **KMS** (AWS-0039, AWS-0132): stage1 `aws_kms_key.ecommerce`
+  (`alias/ecommerce-cluster`, rotation, 7-day deletion window) encrypts EKS
+  secrets and the app bucket (bucket key on). terraform-state gets its own
+  key `alias/ecommerce-k8s-tfstate` for the state bucket.
+- **AWS-0040** (public EKS endpoint): accepted inline with
+  `trivy:ignore`, as single_instance does (limited to the laptop /32).
+- **AWS-0178:** VPC flow logs on (REJECT only, 7-day log group; the vpc
+  module creates and destroys the log group and role).
+- **App chart:** non-root (65532), read-only root filesystem, no privilege
+  escalation, all capabilities dropped, seccomp RuntimeDefault, no service
+  account token, CPU and memory limits. stage2 no longer overrides the
+  pinned tag `1.0.0` with `latest`.
+- **Controller policy:** upstream `iam_policy.json` at main `c250dc4`,
+  unmodified (tag-scoped). It adds 7 actions to the v2.9.1 copy, including
+  `ec2:GetSecurityGroupsForVpc`.
+- **Argo CD:** server NLB annotated `aws-load-balancer-scheme:
+  internet-facing`. **Ingress:** `wait_for_load_balancer = true`.
+- **Remaining:** KSV-0125, the image is on Docker Hub, which trivy treats
+  as untrusted. Inline `trivy:ignore` doesn't work in Helm templates
+  (tested), so it is accepted here until the scanners become blocking.
+- **check_resources.sh:** adds checks for CMK encryption (state bucket, EKS
+  secrets, app bucket) and the flow log.
+- The user applied `terraform-state` with the old code at 13:30 (bucket
+  AES256). Re-plan expected: 2 to add (key, alias), 1 to change
+  (encryption).
+
+### 2026-10-23: ecommerce-k8s check script; stale scripts removed
+
+- New `ecommerce-k8s/scripts/check_resources.sh` (read-only, PASS/FAIL like
+  `aws/scripts/check_resources.sh`). It covers:
+  - terraform-state: the bucket.
+  - stage1: NAT, ELB subnet tags, S3 endpoint, cluster and API CIDR, node
+    group, Pod Identity add-on and association, cluster-admin access
+    policies, log group retention, app bucket.
+  - stage2: nodes and pods ready, `aws-auth` node role, RBAC, controller and
+    Argo CD ready, no AccessDenied on the Ingress, ALB active and
+    internet-facing, healthy targets, HTTP 200 from the laptop.
+
+  It skips stages that aren't applied and uses a temporary kubeconfig. Run
+  against the destroyed account: every stage skipped, exit 0. Not yet run
+  against a live deployment.
+- Removed `01`-`06`, `residue_check.sh`, `bucket_status.sh` and
+  `update_settings.sh` (nothing referenced them).
+- `aws/README.aws.md`: ecommerce-k8s build, check and destroy order.
+
+### 2026-10-23: ecommerce-k8s destroyed; account empty
+
+- stage2-k8s 12 destroyed (the controller removed both load balancers),
+  stage1-infra 64 (node group 8m13s, cluster 2m16s, NAT 1m11s),
+  terraform-state 4. All three states are empty.
+- Sweep: no EKS, EC2, NAT, EIP, load balancers or target groups, VPCs,
+  security groups, ENIs, EBS volumes, S3 buckets or local IAM policies. The
+  IAM roles left (`AccountFullAccessRole`, `AWSManagedAccount*`) belong to
+  the Organization. Leftover: `/aws/eks/ecommerce-cluster/cluster`, created
+  by EKS for the control-plane logs; deleted with the CLI.
+- **Fix:** `modules/eks` now creates that log group itself (7-day
+  retention) and the cluster `depends_on` it, so destroy removes it.
+  Untested: next apply should show `aws_cloudwatch_log_group.cluster`.
+- Deleted the saved plans. `destroy-stage2` held the Argo CD server key in
+  plain text (it is in the helm release metadata). `.gitignore` now also
+  covers `ecommerce-k8s/terraform-state/bucket`.
+
+### 2026-10-23: ecommerce-k8s terraform-state, stage1-infra and stage2-k8s applied
+
+- **terraform-state:** 4 added, bucket `blue-elephant-ecommerce-terraform-state`
+  (local state).
+- **stage1-infra:** plan 64 to add; apply created 59. The EKS cluster took
+  8m36s and the node group 1m16s; the Pod Identity agent add-on and the ALB
+  controller's Pod Identity association were also created. All five
+  `aws_eks_access_policy_association`s failed with 404
+  `ResourceNotFoundException`. They took `principal_arn` from the variables,
+  so they ran in parallel with the two `aws_eks_access_entry`s and reached
+  EKS before the entries existed.
+- **Fix** (`modules/cluster-config/main.tf`): the associations now use
+  `aws_eks_access_entry.<name>.principal_arn`, which makes them wait for the
+  entries. Re-plan stage1 showed 5 to add; applied, 5 added (64 total).
+- **Checked (aws CLI):** cluster ACTIVE, 1.36, public API only from
+  `23.93.161.67/32` (unchanged laptop IP); node group ACTIVE, t3.small,
+  2/4/6; Pod Identity association `kube-system/aws-load-balancer-controller`;
+  access entries for `terraform-admin`, `blue-elephant`, the node role and
+  the EKS service role.
+- The re-plan reported drift `vpc_config.security_group_ids = []` on the
+  cluster. That is refresh noise only: no change was planned.
+- `.gitignore`: added the ecommerce-k8s saved-plan names (`state-bucket`,
+  `stage1`, `stage2`, `destroy-*`); `stage1` was not ignored.
+- **stage2 plan (12 to add) caught before apply:** it would have created
+  `aws-auth`, but EKS had already created it, holding the node role mapping
+  (authentication mode `API_AND_CONFIG_MAP`). The apply would have failed
+  with "already exists". `ecommerce-k8s-deploy.sh` used to import it.
+  `stage2-k8s` now uses `kubernetes_config_map_v1_data` with `force = true`,
+  which takes over the keys in place (the cleanup script already expected
+  that type), and the import step is removed. Nodes don't depend on it:
+  EKS also made an access entry for the node role.
+- **Argo CD chart is `2.17.0` (Argo CD 1.8.4, 2021)**; current is 10.x
+  (v3.5). Its templates use only current APIs, so it is kept for this run;
+  upgrading it (the values layout changed) is an open item.
+- **stage2-k8s applied:** 12 added (controller 24s, app 8s, Argo CD 47s).
+  All pods Running, nodes Ready. `curl` to the ALB from the laptop returns
+  `hello-world` (HTTP 200); the target groups are healthy; the RBAC roles and
+  bindings exist.
+- **Controller IAM gap:** the first eight ALB reconciles failed with
+  `AccessDenied ... ec2:GetSecurityGroupsForVpc`, then one succeeded. Our
+  `files/iam-alb-controller-policy.json` is a hand-written, loose policy
+  (`elasticloadbalancing:*`, security-group writes on `*`) that predates
+  upstream's newer read actions. Added `ec2:GetSecurityGroupsForVpc`,
+  `ec2:DescribeRouteTables` and `ec2:DescribeIpamPools` (stage1: 1 to
+  change). Group 2 should replace it with upstream's tag-scoped policy.
+  **Verified:** stage1 applied (1 changed); stage2
+  `apply -replace=kubernetes_ingress_v1.ecommerce_app` rebuilt the ALB,
+  which reconciled first time with no AccessDenied events and answered
+  `hello-world` (HTTP 200).
+- `ingress_hostname` output says `pending`: the Ingress doesn't wait for
+  its load balancer (`wait_for_load_balancer` not set). Open item.
+- **Argo CD UI not reachable from the laptop:** the controller turned the
+  `argocd-server` LoadBalancer Service into an NLB
+  (`loadBalancerClass service.k8s.aws/nlb`) with the default **internal**
+  scheme. Needs the `aws-load-balancer-scheme: internet-facing` annotation
+  (open item, with the chart upgrade).
+- **scripts/:** `01`-`06`, `residue_check.sh`, `bucket_status.sh` and
+  `update_settings.sh` are stale notes from the 2025 build: they use
+  `sample-app` and Tiller (Helm 2) with hard-coded IDs from the old
+  deployment. Some are destructive despite their names:
+  `residue_check.sh` deletes the state bucket on line 1,
+  `bucket_status.sh` empties it, `05_debug_tiller.sh` runs `rm -rf ~/.helm`,
+  and `update_settings.sh` applies without review. Not run. Open item:
+  replace them with one read-only check script.
+
+### 2026-10-23: confirmed everything destroyed; docs brought up to date
+
+A read-only sweep of `650836812595` found nothing from this repo: the
+tfstate bootstraps were destroyed after the 2026-10-22 entry below (both
+local states empty, no buckets). Updated "Current state", `README.AWS.md`,
+`NEXT_SESSION.md`, `aws/tfstate/README.md` and the generated module
+READMEs, which still described the old account (us-west-1/2, `bluedragon`).
+
+### 2026-10-22: tfstate/environments dev and prod destroyed (state CMKs)
+
+Both `plan -destroy` 2 (key + alias), no errors. The CMKs
+`alias/tfstate-{dev,prod}` are PendingDeletion (deleted 2026-11-21 and
+~2026-11-22); the account now has no enabled customer-managed key. The
+`terraform.tfstate` objects of tfstate/environments use the buckets'
+AES256 default, so they wrote fine. Left over: `single_instance/terraform.tfstate`
+in both bootstrap buckets is (empty) state encrypted with those keys, and
+`single_instance/environments/*/backend.hcl` names the deleted aliases.
+Before the next single_instance build: delete that object, then re-apply
+tfstate/environments/<env> (new key and alias). The bootstrap buckets
+remain (bootstrap/dev, bootstrap/prod).
+
+Then bootstrap/prod's destroy removed 11 of 13 and failed `BucketNotEmpty`
+on both buckets (versioned, `force_destroy = false`); emptied them (43 and
+89 versions/markers). Deleted dev's unreadable `single_instance/terraform.tfstate`
+(96 versions). Fixed `aws_wipe.sh` preflight: with no state object
+`terraform state list` exits 1, which `set -euo pipefail` turned into an
+abort; it now counts as 0. Remaining tear-down via `aws_wipe.sh`.
 
 ### 2026-10-22: dev destroy hung on the Ingress again; aws-auth ordering fixed
 
@@ -749,11 +972,16 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
   slots and all 8 are used. Any new workload needs more nodes or bigger nodes.
 - **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
   chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
-- **ecommerce-k8s not plan-tested:** validates, but its state bucket
-  `bluedragon-ecommerce-terraform-state` must be re-created (`terraform-state`
-  root, whose local state is stale) before init with the backend.
-  `stage2-k8s/statefile.json` (old Terraform state) is committed. stage1
-  tfvars uses 4 `t3.medium` nodes; the default endpoint CIDR is `0.0.0.0/0`.
+- **ecommerce-k8s follow-ups** (full run verified 2026-10-23):
+  - Argo CD chart `2.17.0` (Argo CD 1.8.4, 2021) → 10.x.
+  - Controller chart 1.9.1 (v2.9.1) is behind the policy (upstream main).
+  - `logs/` (2025, old account; git-ignored, local only) can go.
+  - Live RBAC in stage2: wildcard `terraform-admin` ClusterRole and the
+    impersonator binding to the controller's service account (unscanned).
+  - KSV-0125 (Docker Hub image): pick an ignore mechanism, or a registry,
+    before trivy blocks.
+  - Not yet tested: destroy now removes the EKS and flow-log log groups
+    and schedules both KMS keys for deletion (check after teardown).
 - **EKS control-plane logging off** (trivy AWS-0038, checkov CKV_AWS_37):
   set `enabled_cluster_log_types`; small CloudWatch cost.
 - **Kubernetes pod hardening** (most checkov/trivy findings): no security
@@ -765,3 +993,6 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
   policies and the flow-log KMS key need a dev rebuild to confirm.
 - **EKS node volumes are gp2;** gp3 is 20% cheaper ($0.08 vs $0.10 per GB-month
   in us-west-2) and at least as fast.
+- **Module READMEs are stale** (generated by terraform-docs in 2025; inputs
+  removed or renamed since, e.g. the vpc module's `region`). Regenerate with
+  `aws/scripts/make_docs.sh` once terraform-docs is installed.

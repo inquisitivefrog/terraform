@@ -28,6 +28,46 @@ Tips:
 - zsh doesn't split `$VAR` into words: `P="--region us-east-2"; aws … $P`
   passes one argument and fails. Write the options out, or use `${=P}`.
 
+## Build and tear-down order
+
+Everything here is demo data: tear it down freely, rebuild from code. Per
+env, from `aws/`:
+
+| Step | Build | Tear down |
+|---|---|---|
+| 1 | `tfstate/bootstrap/<env>`: state bucket + log bucket | `single_instance/environments/<env>` (prod before dev: dev owns the shared IAM) |
+| 2 | `tfstate/environments/<env>`: state CMK `alias/tfstate-<env>` | delete `single_instance/terraform.tfstate` from the state bucket |
+| 3 | `single_instance/environments/<env>` (dev before prod) | `tfstate/environments/<env>` |
+| 4 | `scripts/check_resources.sh <env>` | `tfstate/bootstrap/<env>` (empty the versioned buckets first), or keep it: it costs cents |
+
+Each Terraform step: `terraform init -reconfigure -backend-config=backend.hcl`
+(bootstrap has no backend file), then `terraform plan -out p && terraform apply p`;
+for tear-down `terraform plan -destroy -out d && terraform apply d`.
+
+Step 2 of tear-down matters: the single_instance state object is encrypted
+with the state CMK. Destroy the CMK first and the object can't be read
+(and after the 30-day deletion window, never), so the next init fails. If
+that happened, delete the object (`aws s3api delete-object --bucket
+blue-elephant-tfstate-admin-<env> --key single_instance/terraform.tfstate`;
+the bucket is versioned, so old versions linger but are ignored), then build
+from step 2.
+
+Shortcut for tear-down steps 3–4 (both envs): after step 1, run
+`scripts/aws_wipe.sh`. It empties the versioned buckets, destroys
+tfstate/environments then bootstrap, retries on late access logs, and lists
+anything billable left.
+
+ecommerce-k8s has its own state backend (`ecommerce-k8s/terraform-state`).
+Build `terraform-state`, then `stage1-infra`, then `stage2-k8s`; verify with
+`ecommerce-k8s/scripts/check_resources.sh`; destroy in reverse order
+(stage2 first, so the load-balancer controller removes its ALB and NLB).
+While it's up, from `ecommerce-k8s/scripts/`:
+`kube_use.sh` (kubectl context `ecommerce-cluster`; nodes, pods, load
+balancers), `helm_status.sh [release]` (releases, versions, values with
+secrets redacted) and `argocd_use.sh [--login]` (UI URL and admin login,
+components, Applications). The Helm and Argo CD scripts use that context
+explicitly and never change the current one.
+
 ## Free plan: Free Tier instance types only
 
 The account is on the Free plan, which rejects any other EC2 instance type

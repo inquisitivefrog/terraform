@@ -34,7 +34,7 @@
 |------|-------------|------|---------|:--------:|
 | <a name="input_employer"></a> [employer](#input\_employer) | Employer Business Name | `string` | `"ACME"` | no |
 | <a name="input_env"></a> [env](#input\_env) | Environment where resources are deployed | `string` | `"develop"` | no |
-| <a name="input_region"></a> [region](#input\_region) | AWS Region where resources are deployed | `string` | `"us-west-1"` | no |
+| <a name="input_region"></a> [region](#input\_region) | AWS Region where resources are deployed | `string` | `"us-east-2"` | no |
 | <a name="input_tfstate_bucket"></a> [tfstate\_bucket](#input\_tfstate\_bucket) | AWS S3 bucket for terraform.tfstate | `string` | `""` | no |
 
 ## Outputs
