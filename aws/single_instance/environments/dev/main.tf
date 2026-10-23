@@ -172,7 +172,13 @@ module "eks" {
 }
 
 module "kubernetes" {
-  source         = "../../modules/kubernetes"
+  source = "../../modules/kubernetes"
+  # On destroy the Ingress must go while the load-balancer controller can
+  # still run, or it hangs on the controller's ingress.k8s.aws/resources
+  # finalizer. That needs the node group (module.eks) AND the aws-auth entry
+  # that lets the nodes join: with only module.eks, aws_auth was destroyed
+  # first, the nodes went NotReady and the Ingress hung 108 min (2026-10-22).
+  depends_on     = [module.eks, kubernetes_config_map_v1_data.aws_auth]
   cluster_name   = module.eks.eks_cluster_name
   enable_ingress = true
   namespaces     = ["app1", "app2"]

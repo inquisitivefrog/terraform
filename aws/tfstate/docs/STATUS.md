@@ -44,10 +44,10 @@ New account `650836812595` (us-east-2) has:
 
 | Layer | dev | prod |
 |---|---|---|
-| `tfstate/bootstrap` (local state) | **applied** 2026-10-22: `blue-elephant-tfstate-admin-dev` + `-logs`; `check_resources.sh dev` 5/5 PASS | not applied |
-| `tfstate/environments` | **applied** 2026-10-22: `alias/tfstate-dev` (enabled, rotation on); `check_resources.sh dev` 7/7 PASS | not applied |
+| `tfstate/bootstrap` (local state) | **applied** 2026-10-22: `blue-elephant-tfstate-admin-dev` + `-logs`; `check_resources.sh dev` 5/5 PASS | **applied** 2026-10-22: `blue-elephant-tfstate-admin-prod` + `-logs`; `check_resources.sh prod` 5/5 PASS |
+| `tfstate/environments` | **applied** 2026-10-22: `alias/tfstate-dev` (enabled, rotation on); `check_resources.sh dev` 7/7 PASS | **applied** 2026-10-22: `alias/tfstate-prod` (enabled, rotation on); `check_resources.sh prod` 7/7 PASS |
 | EC2 key pair `blue-elephant` | imported (shared) | imported (shared) |
-| `single_instance` | **applied** 2026-10-22 (env `multi`, suffix `765jm01j`, `vpc-0efe071f9d720d8c8`): `check_resources.sh dev` 23/23 PASS; SSH public and private OK; 4 EKS nodes Ready, all pods Running. Estimate **$211/month, $6.94/day** | not applied |
+| `single_instance` | applied 2026-10-22 and verified (24/24); **destroyed** 2026-10-22, except the 9 shared IAM resources re-created for prod | **applied** 2026-10-22 (suffix `3zv478av`, `vpc-02eb0f860cc986f48`): 71 added; `check_resources.sh prod` 23/24 (only fail: DeveloperPolicy/AdminPolicy, not targeted in dev) |
 | `ecommerce-k8s` | not applied (Pod Identity change in code) | — |
 
 Plus the `monthly-5usd` budget (CLI-created). The table below is the old
@@ -99,6 +99,163 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-10-22: dev destroy hung on the Ingress again; aws-auth ordering fixed
+
+Before destroying: `check_resources.sh dev` 24/24; ECS on `tasks-multi:2`
+with 0 stopped tasks (crash-loop fix holds in dev); the Ingress carried the
+controller's finalizer; no ALB (the controller never creates one here;
+pending ALB-ingress work). The destroy then hung on `app_ingress` for
+108 min. The `depends_on = [module.eks]` added earlier kept the node group,
+but `kubernetes_config_map_v1_data.aws_auth` (root, outside both modules)
+was destroyed early: the nodes lost their aws-auth mapping, went NotReady,
+and the controller could no longer act. Unblocked as before (no ALB or
+target group existed): deleted the `aws-load-balancer-webhook` validating
+and mutating configurations, removed the finalizer.
+
+- **Fix (not yet exercised):** `module "kubernetes"` now has
+  `depends_on = [module.eks, kubernetes_config_map_v1_data.aws_auth]`, so
+  destroy order is Kubernetes resources, then aws-auth, then the node group.
+
+The run then ended in "context deadline exceeded" on namespace `app1`
+(already gone from the cluster). A second `plan -destroy` showed 20 and
+completed with no errors (node group 8m11s, cluster 2m0s, NAT 1m11s); dev
+state is empty. Sweep right after: no EKS, EC2, VPC, NAT, EIP, volume, ELB,
+ECS, Redis or SNS; buckets are the four tfstate ones; enabled CMKs are only
+`alias/tfstate-dev` and `alias/tfstate-prod` (the rest PendingDeletion).
+No dev log groups: the managed Insights group and the flow-log
+`CreateLogGroup` removal both held. The only log groups are prod's two
+empty leftovers from before those fixes. Deleted both (so the next prod
+apply can create its managed Insights group); a re-check then listed no
+log groups at all, so dev's flow log made no late delivery either.
+
+### 2026-10-22: dev rebuilt by accident; S3 notification race fixed
+
+A full dev apply ran instead of the IAM-only destroy (100 add, 1 change).
+It exercised the day's untested fixes: the Container Insights log group was
+created before the ECS cluster, the flow-log policy updated in place, and
+the Kubernetes resources waited for the node group (`depends_on`). One
+error: `dev_bucket_notification` failed with "Unable to validate the
+following destination configurations". S3 checks it may publish to the SNS
+topic when the notification is set; the dev bucket's notification didn't
+wait for the topic policy (the log bucket's did, via
+`null_resource.sns_policy_delay`). It had won the race in the two earlier
+applies. Fix: `depends_on = [null_resource.sns_policy_delay]`; re-plan
+shows 1 to add.
+
+### 2026-10-22: single_instance/prod destroyed; log-group leftovers fixed in code
+
+`plan -destroy` 71, one run, no errors (EKS cluster delete took 7m55s).
+Sweep: nothing billable left. Two empty log groups survived the destroy,
+as after dev's: `/aws/vpc/flow-logs/<vpc>` (recreated by the flow log's last
+buffered delivery, even though the flow log was deleted first) and
+`/aws/ecs/containerinsights/ecs-cluster-<env>/performance` (created by ECS).
+
+- **Fix (code, not yet exercised):** `vpc-flow-logs-policy` no longer
+  grants `logs:CreateLogGroup`, so a late delivery can't recreate the group;
+  the compute module now creates the Container Insights log group itself
+  (1-day retention, before the cluster), so destroy removes it.
+- Delete the existing leftovers by hand before the next build, or the
+  managed ECS log group fails with "already exists".
+
+### 2026-10-22: ECS nginx crash loop fixed (verified in prod)
+
+The ECS service showed `runningCount 1`, but its task exited with code 1
+about every 50 s and was restarted ("Essential container in task exited";
+22 stopped tasks in ~15 min). Cause: commit `80375de` set
+`readonlyRootFilesystem = true` (CKV_AWS_336), and stock `nginx` writes to
+`/var/cache/nginx`, `/run` and `/tmp` at startup. Affected dev too.
+
+- **Fix:** the root stays read-only; the task definition adds three Fargate
+  ephemeral volumes mounted writable at those paths. Prod: 1 add, 1 change,
+  1 destroy (task definition revision 2). Revision 2 ran 3+ min with no
+  stops; every stopped task is revision 1.
+- **Gap:** `check_resources.sh` didn't catch it (the service's own counts
+  looked healthy), and the task has no log configuration, so the cause was
+  inferred from the exit code and the image.
+
+### 2026-10-22: single_instance/prod applied and verified
+
+`plan -out plan-prod`: 71 to add (the failed plan earlier showed 64 because
+it stopped before the 7 resources that use dev's roles); applied first try,
+no errors. `check_resources.sh prod`: 23 passed, 1 failed. The failure is
+"Shared IAM: DeveloperPolicy and AdminPolicy": dev's targeted apply skipped
+those two policies (prod doesn't read them), so the `Developer` and `Admin`
+roles exist without permissions. A full dev apply creates them.
+
+### 2026-10-22: dev's shared IAM re-created for prod (targeted apply)
+
+`single_instance/environments/prod` plan failed reading the IAM roles dev
+creates (`Developer`, `Admin`, `EC2Role`, `ecsTaskExecutionRole`,
+`vpc-flow-logs-role`): dev had been destroyed. Rather than rebuild all of
+dev, a targeted dev apply created only the shared IAM (9 resources, free):
+
+```sh
+terraform plan -out iam-dev \
+  -target='module.identity.aws_iam_role.developer_role[0]' -target='module.identity.aws_iam_role.admin_role[0]' \
+  -target='module.identity.aws_iam_role.ec2_role[0]' -target='module.identity.aws_iam_role.ecs_task_execution_role[0]' \
+  -target='module.identity.aws_iam_instance_profile.ec2_profile[0]' -target='module.identity.aws_iam_role_policy_attachment.ec2_ssm[0]' \
+  -target='module.identity.aws_iam_role_policy_attachment.ecs_task_execution_role[0]' \
+  -target='module.vpc.aws_iam_role.vpc_flow_logs[0]' -target='module.vpc.aws_iam_role_policy.vpc_flow_logs_policy[0]'
+```
+
+(Targeting `module.identity` whole pulls in compute, since it takes the EC2
+ARNs.) Dev state now holds just these 9; a full dev apply adds the rest.
+**Destroy prod before dev**, or prod loses its roles.
+
+### 2026-10-22: ecommerce-k8s readied for a short test deploy (not applied)
+
+`terraform-state` plans 4 to add; stage1 (scratch copy, local backend)
+plans 64 to add with no SCP or API errors. ALB controller policy covers
+every action in the upstream v2.9.1 `iam_policy.json`. Argo CD chart 2.17.0
+(Argo CD 1.8.4, 2021) renders only current APIs on Kubernetes 1.36
+(CRDs `apiextensions.k8s.io/v1`); old, but not a blocker.
+
+- **EKS API:** `cluster_endpoint_public_access_cidrs` no longer defaults to
+  `0.0.0.0/0`; tfvars sets the laptop `/32`.
+- **Load balancers:** Argo CD's server Service gets
+  `loadBalancerSourceRanges` and the app Ingress
+  `alb.ingress.kubernetes.io/inbound-cidrs`, both the new stage2 variable
+  `my_laptop_cidr_block` (Argo CD runs `--insecure`, plain HTTP).
+- **Destroy order:** `helm_release.argocd`, `helm_release.ecommerce_app` and
+  `kubernetes_ingress_v1.ecommerce_app` now `depends_on` the controller's
+  Helm release, so they are removed while it can still delete its ALB and
+  finalizer (stage2 had no `depends_on`; same race as the dev Ingress hang).
+- **Scripts:** `01_deployment.sh` (label `app=sample-app`),
+  `02_alb_health.sh` (hard-coded old target group/ALB) and `03_rbac.sh`
+  (`blue-elephant-admin-binding`; stage2 names it `blue-elephant-admin`)
+  target an older layout.
+
+### 2026-10-22: single_instance/dev destroyed; Ingress hung on destroy
+
+`plan -destroy` 108 resources. The node group and the `app-ingress` Ingress
+were destroyed in parallel, so the load-balancer controller lost its nodes
+before it could drop its `ingress.k8s.aws/resources` finalizer; the Ingress
+(and namespace `app1`) hung. No ALB or target group existed, so the
+finalizer was removed by hand: the controller's
+`aws-load-balancer-webhook` validating and mutating webhook configurations
+(no endpoints left) had to be deleted first, then
+`kubectl -n app1 patch ingress app-ingress --type=merge -p '{"metadata":{"finalizers":null}}'`.
+
+- **Destroy finished** with a second `plan -destroy` (14: EKS cluster, NAT,
+  EIP, subnets, IGW, VPC, EKS KMS key, cluster role; `app1` had timed out
+  in the first run but was already gone, so the refresh dropped it). Sweep
+  afterwards: no VPC, EKS, EC2, volumes, EIPs, NAT, ELB, Redis or ECS left;
+  5 KMS keys PendingDeletion (free); `alias/tfstate-dev` key enabled.
+  Two empty log groups remain that Terraform doesn't manage:
+  `/aws/ecs/containerinsights/ecs-cluster-multi/performance` (ECS creates
+  it) and `/aws/vpc/flow-logs/vpc-0efe071f9d720d8c8` (recreated by the
+  flow log's last delivery after Terraform deleted it). Both 0 bytes;
+  deleted by hand with `aws logs delete-log-group`.
+- **tfstate/bootstrap/prod** applied (13 added), 5/5 PASS.
+- **tfstate/environments/prod** applied (2 added; needed `init -reconfigure`,
+  same as dev), 7/7 PASS. Account now idles at $2/month (the two state
+  KMS keys). Its folder still holds git-ignored leftovers from March 2025:
+  an empty `terraform.tfstate` and a `terraform.tfstate.backup` from the old
+  account's local backend (24 resources, us-west-1).
+- **Fix (not yet exercised):** `module "kubernetes"` in dev now has
+  `depends_on = [module.eks]`, so Kubernetes resources are created after
+  and destroyed before the node group.
 
 ### 2026-10-22: single_instance/dev applied and verified
 

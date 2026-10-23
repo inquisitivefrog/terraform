@@ -80,8 +80,10 @@ resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
     Statement = [
       {
         Effect = "Allow"
+        # No logs:CreateLogGroup: Terraform creates the group. With it, the
+        # flow log's last buffered delivery (up to 10 min) recreated the group
+        # after terraform destroy had deleted it.
         Action = [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
           "logs:DescribeLogGroups",

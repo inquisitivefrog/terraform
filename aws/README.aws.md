@@ -21,6 +21,12 @@ Tips:
 - `--output table|text|json` sets the format; `text` suits scripts.
 - `--region` and `--profile` pick the region and credentials per command.
 - `aws <service> <command> help` shows the manual.
+- `--output text` separates list values with tabs, not spaces; compare
+  accordingly in scripts (`check_resources.sh` turns tabs into spaces).
+- `export AWS_PAGER=""` stops long output pausing in `less` (the `:`
+  prompt); the helper scripts set it.
+- zsh doesn't split `$VAR` into words: `P="--region us-east-2"; aws … $P`
+  passes one argument and fails. Write the options out, or use `${=P}`.
 
 ## Free plan: Free Tier instance types only
 
@@ -84,12 +90,13 @@ aws ec2 import-key-pair --key-name blue-elephant \
 
 | Script | What it does |
 |---|---|
+| `aws_env.sh` | Sourced by the others: `ACCOUNT_ID`, `AWS_PROFILE=blue-elephant`, `AWS_PAGER=""`, region per env, and `require_account`, which stops a script on any other account |
 | `aws_wipe.sh` | Tears down the tfstate layer (environments, then bootstrap) after single_instance is destroyed. Only runs on account `650836812595`; only touches `blue-elephant-` resources |
 | `kube_use.sh dev\|prod` | Points kubectl at the single_instance EKS cluster and shows nodes and pods. Leaves the grid-meter context alone |
 | `ssh_ec2.sh dev\|prod [public\|private]` | SSHes to an EC2 instance; the private one through the public one (ProxyJump) |
-| `check_resources.sh dev\|prod` | Confirms tfstate and single_instance resources exist and are configured as intended (Redis TLS/AUTH, IMDSv2, KMS, EKS API and SSH allow this laptop's IP). Skips what isn't applied. Exit 1 on any failure |
-| `estimate_costs.sh` | Monthly and daily list-price estimate of what's running in both regions (Price List API, free), plus billed month-to-date cost by service (Cost Explorer, $0.01 per call) |
-| `inspect_aws.sh`, `scan_aws.sh` | Read-only listings of resources across regions, plus budget spend |
+| `check_resources.sh dev\|prod` | Confirms tfstate and single_instance resources exist and are configured as intended (Redis TLS/AUTH, IMDSv2, KMS, encrypted EKS node disks, EKS API and SSH allow this laptop's IP), scoped to that env's VPC. Skips what isn't applied. Exit 1 on any failure |
+| `estimate_costs.sh` | Monthly and daily list-price estimate of what's running (us-east-2) (Price List API, free), plus billed month-to-date cost by service (Cost Explorer, $0.01 per call) |
+| `inspect_aws.sh`, `scan_aws.sh` | Read-only listings of resources in us-east-2, plus budget spend |
 | `make_docs.sh` | Generates module READMEs with terraform-docs |
 
 ## Accounts and configuration
@@ -99,6 +106,16 @@ aws ec2 import-key-pair --key-name blue-elephant \
 | `aws configure` | Saves access keys, default region and output format to `~/.aws/` | `gcloud auth login`, `gcloud auth application-default login` |
 | `aws sts get-caller-identity` | Shows which account and user you are | `gcloud config list` |
 | `aws budgets describe-budgets --account-id 650836812595 --query 'Budgets[*].[BudgetName,CalculatedSpend.ActualSpend.Amount]' --output text` | Shows budget spend | `gcloud billing budgets list --billing-account=…` |
+| `aws configure --profile blue-elephant` / `aws configure list-profiles` | Saves keys under a named profile / lists profiles | `gcloud config configurations create` / `list` |
+| `aws sts get-caller-identity --profile blue-elephant --query Account --output text` | Prints only the account ID (the scripts' account guard) | `gcloud config get-value project` |
+| `aws freetier get-account-plan-state --region us-east-1` | Free or Paid plan, credits left, expiry date | none: free-trial credits show in the console |
+| `aws organizations describe-organization` | Shows the organization and its management account (whose SCPs apply here) | `gcloud organizations list` |
+| `aws budgets create-budget --account-id 650836812595 --budget file://scripts/budget.json --notifications-with-subscribers file://notifs.json` | Creates the $5/month budget with email alerts (how `monthly-5usd` was made) | `gcloud billing budgets create --billing-account=… --budget-amount=5USD --threshold-rule=percent=1.0` |
+| `aws budgets describe-notifications-for-budget --account-id 650836812595 --budget-name monthly-5usd` | Shows a budget's alert thresholds | `gcloud billing budgets describe` |
+| `aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::650836812595:user/blue-elephant --action-names ACTION … --context-entries ContextKeyName=aws:RequestedRegion,ContextKeyValues=us-east-2,ContextKeyType=string` | Says whether an action is allowed, SCPs included (see "Organization SCP limits") | `gcloud policy-intelligence troubleshoot-policy iam` |
+| `aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=RunInstances --max-results 5` | Shows recent API calls and their errors (found the Free Tier rejection) | `gcloud logging read 'protoPayload.methodName="…"'` |
+| `aws ce get-cost-and-usage --time-period Start=YYYY-MM-01,End=YYYY-MM-DD --granularity MONTHLY --metrics UnblendedCost --group-by Type=DIMENSION,Key=SERVICE` | Billed cost by service, $0.01 per call (`estimate_costs.sh`) | billing export to BigQuery |
+| `aws pricing get-products --region us-east-1 --service-code AmazonEC2 --filters …` | List prices (free; us-east-1 endpoint only) (`estimate_costs.sh`) | Cloud Billing Catalog API |
 
 ## S3
 
@@ -113,6 +130,8 @@ aws ec2 import-key-pair --key-name blue-elephant \
 | `aws s3api list-buckets --query 'Buckets[?starts_with(Name, \`blue-elephant-\`)].Name'` | Lists buckets, filtered | `gcloud storage ls --filter=…` |
 | `aws s3api head-bucket --bucket BUCKET` | Checks a bucket exists and you can reach it | `gcloud storage buckets describe gs://BUCKET` |
 | `aws s3api head-object --bucket BUCKET --key KEY` | Shows an object's metadata | `gcloud storage objects describe gs://BUCKET/KEY` |
+| `aws s3api head-object --bucket blue-elephant-tfstate-admin-dev --key single_instance/terraform.tfstate.tflock --query LastModified --output text` | Is a Terraform lock held (an apply or destroy running), and since when | `gcloud storage ls gs://BUCKET/**.tflock` |
+| `aws s3api head-object --bucket BUCKET --key KEY --query ServerSideEncryption --output text` | How an object is encrypted (`aws:kms` for single_instance state) | `gcloud storage objects describe … --format='value(kms_key)'` |
 | `aws s3api get-bucket-lifecycle-configuration --bucket BUCKET` | Shows lifecycle rules | `gcloud storage buckets describe gs://BUCKET --format='value(lifecycle_config)'` |
 | `aws s3api restore-object --bucket BUCKET --key KEY --restore-request …` | Restores an object from Glacier | not needed: Coldline is read directly |
 | `aws s3api delete-bucket --bucket BUCKET` | Deletes an empty bucket | `gcloud storage buckets delete gs://BUCKET` |
@@ -143,6 +162,10 @@ GCP does it in one step: `gcloud storage rm -r --all-versions gs://BUCKET`.
 | `aws ec2 describe-vpc-endpoints` / `describe-flow-logs` / `describe-volumes` / `describe-tags` | Lists endpoints, flow logs, disks, tags | `gcloud compute disks list`; flow logs are a subnet setting |
 | `aws ec2 describe-transit-gateways` / `describe-vpn-gateways` / `describe-vpn-connections` / `describe-local-gateways` | Audit listings in `scan_aws.sh` | `gcloud compute vpn-gateways list` |
 | `aws ec2 wait instance-terminated --instance-ids ID` | Waits until a state is reached | `gcloud compute operations wait` |
+| `aws ec2 describe-availability-zones --region R --query 'AvailabilityZones[].ZoneName'` | Lists AZs (letters are mapped per account); an SCP deny here means the region is blocked | `gcloud compute zones list --filter=region:R` |
+| `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true --query 'InstanceTypes[].InstanceType'` | Instance types the Free plan allows | `gcloud compute machine-types list --zones=Z` |
+| `aws ec2 delete-key-pair --key-name NAME` | Deletes a key pair (key pairs can't be renamed: import new, then delete old) | none |
+| `aws ec2 describe-volumes --filters Name=tag:eks:nodegroup-name,Values=NODEGROUP --query 'Volumes[].[VolumeId,Encrypted,Attachments[0].InstanceId]'` | Are a node group's disks encrypted | `gcloud compute disks list --format='table(name,diskEncryptionKey)'` |
 
 Manual VPC teardown, in dependency order (from old cleanup notes; Terraform
 destroy normally does this): `delete-nat-gateway` → `release-address` →
@@ -172,6 +195,21 @@ destroy normally does this): `delete-nat-gateway` → `release-address` →
 | `aws eks update-cluster-config --access-config authenticationMode=CONFIG_MAP` | Switches between aws-auth and access entries | none: GKE uses IAM + RBAC |
 | `aws eks create-access-entry` / `associate-access-policy` / `list-access-entries` / `delete-access-entry` | Grants an IAM principal cluster access (ecommerce-k8s) | `gcloud projects add-iam-policy-binding … --role=roles/container.developer` or RBAC |
 | `aws eks delete-nodegroup` / `delete-cluster` | Deletes node groups, then the cluster | `gcloud container clusters delete` |
+| `aws eks list-updates --name CLUSTER --nodegroup-name NODEGROUP` / `describe-update --update-id ID` | Status of a node group rolling update (e.g. a new launch template version) | `gcloud container operations list` |
+| `aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?contains(AutoScalingGroupName,'NODEGROUP')].[DesiredCapacity,MinSize,MaxSize,length(Instances)]"` | The node group's Auto Scaling group: desired vs actual nodes (surge nodes during an update) | `gcloud compute instance-groups managed list` |
+| `aws autoscaling describe-scaling-activities --auto-scaling-group-name ASG --max-items 5` | Recent node launches and terminations | `gcloud compute instance-groups managed list-errors` |
+
+An Ingress stuck on destroy (`ingress.k8s.aws/resources` finalizer, load
+balancer controller already gone; happened 2026-10-22). First confirm
+`aws elbv2 describe-load-balancers` and `describe-target-groups` show nothing
+the controller made, or that cleanup is lost:
+
+```sh
+kubectl -n app1 get ingress app-ingress -o jsonpath='{.metadata.finalizers}'
+kubectl delete validatingwebhookconfiguration aws-load-balancer-webhook   # its pods are gone too
+kubectl delete mutatingwebhookconfiguration aws-load-balancer-webhook
+kubectl -n app1 patch ingress app-ingress --type=merge -p '{"metadata":{"finalizers":null}}'
+```
 
 ## IAM
 
@@ -191,6 +229,9 @@ destroy normally does this): `delete-nat-gateway` → `release-address` →
 |---|---|---|
 | `aws kms list-keys` / `list-aliases` / `describe-key --key-id ID` | Lists or shows keys | `gcloud kms keys list --keyring=… --location=…` |
 | `aws kms schedule-key-deletion --key-id ID --pending-window-in-days 7` | Deletes a key after a waiting period | `gcloud kms keys versions destroy` (key rings are never deleted) |
+| `aws kms list-aliases --query "Aliases[?!starts_with(AliasName,'alias/aws/')].AliasName"` | Only this repo's aliases (hides AWS-managed ones) | `gcloud kms keys list --keyring=…` |
+| `aws kms describe-key --key-id ID --query 'KeyMetadata.[KeyManager,KeyState,Description]'` | AWS-managed or customer key, and whether enabled | `gcloud kms keys describe` |
+| `aws kms get-key-rotation-status --key-id ID` | Is yearly rotation on | `gcloud kms keys describe … --format='value(rotationPeriod)'` |
 
 ## SNS, ElastiCache, ECS, Load Balancers, Logs
 

@@ -3,6 +3,15 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_service
 # https://registry.terraform.io/providers/-/aws/4.57.0/docs/resources/ecs_task_definition
 
+# Container Insights writes here. Created by Terraform (before the cluster) so
+# destroy removes it; left to ECS, it outlived every destroy.
+resource "aws_cloudwatch_log_group" "container_insights" {
+  # checkov:skip=CKV_AWS_158:performance metrics only; default encryption
+  # checkov:skip=CKV_AWS_338:one day is the retention ECS itself uses
+  name              = "/aws/ecs/containerinsights/ecs-cluster-${var.env}/performance"
+  retention_in_days = 1
+}
+
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "ecs-cluster-${var.env}"
@@ -10,6 +19,7 @@ resource "aws_ecs_cluster" "main" {
     name  = "containerInsights"
     value = "enabled"
   }
+  depends_on = [aws_cloudwatch_log_group.container_insights]
 }
 
 # Task Definition
@@ -35,8 +45,27 @@ resource "aws_ecs_task_definition" "service" {
         }
       ],
       readonlyRootFilesystem = true
+      # nginx writes its cache, pid file and temp files at startup; with only a
+      # read-only root it exited 1 and the service restarted it every ~30s.
+      mountPoints = [
+        { sourceVolume = "nginx-cache", containerPath = "/var/cache/nginx", readOnly = false },
+        { sourceVolume = "run", containerPath = "/run", readOnly = false },
+        { sourceVolume = "tmp", containerPath = "/tmp", readOnly = false },
+      ]
     }
   ])
+
+  # Fargate ephemeral task storage (no host path): writable scratch for the
+  # paths above while the root filesystem stays read-only (CKV_AWS_336).
+  volume {
+    name = "nginx-cache"
+  }
+  volume {
+    name = "run"
+  }
+  volume {
+    name = "tmp"
+  }
 }
 
 # ECS Service

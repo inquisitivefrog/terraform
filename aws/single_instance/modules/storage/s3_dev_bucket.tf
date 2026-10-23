@@ -47,6 +47,12 @@ resource "aws_s3_bucket_notification" "dev_bucket_notification" {
     events        = ["s3:ObjectCreated:*"]
     filter_prefix = "logs/"
   }
+
+  # S3 validates it may publish to the topic when the notification is set.
+  # Without waiting for the topic policy (+10 s propagation), this raced it and
+  # failed with "Unable to validate the following destination configurations"
+  # (dev, 2026-10-22); the log bucket's notification already waited.
+  depends_on = [null_resource.sns_policy_delay]
 }
 
 resource "aws_s3_bucket_public_access_block" "dev_bucket_access_block" {
