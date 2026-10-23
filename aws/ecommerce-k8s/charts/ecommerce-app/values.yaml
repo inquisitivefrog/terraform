@@ -7,9 +7,9 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 5678
-podLabels:
-  app: ecommerce-app
-  app.kubernetes.io/name: ecommerce-app
+# Extra pod labels. The selector labels (app, app.kubernetes.io/name) are
+# always added by the template; repeating them here duplicates YAML keys.
+podLabels: {}
 # http-echo is a single static binary: it needs no root, writable files or
 # extra capabilities.
 podSecurityContext:
