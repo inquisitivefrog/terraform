@@ -25,6 +25,8 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - {{ printf "-text=%s" .Values.message | quote }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           resources:
