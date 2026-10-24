@@ -135,8 +135,25 @@ resource "helm_release" "argocd" {
 # out with no Terraform run. Terraform only creates the Application, through
 # the argocd-apps chart: a kubernetes_manifest would need the Application
 # CRD at plan time, before the Argo CD release above has installed it.
+# The controller's webhook adds an ALB readiness gate to new pods in this
+# namespace: a pod counts as ready only once its ALB target is healthy, so a
+# rolling update never removes the last serving pod. Gates are added when a
+# pod is created and its Service already has a target group (after the
+# first rollout on a fresh cluster).
+resource "kubernetes_labels" "default_ns_readiness_gate" {
+  api_version = "v1"
+  kind        = "Namespace"
+  metadata {
+    name = "default"
+  }
+  labels = {
+    "elbv2.k8s.aws/pod-readiness-gate-inject" = "enabled"
+  }
+  depends_on = [helm_release.aws_load_balancer_controller]
+}
+
 resource "helm_release" "argocd_apps" {
-  depends_on = [helm_release.argocd]
+  depends_on = [helm_release.argocd, kubernetes_labels.default_ns_readiness_gate]
   name       = "argocd-apps"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argocd-apps"

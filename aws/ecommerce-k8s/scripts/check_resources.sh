@@ -168,6 +168,9 @@ else
     expect "Argo CD deployed the latest commit of ${REPO:-its repo}" "$(git ls-remote ${REPO:-none} 2>/dev/null | cut -c1-12)" \
       sh -c "kubectl --kubeconfig '$KC' get applications.argoproj.io -n argocd ecommerce-app -o jsonpath='{.status.sync.revision}' | cut -c1-12"
 
+    expect "ALB readiness gates enabled for the app namespace" "enabled" k get namespace default \
+      -o jsonpath='{.metadata.labels.elbv2\.k8s\.aws/pod-readiness-gate-inject}'
+
     # Ingress -> ALB -> pods. The controller must not have hit IAM denials.
     HOST="$(k get ingress -n default ecommerce-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
     expect "Ingress has no AccessDenied events" "0" sh -c "kubectl --kubeconfig '$KC' get events -n default \

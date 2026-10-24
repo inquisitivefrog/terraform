@@ -50,9 +50,8 @@ controller v3.6.1, access-entries-only auth (`API`), RBAC cleanup. It was
 deployed fresh and verified 36/36, and is committed.
 
 Then:
-1. **ecommerce-k8s:** zero-gap rollouts (preStop sleep, readiness probe,
-   ALB readiness gate), then tear down. See STATUS.md for anything still
-   up.
+1. **ecommerce-k8s:** zero-gap rollouts are done (0/192 failed; 37/37
+   checks). Tear down if it's still up: check STATUS.md "Current state".
 2. **datastore-clusters:** new `aws/datastore-clusters` tree; decide which
    datastores first. Free-plan limits: only Free Tier EC2 types; SCP denies
    IAM groups, login profiles and OIDC providers (use Pod Identity).

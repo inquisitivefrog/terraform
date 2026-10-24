@@ -105,6 +105,31 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ## Change log
 
+### 2026-10-23: zero-gap rollouts verified (0 of 192 requests failed)
+
+Previous result with 2 replicas and no other changes: 2 of 330 requests got
+a `502`.
+- **Chart** (`d4387f4`, then `007120f`, delivered by Argo CD): readiness
+  probe on `/`; `preStop` using the built-in `sleep` action (the image has no
+  shell); `terminationGracePeriodSeconds`. Strict server-side dry run passed.
+- **stage2:** `kubernetes_labels.default_ns_readiness_gate` labels
+  `default` with `elbv2.k8s.aws/pod-readiness-gate-inject=enabled`, created
+  before `argocd_apps`. New pods get the gate
+  `target-health.elbv2.k8s.aws/<tgb>` and become ready only once their ALB
+  target is healthy.
+- **Run 1, preStop 15 s:** 1 of 153 failed. The controller log (read with
+  `--tail=-1`; `kubectl logs -l` shows only 10 lines per pod) showed it
+  correct: old IP `10.0.2.148` deregistered at 23:51:47, the same second its
+  pod was stopped, and each gate turned True exactly when an old pod was
+  killed. The 502 at 23:52:06 was the ALB still routing to that target 19 s
+  after deregistration.
+- **Run 2, preStop 30 s and grace 45 s:** **0 of 192 failed.** A rollover
+  takes about 50 s.
+- `check_resources.sh` adds a check for the namespace readiness-gate label;
+  **37/37**.
+- Cosmetic: old pods end in `Error`, because http-echo exits non-zero on
+  SIGTERM after it has finished serving.
+
 ### 2026-10-23: upgrade set deployed and verified (36/36)
 
 Fresh deploy: terraform-state 6, stage1 68 (cluster 8m05s, node group
@@ -1107,8 +1132,6 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 - **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
   chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
 - **ecommerce-k8s follow-ups** (full run verified 2026-10-23):
-  - Zero-gap rollouts: preStop sleep, grace period, readiness probe,
-    readiness gate (2 × 502 in the 2-replica test).
   - `argocd-cm` URL is the chart placeholder `argocd.example.com`
     (`global.domain`); only matters for SSO and notification links.
   - `logs/` (2025, old account; git-ignored, local only) can go.
