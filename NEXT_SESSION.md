@@ -8,7 +8,7 @@ Updated 2026-10-23. Rolling records: `aws/tfstate/docs/STATUS.md`,
 
 | Cloud | State | Cost |
 |---|---|---|
-| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-23 evening). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
+| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-24 00:45 UTC). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
@@ -50,8 +50,9 @@ controller v3.6.1, access-entries-only auth (`API`), RBAC cleanup. It was
 deployed fresh and verified 36/36, and is committed.
 
 Then:
-1. **ecommerce-k8s:** zero-gap rollouts are done (0/192 failed; 37/37
-   checks). Tear down if it's still up: check STATUS.md "Current state".
+1. **ecommerce-k8s:** done and destroyed (verified 37/37, zero-gap
+   rollouts). Small follow-up: Ingress `deregistration_delay=30` (see
+   STATUS.md, 2026-10-24 teardown).
 2. **datastore-clusters:** new `aws/datastore-clusters` tree; decide which
    datastores first. Free-plan limits: only Free Tier EC2 types; SCP denies
    IAM groups, login profiles and OIDC providers (use Pod Identity).

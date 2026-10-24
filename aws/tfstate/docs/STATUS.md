@@ -38,13 +38,13 @@ change log, and update "Current state" and "Open items" when they change.
 - **Your home IP changes:** check `curl -4 ifconfig.me` against
   `my_laptop_cidr_block` before plan/apply or kubectl.
 
-## Current state (2026-10-23, evening): ecommerce-k8s up with the upgrade set (~$0.25/h)
+## Current state (2026-10-24, 00:45 UTC): everything destroyed
 
 Account `650836812595` (us-east-2) is empty (swept after the final
 ecommerce-k8s teardown): no EKS, EC2, NAT, EIPs, load balancers, target
 groups, VPCs, security groups, ENIs, EBS, S3 buckets, log groups, or IAM
 roles and policies from this repo. Left: the `monthly-5usd` budget
-(CLI-created) and 19 customer KMS keys in PendingDeletion (free); the two
+(CLI-created) and 21 customer KMS keys in PendingDeletion (free); the
 ecommerce keys go on 2026-10-30.
 
 | Layer | dev | prod |
@@ -53,7 +53,7 @@ ecommerce keys go on 2026-10-30.
 | `tfstate/environments` | **destroyed** 2026-10-22 (CMK PendingDeletion) | **destroyed** 2026-10-22 (CMK PendingDeletion) |
 | EC2 key pair `blue-elephant` | imported 2026-10-22 from `~/.ssh/aws_ssh.pub` (shared by dev and prod) | |
 | `single_instance` | applied, verified 24/24, **destroyed** 2026-10-22 | applied, verified, **destroyed** 2026-10-22 |
-| `ecommerce-k8s` | applied, verified and destroyed twice 2026-10-23 (second run: scanner fixes, Argo CD GitOps, 34/34). **upgrade set deployed and verified 36/36** (Argo CD v3.5.6, controller v3.6.1, auth mode `API`, RBAC cleanup); up | — |
+| `ecommerce-k8s` | applied, verified and destroyed twice 2026-10-23 (second run: scanner fixes, Argo CD GitOps, 34/34). upgrade set and zero-gap rollouts verified (37/37), then **destroyed** 2026-10-24 | — |
 
 Rebuild from step 1 of the build order (`aws/README.aws.md`, "Build and
 tear-down order").
@@ -104,6 +104,39 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-10-24 00:45 UTC: final teardown; one AWS-side hold-up
+
+stage2 5, stage1 68, terraform-state 6 destroyed. Sweep: account empty; the
+two new KMS keys are PendingDeletion until 2026-10-30. Both log groups were
+removed by Terraform.
+
+**Hold-up:** the Ingress destroy hit Terraform's 10-minute timeout.
+- The controller deleted the ALB at 00:03:15 (CloudTrail agrees). For **21
+  minutes** afterwards, AWS rejected `DeleteTargetGroup` with "in use by a
+  listener or a rule", although the target group listed no load balancer and
+  no targets, and the ALB's ENIs were gone. Manual deletes failed the same
+  way until 00:24:08.
+- The controller was by then in long exponential backoff. A `kubectl
+  rollout restart` made it retry at once: it deleted the ALB's security
+  group and removed the finalizer at 00:25:57. The re-run destroy then
+  finished; Ingress 8m50s.
+- Not seen in the earlier teardowns (Ingress about 26 s). The difference
+  this time: the target group had just rolled over, with draining targets
+  and the default 300 s `deregistration_delay`.
+- Other findings:
+  - Helm's uninstall of `argocd-apps` waits for the Application finalizer
+    (33 s), and the app was gone before Argo CD.
+  - The new Argo CD chart keeps its CRDs on uninstall (`crds.keep`); they
+    go with the cluster.
+  - The controller logs `shield:GetSubscriptionState` AccessDenied on every
+    reconcile even though its policy allows it. Most likely the org SCP:
+    Shield's API is global (us-east-1). Harmless; it skips Shield.
+- **Follow-up:** set `alb.ingress.kubernetes.io/target-group-attributes:
+  deregistration_delay.timeout_seconds=30` on the Ingress (matches the 30 s
+  preStop). If a destroy hangs on the Ingress again: check the controller
+  log with `--tail=-1`, retry `aws elbv2 delete-target-group`, then
+  `kubectl -n kube-system rollout restart deploy/aws-load-balancer-controller`.
 
 ### 2026-10-23: zero-gap rollouts verified (0 of 192 requests failed)
 
@@ -1132,6 +1165,8 @@ As found at the start of the rebuild, before `05f08e1`. Upstream was `b6f7cbf`.
 - **ALB controller chart is old:** dev pins `aws-load-balancer-controller`
   chart 1.6.0 (2023) with no IRSA role annotation; update before relying on it.
 - **ecommerce-k8s follow-ups** (full run verified 2026-10-23):
+  - Ingress `deregistration_delay.timeout_seconds=30` (the 21-minute
+    target-group hold-up on 2026-10-24 destroy).
   - `argocd-cm` URL is the chart placeholder `argocd.example.com`
     (`global.domain`); only matters for SSO and notification links.
   - `logs/` (2025, old account; git-ignored, local only) can go.
