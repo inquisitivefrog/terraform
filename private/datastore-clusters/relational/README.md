@@ -1,0 +1,92 @@
+# relational
+
+Two 3-node highly available SQL clusters, one node per zone, that keep
+serving writes with any one zone down and lose no committed data. The
+private-cloud version of an Aurora design (two Aurora clusters), which the
+AWS Free plan can't run.
+
+| Example | Cluster | Engine | Nodes | Writer / reader endpoints |
+|---|---|---|---|---|
+| `modules/postgresql` | `pg` | PostgreSQL 16.13 (deliberately old: see the runbooks), CloudNativePG 1.30.1 | 1 primary + 2 streaming replicas | `pg-rw` / `pg-ro` |
+| `modules/mysql` | `mysql` | Percona XtraDB Cluster 8.0.44 (MySQL 8.0, past upstream end of life; Galera), Percona operator 1.20.0 | 3 Galera nodes + 3 HAProxies | `mysql-haproxy` / `mysql-haproxy-replicas` |
+| distributed SQL (planned) | | YugabyteDB or TiDB | Raft groups across 3 zones | |
+
+Both run in namespace `relational`. The endpoints are Kubernetes Services
+(`<name>.relational.svc`) that follow the writer on failover: the service
+discovery that Aurora's cluster endpoint provides.
+
+## How each survives losing a zone
+
+| | PostgreSQL (CloudNativePG) | MySQL (Percona XtraDB Cluster) |
+|---|---|---|
+| Copies of the data | 3, one per zone | 3, one per zone |
+| A commit waits for | the primary + **any 1** of the 2 replicas (quorum synchronous replication) | a **majority** (2 of 3) of nodes to certify it (Galera) |
+| One zone down | a replica is promoted (only one known to hold every commit: `failoverQuorum`); writes resume on `pg-rw` | the other 2 nodes are still a majority; HAProxy moves writes to one of them |
+| Two zones down | writes stop rather than risk losing data (`dataDurability: required`) | the last node is a minority and stops accepting writes |
+| Planned maintenance | PodDisruptionBudget: one instance down at a time | PodDisruptionBudget: one node down at a time |
+
+Aurora does the same with six storage copies across three AZs (write
+quorum 4 of 6).
+
+## Layout
+
+| Path | Creates |
+|---|---|
+| `modules/postgresql/operator/` | CloudNativePG (Helm, namespace `cnpg-system`, watches every namespace) |
+| `modules/postgresql/cluster/` | One `Cluster`: required zone anti-affinity, quorum sync replication, TLS-only `pg_hba`, PDB, app database and role; apply waits for Ready |
+| `modules/mysql/operator/` | Percona PXC operator (Helm, namespace `pxc-operator`, watches every namespace) |
+| `modules/mysql/cluster/` | One `PerconaXtraDBCluster`: zone anti-affinity, HAProxy, TLS for clients and replication, `require_secure_transport`, PDBs, app database and user; apply waits for ready |
+| `environments/dev/operators/` | Both operators |
+| `environments/dev/clusters/` | Namespace `relational`, `pg` and `mysql` (versions in `variables.tf`) |
+| `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext |
+| `scripts/failover_test.sh pg\|mysql [pod\|zone]` | Takes out the writer (its pod, or its whole zone with `docker stop`) under a write probe; reports the outage and, for a zone, the time to heal |
+
+## Build and tear down
+
+The platform (`../platform`) first. Then, from the repo root:
+
+```sh
+cd private/datastore-clusters/relational/environments/dev/operators
+terraform init && terraform plan -out plan-operators && terraform apply plan-operators   # ~1 min
+
+cd ../clusters
+terraform init && terraform plan -out plan-clusters && terraform apply plan-clusters      # ~5-10 min: image pulls, then 3 nodes each
+
+../../../scripts/check_resources.sh
+../../../scripts/failover_test.sh pg            # delete the primary's pod; measure the write outage
+../../../scripts/failover_test.sh mysql zone    # stop the writer's whole zone; measure, then heal
+```
+
+Tear down clusters, then operators (each `plan -destroy -out plan-destroy-<root>`,
+then apply that plan). Memory while up: about 5 GB of the Docker Desktop VM.
+
+## Connecting
+
+The databases are reachable only inside the cluster. From the laptop,
+forward a port (this shell only):
+
+```sh
+export KUBECONFIG=~/.kube/kind-datastore-dev
+kubectl -n relational port-forward svc/pg-rw 5432:5432 &
+PGPASSWORD="$(kubectl -n relational get secret pg-app -o jsonpath='{.data.password}' | base64 -d)" \
+  psql "host=127.0.0.1 user=app dbname=appdb sslmode=require"
+
+kubectl -n relational port-forward svc/mysql-haproxy 3306:3306 &
+MYSQL_PWD="$(kubectl -n relational get secret mysql-secrets -o jsonpath='{.data.root}' | base64 -d)" \
+  mysql -h 127.0.0.1 -uroot --ssl-mode=REQUIRED
+```
+
+Unencrypted connections are refused by both (`hostnossl ... reject` in
+`pg_hba`, `require_secure_transport=ON`).
+
+## Version path (for the patch and upgrade runbooks)
+
+| | Start | Security patch | Major upgrade |
+|---|---|---|---|
+| PostgreSQL | 16.13 | 16.15, replicas first, then a switchover | 18, in place with `pg_upgrade` (offline; images must share a Debian release, trixie), after a backup; compare with blue/green by logical replication |
+| MySQL | 8.0.44 | 8.0.45 (the version operator 1.20.0 tested), one node at a time | 8.4.8: Percona's recommended operator path, a new 8.4 cluster seeded from backup plus asynchronous replication, then cut over |
+
+MySQL-specific "force an election": Galera has no elected leader; the
+emergency is a cluster that lost its majority. The drill forces the survivor
+to become the Primary Component (`pc.bootstrap`), accepting the loss of
+anything only the failed nodes had.

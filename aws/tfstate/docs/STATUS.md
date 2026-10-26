@@ -38,7 +38,7 @@ change log, and update "Current state" and "Open items" when they change.
 - **Your home IP changes:** check `curl -4 ifconfig.me` against
   `my_laptop_cidr_block` before plan/apply or kubectl.
 
-## Current state (2026-10-24, 00:45 UTC): everything destroyed
+## Current state (2026-10-24, night): everything destroyed
 
 Account `650836812595` (us-east-2) is empty (swept after the final
 ecommerce-k8s teardown): no EKS, EC2, NAT, EIPs, load balancers, target
@@ -104,6 +104,112 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-10-26: aws/datastore-clusters removed
+
+The uncommitted Aurora tree is deleted from the repo; the design now lives
+in the private cloud (`private/datastore-clusters`, applied and verified
+2026-10-26). Nothing was live: its dev and terraform-state roots were
+destroyed on 2026-10-24 (both states empty). The design and the Free-plan
+findings stay recorded in the 2026-10-24 entries below.
+
+### 2026-10-24: datastore-clusters blocked by the Free plan; destroyed
+
+With backups at 1 day, `CreateDBCluster` still failed:
+- Aurora MySQL: `FreeTierRestrictionError: The specified cluster engine type
+  is not available with free plan accounts. Available engine types:
+  [aurora-postgresql]`.
+- Aurora PostgreSQL: `To use Aurora clusters with free plan accounts you need
+  to set WithExpressConfiguration`.
+
+AWS docs (Aurora on the Free Tier; Create with express configuration): on the
+Free plan, Aurora is PostgreSQL in **express configuration only**:
+- serverless, up to 4 ACUs and 1 GB storage per cluster;
+- at most 2 clusters and 2 instances per account;
+- no customer managed KMS key, engine version or VPC choice (reached through
+  an internet access gateway).
+
+So neither 3-node HA clusters, Aurora MySQL nor private subnets are possible
+without upgrading the account to the paid plan. The Terraform design is
+unchanged; it needs a paid plan.
+
+- One `apply` of a plan saved without `-destroy` retried the 8 creates (the
+  same errors, nothing created).
+- Destroyed: dev 33, terraform-state 6. Sweep: account empty (no RDS, secrets,
+  VPCs, buckets, log groups); 23 customer KMS keys PendingDeletion; credits
+  **$137.41**, unchanged.
+- `aws/datastore-clusters/` was never committed; removed 2026-10-26 (see
+  the entry above it).
+- **Decision for the user:**
+  1. upgrade to the paid plan. This builds the design as written; confirm
+     first that credits carry over and that the upgrade can't be reverted.
+  2. Or stay on the Free plan with a subset: one express Aurora PostgreSQL;
+     or plain RDS primary + replicas, if the plan allows them (untested).
+- Discussed with the user (to fold into later work):
+  - N+2 (one instance in maintenance plus one failure);
+  - 3-member quorums are only N+1 (5 for N+2);
+  - the Aurora writer is a single active node (~30 s failover);
+  - ecommerce-k8s is N+1: 2 AZs, 2 replicas, no zone spread or PDB;
+  - a 4th node for clones and backups maps to Aurora fast clone, a reader
+    with `promotion_tier = 15` behind a custom endpoint, and Blue/Green;
+  - autoscaling needs discovery, rebalancing, client routing and safe
+    scale-in; Aurora reader autoscaling fits the module;
+  - NoSQL roadmap: DynamoDB/Keyspaces, DocumentDB, ElastiCache/MemoryDB,
+    OpenSearch.
+
+### 2026-10-24: datastore-clusters first apply: Free plan caps RDS backups
+
+- terraform-state: 6 added.
+- environments/dev: 33 of 41 created (network, KMS, subnet, parameter and
+  security groups, log groups). Both `CreateDBCluster` calls failed with
+  `FreeTierRestrictionError: The specified backup retention period exceeds
+  the maximum available to free tier customers`.
+- My assumption that 7 days of backups is free was wrong for the Free plan,
+  which caps retention, most likely at 1 day. Dev is back to 1
+  (`backup_retention_period = 1`, trivy AWS-0077 accepted as forced by the
+  plan). The module default stays 7 for paid accounts.
+- Re-plan expected: 8 to add (2 clusters, 6 instances).
+
+### 2026-10-24: aws/datastore-clusters written (not applied)
+
+New tree with two highly available Aurora clusters. Decisions made with the
+user:
+- **Aurora PostgreSQL 17.9** and **Aurora MySQL 3.10.3** (MySQL 8.0): the
+  AWS defaults; newer lines exist (PostgreSQL 18.6, Aurora MySQL 8.4.8).
+- Each cluster: 1 writer + 2 readers, provisioned `db.t4g.medium` (the
+  smallest Aurora class), one node per AZ in us-east-2a/b/c. About $0.45/h
+  for all 6.
+- dev only, own state bucket (`blue-elephant-datastore-clusters-tfstate`).
+- **VPC with public and private subnets** (user's requirement): the
+  datastores are in the private subnets. NAT gateway optional, off.
+
+Design:
+- Private only: no public endpoints; the security group admits the VPC CIDR.
+- TLS required (`rds.force_ssl=1`, `require_secure_transport=ON`).
+- The master password is RDS-managed in Secrets Manager under the CMK, so it
+  is never in state.
+- Storage and Performance Insights use the same CMK; IAM DB auth on.
+- Log groups are created by Terraform (lesson from ecommerce-k8s).
+- The writer is a separate resource created first in AZ a, so its placement
+  is deterministic.
+- SQL tests use the **RDS Data API** (no SQL client installed locally). Data
+  API supports Aurora PostgreSQL 17.4+ and MySQL 3.07+ in us-east-2;
+  support on T classes is not documented either way, so it is a module
+  variable.
+
+Checks:
+- validate, tflint 0, trivy MEDIUM+ = AWS-0343 only (deletion protection
+  off in dev, on purpose; the module defaults to on). Dev backups are 7 days
+  (free up to cluster size).
+- Scratch plan with a local backend: **41 to add**; writers in 2a, readers in
+  2b/2c.
+- Account check: Free plan ACTIVE, **$137.41** credits, expires 2027-04-22.
+  Open credit activity "Create an Aurora or RDS database" pays +$20.
+- `scripts/check_resources.sh` (network tiers; per cluster: 3 nodes,
+  1 writer, 3 AZs, private subnets, CMK, IAM auth, Data API, secret, PI,
+  TLS, security group, log groups; live SQL via the Data API) and
+  `scripts/failover_test.sh pg|mysql` (forced failover, writes once a second,
+  measures the outage). Both run against the empty account and skip cleanly.
 
 ### 2026-10-24 00:45 UTC: final teardown; one AWS-side hold-up
 

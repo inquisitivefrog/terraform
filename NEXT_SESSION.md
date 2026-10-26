@@ -1,15 +1,17 @@
 # Next session: start here
 
-Updated 2026-10-23. Rolling records: `aws/tfstate/docs/STATUS.md`,
-`gcp/tfstate/docs/STATUS.md`, `azure/tfstate/docs/STATUS.md`. Command guides:
+Updated 2026-10-26. Rolling records: `aws/tfstate/docs/STATUS.md`,
+`gcp/tfstate/docs/STATUS.md`, `azure/tfstate/docs/STATUS.md`,
+`private/docs/STATUS.md`. Command guides:
 `aws/README.aws.md`, `gcp/README.gcloud.md`, `azure/README.az.md`.
 
 ## Where things stand
 
 | Cloud | State | Cost |
 |---|---|---|
-| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-24 00:45 UTC). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
+| AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-24 night; credits $137.41). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
+| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters` platform + relational applied and verified 2026-10-26 (13/13, 29/29); kind cluster `datastore-dev` running | $0 |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
 Azure leftovers, free: four soft-deleted Key Vaults purge themselves
@@ -53,12 +55,24 @@ Then:
 1. **ecommerce-k8s:** done and destroyed (verified 37/37, zero-gap
    rollouts). Small follow-up: Ingress `deregistration_delay=30` (see
    STATUS.md, 2026-10-24 teardown).
-2. **datastore-clusters:** new `aws/datastore-clusters` tree; decide which
-   datastores first. Free-plan limits: only Free Tier EC2 types; SCP denies
-   IAM groups, login profiles and OIDC providers (use Pod Identity).
-3. **Group 2** (single_instance dev ALB ingress): copy ecommerce-k8s's
+2. **datastore-clusters: moved to the private cloud and widened** to the
+   whole range of datastore categories (`private/datastore-clusters`; design
+   and decisions in its `docs/DESIGN.md`; runbook definitions in
+   `docs/RUNBOOKS.md`). Platform (kind `datastore-dev`, kube-prometheus-stack)
+   and relational (`pg` PostgreSQL 16.13, `mysql` PXC 8.0.44) applied and
+   verified 2026-10-26. Next: runbook 1 (CNPG/PXC metrics and dashboards,
+   Java CRUDS app with the planted missing index, k6 load), then backups
+   (cert-manager, object store), then `failover_test.sh` with a reader
+   target. Dedicated database nodes deferred to the node-drain and
+   node-replacement runbooks. Open questions are listed at the end of
+   DESIGN.md. The AWS Aurora version was removed 2026-10-26 (design kept in
+   `aws/tfstate/docs/STATUS.md`).
+3. **ecommerce-k8s N+2:** 3 AZs, `replicaCount: 3` with zone
+   `topologySpreadConstraints`, a PodDisruptionBudget; Ingress
+   `deregistration_delay=30`.
+4. **Group 2** (single_instance dev ALB ingress): copy ecommerce-k8s's
    working pattern (Pod Identity, current chart, upstream policy).
-4. Later: make scanners blocking (KSV-0125 needs an ignore mechanism for
+5. Later: make scanners blocking (KSV-0125 needs an ignore mechanism for
    Helm templates); regenerate module READMEs (terraform-docs).
 
 Other clouds' open items: `gcp/tfstate/docs/STATUS.md`,

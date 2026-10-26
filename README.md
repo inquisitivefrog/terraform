@@ -10,6 +10,8 @@ checkov, ...): [docs/REPO_CHECKS.md](docs/REPO_CHECKS.md).
 
 **Status of the AWS rebuild:** [aws/tfstate/docs/STATUS.md](aws/tfstate/docs/STATUS.md)
 
+**Private cloud** (Docker Desktop + kind, no cost): [private/README.md](private/README.md)
+
 AWS
 
 1. tfstate: create S3 bucket for terraform.tfstate

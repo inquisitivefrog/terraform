@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cloud: [aws, gcp, azure]
+        cloud: [aws, gcp, azure, private]
     steps:
       - uses: actions/checkout@v4
 
