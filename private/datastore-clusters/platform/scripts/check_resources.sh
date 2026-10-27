@@ -9,13 +9,6 @@ source "$(dirname "$0")/../../../scripts/checks.sh"      # expect, match, summar
 ENV="${1:-dev}"
 ZONES="dc1-a dc1-b dc1-c"
 
-# prom_count <PromQL>: the number a count(...) query returns (0 when empty)
-prom_count() {
-  local n
-  n="$(k get --raw "/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy/api/v1/query?query=count($1)" |
-    grep -oE '"[0-9]+"\]' | tr -dc '0-9')"
-  echo "${n:-0}"
-}
 scrape_targets() { echo "$(prom_count 'up==1') up, $(prom_count 'up==0') down"; }
 
 # unlimited_containers <namespace>: running containers with no memory limit, or "all" (all have one)

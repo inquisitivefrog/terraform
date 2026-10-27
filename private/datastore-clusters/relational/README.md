@@ -32,10 +32,10 @@ quorum 4 of 6).
 
 | Path | Creates |
 |---|---|
-| `modules/postgresql/operator/` | CloudNativePG (Helm, namespace `cnpg-system`, watches every namespace) |
-| `modules/postgresql/cluster/` | One `Cluster`: required zone anti-affinity, quorum sync replication, TLS-only `pg_hba`, PDB, app database and role; apply waits for Ready |
+| `modules/postgresql/operator/` | CloudNativePG (Helm, namespace `cnpg-system`, watches every namespace), its PodMonitor and the official CloudNativePG Grafana dashboard |
+| `modules/postgresql/cluster/` | One `Cluster`: required zone anti-affinity, quorum sync replication, TLS-only `pg_hba`, PDB, app database and role; apply waits for Ready. `monitoring.tf`: PodMonitor for every instance |
 | `modules/mysql/operator/` | Percona PXC operator (Helm, namespace `pxc-operator`, watches every namespace) |
-| `modules/mysql/cluster/` | One `PerconaXtraDBCluster`: zone anti-affinity, HAProxy, TLS for clients and replication, `require_secure_transport`, PDBs, app database and user; apply waits for ready |
+| `modules/mysql/cluster/` | One `PerconaXtraDBCluster`: zone anti-affinity, HAProxy, TLS for clients and replication, `require_secure_transport`, PDBs, app database and user; apply waits for ready. `monitoring.tf`: `mysqld_exporter` sidecar per node, PodMonitor, and the MySQL / Galera dashboard (`dashboards/mysql-galera.json`) |
 | `environments/dev/operators/` | Both operators |
 | `environments/dev/clusters/` | Namespace `relational`, `pg` and `mysql` (versions in `variables.tf`) |
 | `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext |
@@ -59,6 +59,26 @@ terraform init && terraform plan -out plan-clusters && terraform apply plan-clus
 
 Tear down clusters, then operators (each `plan -destroy -out plan-destroy-<root>`,
 then apply that plan). Memory while up: about 5 GB of the Docker Desktop VM.
+
+## Metrics and dashboards
+
+Both engines report to the shared Prometheus (`../platform`, namespace
+`monitoring`); Grafana loads their dashboards automatically.
+
+| | PostgreSQL | MySQL |
+|---|---|---|
+| Exporter | built into every CloudNativePG instance (port 9187) | `mysqld_exporter` sidecar on every PXC node (port 9104), logged in as the operator's `monitor` user over the local socket |
+| Grafana dashboard | **CloudNativePG** (official, shipped with the operator chart) | **MySQL / Galera (Percona XtraDB Cluster)** (`modules/mysql/cluster/dashboards/mysql-galera.json`) |
+| Shows | replication lag, WAL and checkpoints, connections, locks, database size, operator health | Galera membership and flow control, CRUDS by statement type, connections against `max_connections`, slow queries, full scans, top statements and statements without an index, buffer pool, memory against the limit |
+
+Changing the MySQL cluster's sidecar restarts its nodes one at a time
+(the operator's SmartUpdate), so the cluster stays writable. `terraform
+apply` returns before that restart starts: its wait (`status.state =
+ready`) is already true when the change lands. Wait for the rollout before
+running the checks:
+`kubectl -n relational get pxc mysql -w` until `ready` again (about a
+minute per node). Query-level
+statistics for PostgreSQL (`pg_stat_statements`) come with runbook 2.
 
 ## Connecting
 

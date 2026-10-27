@@ -8,9 +8,54 @@ Newest first.
 kind cluster `datastore-dev` (4 nodes, zones dc1-a/b/c) with
 kube-prometheus-stack; CloudNativePG and Percona PXC operators; `pg`
 (PostgreSQL 16.13, 3 instances) and `mysql` (PXC 8.0.44, 3 nodes + 3
-HAProxies) in namespace `relational`. Verified: platform check 13/13
-(including monitoring), relational check 29/29. Disk blocker cleared (65 GB free); Docker
+HAProxies) in namespace `relational`, both scraped by Prometheus with
+dashboards in Grafana. Verified: platform check 13/13 (including
+monitoring), relational check 35/35. Disk blocker cleared (65 GB free); Docker
 Desktop at 14 GB memory, 8 CPUs.
+
+## 2026-10-27: cluster stopped for a laptop reboot
+
+The laptop ran flat overnight and was deep in swap (4.8 of 6 GB); the
+Docker Desktop VM held 6.9 GB. The four kind node containers were stopped
+gracefully (`docker stop -t 120`, done in 90 s) and Docker Desktop quit.
+Nothing destroyed: cluster, volumes and Terraform state remain. Restart:
+start Docker Desktop, `docker start` the control plane then the workers,
+then run both `check_resources.sh`. All three Galera nodes stopped
+together, so MySQL comes back through the operator's full-cluster crash
+recovery (`autoRecovery`): a test of runbook 27 for free.
+
+## 2026-10-26: database metrics and dashboards
+
+Committed the verified platform + relational state first (`ea4cf2c`).
+
+- PostgreSQL: a PodMonitor per cluster (CloudNativePG's
+  `enablePodMonitor` is deprecated in 1.30); the operator chart now creates
+  its own PodMonitor and the official CloudNativePG dashboard (66 panels).
+- MySQL: decided exporter over PMM. A `mysqld_exporter` v0.20.0 sidecar on
+  each PXC node (v0.21.0 is four days old), logged in as the operator's
+  `monitor` user through mysqld's socket on the shared `tmp` volume
+  (read-only; a socket counts as secure transport, so
+  `require_secure_transport` stays on); statement digests enabled for the
+  missing-index runbook. PodMonitor and a 25-panel MySQL / Galera dashboard
+  written for this repo (the exporter's own mixin dashboard is dated and
+  has no Galera panels).
+- Checks: the relational check gains six metrics checks (all scraped,
+  `mysql_up`, Primary Component seen by Prometheus, dashboards loaded); the
+  Prometheus query helper moved to `scripts/checks.sh`. Before the apply:
+  29 passed, 6 failed, as expected.
+- Applied: relational `operators`, then `clusters`. Adding the sidecar
+  rolled the PXC nodes one a minute, writer last (pxc-2 22:27:40, pxc-1
+  22:28:40, pxc-0 22:29:40); writes kept flowing. The apply itself returned
+  in 0 s: its wait (`status.state = ready`) was still true from before, so
+  the user's check right after it caught the rollout mid-way (28/35: state
+  `initializing`, Galera `2 Primary`, sidecars not ready yet, PodMonitors
+  not yet loaded by Prometheus). Re-run after the rollout: 35/35. README
+  now says to wait for `ready` after a cluster change. The plan's warning
+  about an `x-kubernetes-preserve-unknown-field` comes from the PXC CRD's
+  untyped sidecar schema and is harmless. Every dashboard query returns data except the two statement-digest
+  tables: the collector succeeds, but nothing has queried `appdb` yet (the
+  exporter skips statements with no schema and the system schemas). They
+  fill when the CRUDS app runs.
 
 ## 2026-10-26: first apply
 

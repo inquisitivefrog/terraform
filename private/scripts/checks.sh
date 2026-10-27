@@ -43,6 +43,16 @@ refused() {
   fi
 }
 
+# prom_value <PromQL>: the whole-number result of an instant query to the
+# shared Prometheus (0 when the result is empty); needs k from private_env.sh
+prom_value() {
+  local n
+  n="$(k get --raw "/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy/api/v1/query?query=$(printf %s "$1" | jq -sRr @uri)" \
+    2>/dev/null | grep -oE '"[0-9]+"\]' | tr -dc '0-9')"
+  echo "${n:-0}"
+}
+prom_count() { prom_value "count($1)"; }
+
 # summary [what]: totals; exit 1 if any check failed
 summary() {
   echo

@@ -11,7 +11,7 @@ Updated 2026-10-26. Rolling records: `aws/tfstate/docs/STATUS.md`,
 |---|---|---|
 | AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-24 night; credits $137.41). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
-| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters` platform + relational applied and verified 2026-10-26 (13/13, 29/29); kind cluster `datastore-dev` running | $0 |
+| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters` platform + relational applied and verified 2026-10-26 (13/13, 35/35; database metrics and dashboards); kind cluster `datastore-dev` running | $0 |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
 Azure leftovers, free: four soft-deleted Key Vaults purge themselves

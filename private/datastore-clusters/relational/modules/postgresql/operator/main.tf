@@ -12,6 +12,13 @@ resource "helm_release" "operator" {
 
   values = [yamlencode({
     config = { clusterWide = true }
+    # The operator's own metrics, and CloudNativePG's official Grafana
+    # dashboard as a ConfigMap labelled grafana_dashboard=1 (the chart's
+    # default label, which Grafana's sidecar loads from any namespace).
+    monitoring = {
+      podMonitorEnabled = true
+      grafanaDashboard  = { create = true }
+    }
     # Without a request the operator is BestEffort: the first pod evicted
     # when its node runs short, and the clusters can't fail over without it.
     resources = {

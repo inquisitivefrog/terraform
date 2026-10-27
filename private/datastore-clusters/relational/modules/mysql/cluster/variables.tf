@@ -61,6 +61,11 @@ variable "memory" {
   default     = "768Mi"
 }
 
+variable "exporter_image" {
+  description = "prom/mysqld-exporter image for the metrics sidecar"
+  type        = string
+}
+
 variable "wait_timeout" {
   description = "How long apply waits for the cluster to report ready"
   type        = string

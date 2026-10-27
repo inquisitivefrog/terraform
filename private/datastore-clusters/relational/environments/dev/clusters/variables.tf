@@ -28,6 +28,13 @@ variable "haproxy_image" {
   default = "percona/haproxy:2.8.18-1"
 }
 
+# v0.21.0 (2026-10-22) is days old; pinned to the release before it.
+variable "mysqld_exporter_image" {
+  description = "Prometheus exporter sidecar on each PXC node"
+  type        = string
+  default     = "prom/mysqld-exporter:v0.20.0-distroless"
+}
+
 variable "nodes" {
   description = "Nodes per cluster, one per zone"
   type        = number

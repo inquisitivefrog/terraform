@@ -24,12 +24,13 @@ module "postgres" {
 module "mysql" {
   source = "../../../modules/mysql/cluster"
 
-  name          = "mysql"
-  namespace     = kubernetes_namespace_v1.relational.metadata[0].name
-  size          = var.nodes
-  cr_version    = var.pxc_cr_version
-  pxc_image     = var.pxc_image
-  haproxy_image = var.haproxy_image
-  database      = "appdb"
-  app_user      = "app"
+  name           = "mysql"
+  namespace      = kubernetes_namespace_v1.relational.metadata[0].name
+  size           = var.nodes
+  cr_version     = var.pxc_cr_version
+  pxc_image      = var.pxc_image
+  haproxy_image  = var.haproxy_image
+  exporter_image = var.mysqld_exporter_image
+  database       = "appdb"
+  app_user       = "app"
 }

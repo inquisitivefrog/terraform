@@ -360,5 +360,7 @@ through the Docker Desktop VM's virtual disk, the same cores and one clock.
   noisy-neighbour containment step): to be tried.
 - Distributed SQL engine: YugabyteDB or TiDB.
 - Object store: Garage or SeaweedFS.
-- MySQL monitoring: Prometheus exporter sidecar (one stack for everything)
-  or Percona's PMM (the vendor's tool).
+- ~~MySQL monitoring: exporter or PMM~~ Decided 2026-10-26: a
+  `mysqld_exporter` sidecar into the shared Prometheus, so every category
+  shares one monitoring stack and one alerting path; PMM would add a second
+  server, its own agents and its own alerting for one engine.

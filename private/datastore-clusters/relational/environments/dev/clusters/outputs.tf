@@ -15,3 +15,8 @@ output "mysql" {
     system_secret = module.mysql.system_secret
   }
 }
+
+output "grafana_dashboards" {
+  description = "Dashboards for these clusters (Grafana: see the platform services output)"
+  value       = ["CloudNativePG (shipped with the operator)", module.mysql.dashboard]
+}

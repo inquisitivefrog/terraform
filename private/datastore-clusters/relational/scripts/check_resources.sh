@@ -108,6 +108,23 @@ else
       "select concat((select count(*) from mysql.user where user = 'app'), ' ', (select count(*) from information_schema.schemata where schema_name = 'appdb'))"
     expect "PodDisruptionBudgets (nodes, HAProxies)" "2" sh -c "kubectl --context $CTX -n $NS get pdb -l app.kubernetes.io/instance=$MY --no-headers | wc -l | tr -d ' '"
   fi
+
+  # Metrics in the shared Prometheus and the dashboards in Grafana. Right after
+  # an apply, allow a minute for the first scrapes.
+  echo
+  if ! k get namespace monitoring >/dev/null 2>&1; then
+    echo "-- metrics: namespace monitoring not found (platform services not applied); skipped --"
+  else
+    echo "-- metrics and dashboards --"
+    expect "Prometheus scrapes every $PG instance" "3" prom_count "up{namespace=\"$NS\", job=\"$NS/$PG\"} == 1"
+    expect "CloudNativePG operator scraped" "1" prom_count 'up{namespace="cnpg-system"} == 1'
+    expect "mysqld_exporter sidecar ready on every node" "3 3" sh -c "kubectl --context $CTX -n $NS get pods -l app.kubernetes.io/instance=$MY,app.kubernetes.io/component=pxc \
+      -o jsonpath='{range .items[*]}{.status.containerStatuses[?(@.name==\"mysqld-exporter\")].ready}{\"\\n\"}{end}' | grep -c true | xargs printf '%s 3'"
+    expect "Every exporter logged in to its node (mysql_up)" "3" prom_value "sum(mysql_up{namespace=\"$NS\"})"
+    expect "Prometheus sees 3 nodes in the Primary Component" "3" prom_value "sum(mysql_global_status_wsrep_cluster_status{namespace=\"$NS\"})"
+    expect "Dashboards for Grafana's sidecar (CloudNativePG, MySQL / Galera)" "cnpg-grafana-dashboard $MY-grafana-dashboard" sh -c \
+      "kubectl --context $CTX get configmap -A -l grafana_dashboard=1 -o jsonpath='{range .items[*]}{.metadata.name}{\"\\n\"}{end}' | grep -E '^(cnpg|$MY)-grafana-dashboard$' | sort | xargs"
+  fi
 fi
 
 summary "relational resources"
