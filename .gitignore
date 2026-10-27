@@ -24,6 +24,9 @@ config
 !/aws/tfstate/environments/*/.terraform.lock.hcl
 !/aws/single_instance/environments/*/.terraform.lock.hcl
 
+# Build output (Maven)
+target/
+
 # Logs or temporary files
 *.log
 *.tmp

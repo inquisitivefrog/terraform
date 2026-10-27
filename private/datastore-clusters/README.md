@@ -58,7 +58,7 @@ Two choices that run through all of them:
 ## Runbooks
 
 The work after "it's deployed", defined once for every engine in
-[docs/RUNBOOKS.md](docs/RUNBOOKS.md): 39 runbooks in five groups (observe,
+[docs/RUNBOOKS.md](docs/RUNBOOKS.md): 40 runbooks in five groups (observe,
 protect, change, recover, secure), a common template (goal, when, before,
 steps, verify, roll back, measure), the capacity and storage practices they
 enforce, and a symptom-to-runbook table of common problems. Each is scripted

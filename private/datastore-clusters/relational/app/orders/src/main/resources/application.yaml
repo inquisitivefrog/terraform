@@ -1,0 +1,49 @@
+# Engine-neutral settings. The engine's own (JDBC URLs, TLS, session
+# timeouts) are in application-<engine>.yaml, chosen by ORDERS_ENGINE
+# (postgresql or mysql). Hosts, database and credentials come from the
+# environment the Deployment sets.
+spring:
+  application:
+    name: orders
+  profiles:
+    active: ${ORDERS_ENGINE}
+  threads:
+    virtual:
+      enabled: true
+  flyway:
+    locations: classpath:db/migration/${orders.engine}
+
+server:
+  shutdown: graceful
+
+orders:
+  engine: ${ORDERS_ENGINE}
+  writer:
+    pool-name: writer
+    username: ${ORDERS_DB_USER}
+    password: ${ORDERS_DB_PASSWORD}
+    maximum-pool-size: 10
+    connection-timeout: 3000
+  reader:
+    pool-name: reader
+    username: ${ORDERS_DB_USER}
+    password: ${ORDERS_DB_PASSWORD}
+    maximum-pool-size: 10
+    connection-timeout: 3000
+    read-only: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      engine: ${orders.engine}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

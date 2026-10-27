@@ -80,7 +80,7 @@ else
     expect "Writer endpoint $PG-rw: primary, over TLS" "false true" pg_app "$PG-rw" require \
       "select pg_is_in_recovery()::text || ' ' || ssl::text from pg_stat_ssl where pid = pg_backend_pid()"
     expect "Reader endpoint $PG-ro: a replica" "true" pg_app "$PG-ro" require "select pg_is_in_recovery()::text"
-    refused "Unencrypted connection rejected" pg_app "$PG-rw" disable "select 1"
+    refused "Unencrypted connection rejected" 'pg_hba\.conf rejects connection' pg_app "$PG-rw" disable "select 1"
     expect "Application database appdb owned by app" "app" pg_local "select pg_get_userbyid(datdba) from pg_database where datname = 'appdb'"
   fi
 
@@ -103,7 +103,7 @@ else
       "select concat(@@hostname, ' ', if(variable_value <> '', 'TLS', 'plain')) from performance_schema.session_status where variable_name = 'Ssl_cipher'"
     match "Reader endpoint $MY-haproxy-replicas answers" "^$MY-pxc-[0-9]+$" my_sql "$MY-haproxy-replicas" REQUIRED "select @@hostname"
     expect "require_secure_transport" "1" my_sql "$MY-haproxy" REQUIRED "select @@require_secure_transport"
-    refused "Unencrypted connection rejected" my_sql "$MY-haproxy" DISABLED "select 1"
+    refused "Unencrypted connection rejected" 'ERROR 3159|insecure transport are prohibited' my_sql "$MY-haproxy" DISABLED "select 1"
     expect "Application user app with database appdb" "1 1" my_sql "$MY-haproxy" REQUIRED \
       "select concat((select count(*) from mysql.user where user = 'app'), ' ', (select count(*) from information_schema.schemata where schema_name = 'appdb'))"
     expect "PodDisruptionBudgets (nodes, HAProxies)" "2" sh -c "kubectl --context $CTX -n $NS get pdb -l app.kubernetes.io/instance=$MY --no-headers | wc -l | tr -d ' '"
@@ -124,6 +124,24 @@ else
     expect "Prometheus sees 3 nodes in the Primary Component" "3" prom_value "sum(mysql_global_status_wsrep_cluster_status{namespace=\"$NS\"})"
     expect "Dashboards for Grafana's sidecar (CloudNativePG, MySQL / Galera)" "cnpg-grafana-dashboard $MY-grafana-dashboard" sh -c \
       "kubectl --context $CTX get configmap -A -l grafana_dashboard=1 -o jsonpath='{range .items[*]}{.metadata.name}{\"\\n\"}{end}' | grep -E '^(cnpg|$MY)-grafana-dashboard$' | sort | xargs"
+  fi
+
+  # The orders example app (environments/dev/app), once per engine.
+  echo
+  if ! k -n "$NS" get deploy orders-pg orders-mysql >/dev/null 2>&1; then
+    echo "-- orders app: not deployed (environments/dev/app not applied); skipped --"
+  else
+    echo "-- orders app --"
+    app_get() { k get --raw "/api/v1/namespaces/$NS/services/$1:http/proxy$2" 2>&1; }
+    for APP in orders-pg orders-mysql; do
+      expect "$APP: 2 pods ready" "2" k -n "$NS" get deploy "$APP" -o jsonpath='{.status.readyReplicas}'
+      match "$APP: pods in 2 different zones" '^(dc1-a dc1-[bc]|dc1-b dc1-c)$' zones "app.kubernetes.io/name=orders,app.kubernetes.io/instance=$APP"
+      match "$APP: healthy, database included" '"status":"UP"' app_get "$APP" /actuator/health
+      match "$APP: schema migrated (customers readable through the reader)" '^\[' app_get "$APP" "/customers/ids?limit=1"
+    done
+    expect "Prometheus scrapes every app pod" "4" prom_count "up{namespace=\"$NS\", service=~\"orders-(pg|mysql)\"} == 1"
+    expect "k6 script and Orders load dashboard" "orders-grafana-dashboard orders-k6" sh -c \
+      "kubectl --context $CTX -n $NS get configmap orders-k6 orders-grafana-dashboard -o name | sed 's:.*/::' | sort | xargs"
   fi
 fi
 

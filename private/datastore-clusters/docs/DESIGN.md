@@ -197,7 +197,7 @@ images and a maintained operator, and re-verified when built.
 
 ## 7. Runbooks
 
-The work after "it's deployed", defined in [RUNBOOKS.md](RUNBOOKS.md): 39
+The work after "it's deployed", defined in [RUNBOOKS.md](RUNBOOKS.md): 40
 runbooks with one template, judged under k6 load. The first seven requested,
 in build order: monitor, back up, security patch, tune, replace a damaged
 node, force an election, major upgrade. Monitoring and backups come first
@@ -318,7 +318,7 @@ The lab is a MacBook Air: Apple M4, 10 cores (4 performance, 6 efficiency),
 24 GB, fanless, one internal NVMe drive. All kind nodes share that drive
 through the Docker Desktop VM's virtual disk, the same cores and one clock.
 
-- 29 of the 39 runbooks test real behaviour; capacity, load baselines and
+- 30 of the 40 runbooks test real behaviour; capacity, load baselines and
   tuning give only relative numbers (before/after on the same laptop, short
   runs repeated three times, never a capacity figure); six need workarounds
   (disk full, storage expansion, reformat, drain, DR, scale out); clock skew

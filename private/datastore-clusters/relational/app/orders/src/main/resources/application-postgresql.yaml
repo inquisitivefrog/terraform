@@ -1,0 +1,10 @@
+# PostgreSQL (CloudNativePG): TLS verified against the cluster's CA and the
+# server's host name (sslmode=verify-full). Every session gets a statement
+# timeout and an idle-in-transaction timeout (runbook 33).
+orders:
+  writer:
+    jdbc-url: jdbc:postgresql://${ORDERS_WRITER_HOST}/${ORDERS_DATABASE}?sslmode=verify-full&sslrootcert=${ORDERS_CA_FILE}&connectTimeout=3&socketTimeout=15&reWriteBatchedInserts=true&ApplicationName=orders
+    connection-init-sql: SET statement_timeout = '5s'; SET idle_in_transaction_session_timeout = '10s'
+  reader:
+    jdbc-url: jdbc:postgresql://${ORDERS_READER_HOST}/${ORDERS_DATABASE}?sslmode=verify-full&sslrootcert=${ORDERS_CA_FILE}&connectTimeout=3&socketTimeout=15&ApplicationName=orders
+    connection-init-sql: SET statement_timeout = '5s'; SET idle_in_transaction_session_timeout = '10s'

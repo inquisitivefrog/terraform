@@ -32,14 +32,18 @@ match() {
   if [[ -n "$out" && "$out" =~ $re ]]; then pass "$label" "${out//$'\n'/, }"; else fail "$label" "expected /$re/, got '${out:-nothing}'"; fi
 }
 
-# refused <label> <command...>: PASS if the command fails (e.g. a connection that must be rejected)
+# refused <label> <regex> <command...>: PASS only if the command fails with an
+# error matching <regex>, the server's own refusal. Any other failure (DNS not
+# up yet, pod restarting) proves nothing and FAILs.
 refused() {
-  local label="$1" out
-  shift
+  local label="$1" re="$2" out
+  shift 2
   if out="$("$@" 2>&1)"; then
     fail "$label" "accepted ('${out//$'\n'/ }')"
+  elif [[ "$out" =~ $re ]]; then
+    pass "$label" "refused ($(echo "$out" | grep -m1 -E "$re" | cut -c1-90))"
   else
-    pass "$label" "refused ($(echo "$out" | grep -m1 -iE 'reject|insecure|denied|prohibited|error' | cut -c1-90))"
+    fail "$label" "failed for another reason: $(echo "$out" | head -1 | cut -c1-90)"
   fi
 }
 

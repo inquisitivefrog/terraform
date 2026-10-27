@@ -38,7 +38,11 @@ quorum 4 of 6).
 | `modules/mysql/cluster/` | One `PerconaXtraDBCluster`: zone anti-affinity, HAProxy, TLS for clients and replication, `require_secure_transport`, PDBs, app database and user; apply waits for ready. `monitoring.tf`: `mysqld_exporter` sidecar per node, PodMonitor, and the MySQL / Galera dashboard (`dashboards/mysql-galera.json`) |
 | `environments/dev/operators/` | Both operators |
 | `environments/dev/clusters/` | Namespace `relational`, `pg` and `mysql` (versions in `variables.tf`) |
-| `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext |
+| `modules/orders-app/` | The example app for one engine: Deployment (2 pods across zones), Service, ServiceMonitor |
+| `environments/dev/app/` | The orders app for both engines, its k6 script and the Orders load dashboard (source, tests and the load: [app/README.md](app/README.md)) |
+| `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext; the app once deployed |
+| `scripts/build_app.sh [--test]` | Build the orders image and load it into the kind nodes |
+| `scripts/load_test.sh pg\|mysql seed\|run` | Run the k6 load as a Job; results in Grafana |
 | `scripts/failover_test.sh pg\|mysql [pod\|zone]` | Takes out the writer (its pod, or its whole zone with `docker stop`) under a write probe; reports the outage and, for a zone, the time to heal |
 
 ## Build and tear down
@@ -57,7 +61,9 @@ terraform init && terraform plan -out plan-clusters && terraform apply plan-clus
 ../../../scripts/failover_test.sh mysql zone    # stop the writer's whole zone; measure, then heal
 ```
 
-Tear down clusters, then operators (each `plan -destroy -out plan-destroy-<root>`,
+Then the example app and its load: [app/README.md](app/README.md).
+
+Tear down the app, then clusters, then operators (each `plan -destroy -out plan-destroy-<root>`,
 then apply that plan). Memory while up: about 5 GB of the Docker Desktop VM.
 
 ## Metrics and dashboards

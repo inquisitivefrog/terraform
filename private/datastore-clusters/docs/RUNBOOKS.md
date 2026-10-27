@@ -170,7 +170,7 @@ there is no real hardware to fail. Results are read with that in mind.
 
 | Testability | Runbooks |
 |---|---|
-| Real behaviour | 1, 2, 6, 7, 8, 9, 11-15, 17, 22-29, 31-34, 36-39 |
+| Real behaviour | 1, 2, 6, 7, 8, 9, 11-15, 17, 22-29, 31-34, 36-40 |
 | Behaviour real, numbers only relative (before/after on the same laptop, short runs repeated 3x; never a capacity figure) | 3, 5, 16, and the noisy-neighbour drill in 2 |
 | With a workaround | 30 disk full (kind volumes don't enforce size: a small fixed-size filesystem mounted into a node); 19 storage expansion (by replacing members, runbook 22); 20 reformat (inside a disk-image file); 21 drain (a Kubernetes version upgrade means recreating the cluster); 10 DR (a second, one-node kind cluster); 18 scale out (memory-bound) |
 | Simulated | 35 clock skew (containers share the VM clock: per-process fake time only); 4 disk health (no SMART data: the alert pipeline is tested with synthetic metrics); I/O caps with cgroup `io.max` (if the VM's disk exposes the controller) |
@@ -185,7 +185,8 @@ cluster layout).
 
 ## The runbooks
 
-39 runbooks in five groups. **Bold** ones are the seven requested first; they
+40 runbooks in five groups (40 was added after the others, so it is numbered
+last and listed next to 32, its server-side counterpart). **Bold** ones are the seven requested first; they
 are built in this order: 1, 7, 13, 16, 22, 23, then 14 last. Each entry gives
 goal, when, the key safety points and steps, how it is verified, and engine
 notes. Implementation status lives in the README of each category.
@@ -505,6 +506,14 @@ notes. Implementation status lives in the README of each category.
   the disk fills: cap with `max_slot_wal_keep_size` and alert; Galera flow
   control pauses the whole cluster for one slow node
   (`wsrep_flow_control_paused`).
+  PostgreSQL replicas serving long reads: with `hot_standby_feedback` off,
+  vacuum on the primary removes rows a replica query still reads; replay
+  waits up to `max_standby_streaming_delay` (30 s), then cancels the query
+  (40001) or terminates the connection (an EOF to the client). Seen
+  2026-10-27 at 150 requests/s: lag up to 22 s, 1,102 snapshot conflicts
+  (`pg_stat_database_conflicts`). Fix: `hot_standby_feedback = on`, a
+  reload, not a restart. Verified the same day, same load: no new
+  conflicts, lag 0 s, 0.35% dead rows kept on the primary.
 
 #### 30. Disk full
 - **Goal:** recover a member whose volume filled, and stop it recurring.
@@ -521,11 +530,48 @@ notes. Implementation status lives in the README of each category.
   `CHECK TABLE`); stop reads from the bad member; rebuild it from a healthy
   peer (22); if every copy is bad, restore (8, 9).
 
-#### 32. Connection exhaustion
-- **Goal:** recover when clients use up all connections, and prevent it.
+#### 32. Connection exhaustion (server side)
+- **Goal:** recover when clients use up all of the database's connections
+  (`max_connections`), and prevent it. The client-side counterpart, an
+  application's own pool full while the database has slots to spare, is 40.
 - **Steps:** find the clients (by application, user, host); kill idle ones;
   add or fix pooling (PgBouncer, ProxySQL, client pool sizes); set per-user
   limits.
+
+#### 40. Connection pool saturation (client side)
+- **Goal:** an application whose connection pool is full sheds load quickly
+  and recovers, instead of queueing and retrying until every request times
+  out; and the cause (usually slow queries, not a small pool) is fixed.
+- **When:** pool `pending` above 0 for more than a few seconds; connection
+  acquire time rising; errors like "Connection is not available, request
+  timed out" (HikariCP) while the database still has connections to spare.
+- **Why it differs from 32:** the database looks healthy by its own
+  connection count; the queue is inside the application. Little's law sets
+  the pool's need: connections busy = request rate x query time. When a
+  query goes from 10 ms to 1 s, the same traffic needs 100 times the
+  connections; a bigger pool then only runs more slow queries at once on an
+  already saturated node.
+- **Steps:** confirm from the app's pool metrics (active = max, pending
+  rising) and the database's (connections well under `max_connections`,
+  queries slow); find the slow statement (2); shed load: fail fast with 503
+  on acquire timeout and **never retry a full pool** (retries are for a
+  failed connection, not a busy one); keep acquire timeouts shorter than the
+  client's own timeout; isolate workloads in separate pools (bulkheads:
+  searches can't starve writes); fix the query (17), then resize the pool
+  from Little's law with headroom.
+- **Verify:** under the same k6 load, pending returns to 0, acquire time to
+  milliseconds, and the operation's SLO holds; no retries on acquire
+  timeouts.
+- **Engine notes:** found 2026-10-27 on PXC at 3 million orders: the
+  planted unindexed search held all 10 reader connections per pod, 45
+  requests waited per pod, and the app retried each acquire timeout up to 4
+  times (2,924 retries in 5 minutes, searches up to 17 s). Fixed in the app
+  (orders 0.1.1): a pool timeout with no underlying connection failure is
+  not retried.
+  PostgreSQL at 150 requests/s showed the second half: Spring calls a
+  statement timeout (`57014`) transient, so 573 timed-out 5 s scans ran
+  again (searches up to 12.3 s). Orders 0.1.2 retries neither a full pool
+  nor a statement timeout.
 
 #### 33. Runaway query, lock pile-up or long transaction
 - **Goal:** stop a query or transaction that blocks others or exhausts
@@ -607,6 +653,7 @@ members.
 | Replica far behind | Long query on the replica; big transaction; slow disk or network | 29 |
 | A member won't rejoin | Diverged data; corrupted volume; missing WAL or gcache | 22, 31 |
 | "Too many connections" | No pooling; connection leak; retry storm after a failover | 32 |
+| "Connection is not available, request timed out" in the app; database connections normal | Slow queries holding the pool; retries feeding the queue; pool shared by fast and slow work | 40, 2 |
 | Write latency spikes every few weeks, then normal | RAID controller cache in write-through: battery learn cycle or failing battery | 4 |
 | Members restarting | OOM kill; failing liveness probe under load; crash on corruption | 34, 31 |
 | Two writers | Network partition with a promotion that wasn't fenced | 28 |
