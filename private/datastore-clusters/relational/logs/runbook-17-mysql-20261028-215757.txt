@@ -1,0 +1,282 @@
+# runbook_17_index.sh mysql (2026-10-28T21:57:57Z, kind cluster datastore-dev)
+
+== 21:57:57 0. Preconditions
+  nodes mysql-pxc-0 mysql-pxc-1 mysql-pxc-2, Galera 3 members; orders ~3107594 rows; index: t
+  orders_customer_created_idx is already there (an earlier run, or --keep): dropping it, so this run starts from the planted problem
+
+== 21:57:58 1. Before: the search plans (customer 391)
+  customer and status (mysql-pxc-1):
+    -> Limit: 20 row(s) (actual time=996..996 rows=20 loops=1)
+        -> Sort: orders.created_at DESC, orders.id DESC, limit input to 20 row(s) per chunk (actual time=996..996 rows=20 loops=1)
+            -> Filter: ((orders.`status` = 'PAID') and (orders.customer_id = 391)) (actual time=26.9..996 rows=44 loops=1)
+                -> Table scan on orders (actual time=0.667..881 rows=3.01e+6 loops=1)
+    
+  customer, last 30 days (mysql-pxc-1):
+    -> Limit: 20 row(s) (actual time=590..590 rows=20 loops=1)
+        -> Sort: orders.created_at DESC, orders.id DESC, limit input to 20 row(s) per chunk (actual time=590..590 rows=20 loops=1)
+            -> Filter: ((orders.customer_id = 391) and (orders.created_at >= <cache>((now(6) - interval 30 day)))) (actual time=33..590 rows=22 loops=1)
+                -> Table scan on orders (actual time=0.0676..516 rows=3.01e+6 loops=1)
+    
+
+== 21:57:59 2. Load during the change: 20 requests/s for 15m
+  k6 run mysql-run-20261028-215800; 60 s to settle
+
+== 21:59:01 3. Add orders_customer_created_idx (customer_id, created_at, id)
+  Job pt-osc-orders-20261028-215901: pt-online-schema-change --dry-run
+    Operation, tries, wait:
+      analyze_table, 10, 1
+      copy_rows, 10, 0.25
+      create_triggers, 30, 2
+      drop_triggers, 30, 2
+      swap_tables, 30, 2
+      update_foreign_keys, 10, 1
+    Starting a dry run.  `appdb`.`orders` will not be altered.  Specify --execute instead of --dry-run to alter the table.
+    Creating new table...
+    Created new table appdb._orders_new OK.
+    Altering new table...
+    Altered `appdb`.`_orders_new` OK.
+    Not creating triggers because this is a dry run.
+    Not copying rows because this is a dry run.
+    Not swapping tables because this is a dry run.
+    Not dropping old table because this is a dry run.
+    Not dropping triggers because this is a dry run.
+    2026-10-28T21:59:02 Dropping new table...
+    2026-10-28T21:59:02 Dropped new table OK.
+    Dry run complete.  `appdb`.`orders` was not altered.
+  Job pt-osc-orders-20261028-215905: pt-online-schema-change --execute
+    No slaves found.  See --recursion-method if host mysql-pxc-0 has slaves.
+    Not checking slave lag because no slaves were found and --check-replica-lag was not specified.
+    Operation, tries, wait:
+      analyze_table, 10, 1
+      copy_rows, 10, 0.25
+      create_triggers, 30, 2
+      drop_triggers, 30, 2
+      swap_tables, 30, 2
+      update_foreign_keys, 10, 1
+    Altering `appdb`.`orders`...
+    Creating new table...
+    Created new table appdb._orders_new OK.
+    Altering new table...
+    Altered `appdb`.`_orders_new` OK.
+    2026-10-28T21:59:06 Creating triggers...
+    2026-10-28T21:59:06 Created triggers OK.
+    2026-10-28T21:59:06 Copying approximately 2779709 rows...
+    Copying `appdb`.`orders`:  44% 00:37 remain
+    Copying `appdb`.`orders`:  80% 00:14 remain
+    2026-10-28T22:00:40 Copied rows OK.
+    2026-10-28T22:00:40 Analyzing new table...
+    2026-10-28T22:00:40 Swapping tables...
+    2026-10-28T22:00:41 Swapped original and new tables OK.
+    2026-10-28T22:00:41 Dropping old table...
+    2026-10-28T22:00:42 Dropped old table `appdb`.`_orders_old` OK.
+    2026-10-28T22:00:42 Dropping triggers...
+    2026-10-28T22:00:42 Dropped triggers OK.
+    Successfully altered `appdb`.`orders`.
+  Done in 107 s
+
+== 22:00:48 4. Waiting for the load to finish
+  | Job k6-mysql-run-20261028-215800: run against orders-mysql at 20 req/s for 15m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261028-215800 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=19.29ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=12.52ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=3.51ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=862.68ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=14.68ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 17997   19.994601/s
+  |     checks_succeeded...: 100.00% 17997 out of 17997
+  |     checks_failed......: 0.00%   0 out of 17997
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 3568   3.964035/s
+  |     orders_deleted.................: 924    1.026561/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=36.33ms  min=530.16µs med=2.37ms max=3.24s p(90)=7.96ms   p(95)=54.56ms 
+  |       { expected_response:true }...: avg=36.33ms  min=530.16µs med=2.37ms max=3.24s p(90)=7.96ms   p(95)=54.56ms 
+  |       { op:create }................: avg=18.04ms  min=1.84ms   med=3.21ms max=1.56s p(90)=8.74ms   p(95)=19.29ms 
+  |       { op:delete }................: avg=19.91ms  min=1.29ms   med=2.41ms max=1.8s  p(90)=6.12ms   p(95)=12.52ms 
+  |       { op:read }..................: avg=3.08ms   min=530.16µs med=1.14ms max=1.46s p(90)=2.45ms   p(95)=3.51ms  
+  |       { op:search }................: avg=141.26ms min=910.66µs med=3.77ms max=3.24s p(90)=686.56ms p(95)=862.68ms
+  |       { op:update }................: avg=18.31ms  min=1.61ms   med=3.03ms max=1.7s  p(90)=7.13ms   p(95)=14.68ms 
+  |     http_req_failed................: 0.00%  0 out of 17998
+  |       { op:create }................: 0.00%  0 out of 3568
+  |       { op:delete }................: 0.00%  0 out of 924
+  |       { op:read }..................: 0.00%  0 out of 8076
+  |       { op:search }................: 0.00%  0 out of 3634
+  |       { op:update }................: 0.00%  0 out of 1795
+  |     http_reqs......................: 17998  19.995712/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 4      0.004444/s
+  |     iteration_duration.............: avg=36.49ms  min=580µs    med=2.52ms max=3.24s p(90)=8.17ms   p(95)=55.69ms 
+  |     iterations.....................: 17997  19.994601/s
+  |     vus............................: 0      min=0          max=22
+  |     vus_max........................: 24     min=20         max=24
+  | 
+  |     NETWORK
+  |     data_received..................: 22 MB  24 kB/s
+  |     data_sent......................: 3.2 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-10-28T22:13:01Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261028-215800: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  During the run: 6287 writes succeeded, 0 failed, 0 acknowledged writes lost
+  The change ran 21:59:01-22:00:48; the load ended 2026-10-28T22:13:03Z
+
+== 22:13:14 5. After: the index on every node, and the plans
+  mysql-pxc-0: orders_customer_created_idx present
+  mysql-pxc-1: orders_customer_created_idx present
+  mysql-pxc-2: orders_customer_created_idx present
+  customer and status (mysql-pxc-1):
+    -> Limit: 20 row(s) (actual time=0.653..2.05 rows=20 loops=1)
+        -> Filter: (orders.`status` = 'PAID') (actual time=0.653..2.05 rows=20 loops=1)
+            -> Index lookup on orders using orders_customer_created_idx (customer_id=391) (reverse) (actual time=0.649..2.04 rows=106 loops=1)
+    
+  customer, last 30 days (mysql-pxc-1):
+    -> Limit: 20 row(s) (actual time=0.0727..0.341 rows=20 loops=1)
+        -> Index range scan on orders using orders_customer_created_idx over (customer_id = 391 AND '2026-09-28 22:13:14.868898' <= created_at) (reverse),
+    
+
+== 22:13:14 6. Verify: 150 requests/s for 5m, every SLO
+Job k6-mysql-run-20261028-221315: run against orders-mysql at 150 req/s for 5m
+Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261028-221315 (port-forward: platform/scripts/grafana_restart.sh)
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{op:create}
+    ✓ 'p(95)<200' p(95)=3.87ms
+
+    http_req_duration{op:delete}
+    ✓ 'p(95)<200' p(95)=3.06ms
+
+    http_req_duration{op:read}
+    ✓ 'p(95)<100' p(95)=1.18ms
+
+    http_req_duration{op:search}
+    ✓ 'p(95)<300' p(95)=2.64ms
+
+    http_req_duration{op:update}
+    ✓ 'p(95)<200' p(95)=3.56ms
+
+    http_req_failed{op:create}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:delete}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:read}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:search}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:update}
+    ✓ 'rate<0.01' rate=0.00%
+
+    orders_lost
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 45001   149.993627/s
+    checks_succeeded...: 100.00% 45001 out of 45001
+    checks_failed......: 0.00%   0 out of 45001
+
+
+    CUSTOM
+    orders_created.................: 9003   30.008058/s
+    orders_deleted.................: 2351   7.83616/s
+    orders_lost....................: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=1.3ms    min=268.41µs med=1.03ms   max=37.5ms  p(90)=2.43ms   p(95)=2.95ms
+      { expected_response:true }...: avg=1.3ms    min=268.41µs med=1.03ms   max=37.5ms  p(90)=2.43ms   p(95)=2.95ms
+      { op:create }................: avg=2.28ms   min=1.08ms   med=2.01ms   max=29.03ms p(90)=3.25ms   p(95)=3.87ms
+      { op:delete }................: avg=1.71ms   min=883.7µs  med=1.49ms   max=12.53ms p(90)=2.51ms   p(95)=3.06ms
+      { op:read }..................: avg=641.95µs min=268.41µs med=547.54µs max=30.06ms p(90)=970.29µs p(95)=1.18ms
+      { op:search }................: avg=1.31ms   min=441.58µs med=1.1ms    max=15.48ms p(90)=2.13ms   p(95)=2.64ms
+      { op:update }................: avg=2.08ms   min=1.08ms   med=1.86ms   max=37.5ms  p(90)=2.95ms   p(95)=3.56ms
+    http_req_failed................: 0.00%  0 out of 45002
+      { op:create }................: 0.00%  0 out of 9003
+      { op:delete }................: 0.00%  0 out of 2351
+      { op:read }..................: 0.00%  0 out of 20155
+      { op:search }................: 0.00%  0 out of 8982
+      { op:update }................: 0.00%  0 out of 4510
+    http_reqs......................: 45002  149.99696/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.39ms   min=302.91µs med=1.12ms   max=56.36ms p(90)=2.55ms   p(95)=3.11ms
+    iterations.....................: 45001  149.993627/s
+    vus............................: 0      min=0          max=1 
+    vus_max........................: 20     min=20         max=20
+
+    NETWORK
+    data_received..................: 54 MB  179 kB/s
+    data_sent......................: 8.0 MB 27 kB/s
+
+
+
+
+Run mysql-run-20261028-221315: passed.
+  Most connections waiting per app pod in the last 6 m (runbook 40 expects 0):
+    reader: 0
+    writer: 0
+
+== 22:18:19 7. Restore the planted problem: drop orders_customer_created_idx
+  Gone from mysql-pxc-0 mysql-pxc-1 mysql-pxc-2
+  customer and status (mysql-pxc-1):
+    -> Limit: 20 row(s) (actual time=673..673 rows=20 loops=1)
+        -> Sort: orders.created_at DESC, orders.id DESC, limit input to 20 row(s) per chunk (actual time=673..673 rows=20 loops=1)
+            -> Filter: ((orders.`status` = 'PAID') and (orders.customer_id = 391)) (actual time=14.8..673 rows=44 loops=1)
+                -> Table scan on orders (actual time=0.0576..550 rows=3.02e+6 loops=1)
+    
+  customer, last 30 days (mysql-pxc-1):
+    -> Limit: 20 row(s) (actual time=644..644 rows=20 loops=1)
+        -> Sort: orders.created_at DESC, orders.id DESC, limit input to 20 row(s) per chunk (actual time=644..644 rows=20 loops=1)
+            -> Filter: ((orders.customer_id = 391) and (orders.created_at >= <cache>((now(6) - interval 30 day)))) (actual time=35.9..644 rows=31 loops=1)
+                -> Table scan on orders (actual time=0.0613..563 rows=3.02e+6 loops=1)
+    
+
+== 22:18:21 Runbook 17 (mysql): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-17-mysql-20261028-215757.txt

@@ -17,8 +17,10 @@ Desktop at 14 GB memory, 8 CPUs.
 clusters, two pods each, with k6 load and a Grafana dashboard. Both engines
 hold about 3 million orders. PXC nodes at 1536Mi; PostgreSQL
 `hot_standby_feedback` on. Checks: platform 13/13, relational 45/45, also
-after a full Docker Desktop shutdown and restart. Search fails its SLO by
-design (the planted missing index, runbook 17).
+after a full Docker Desktop shutdown and restart. Runbook 17 (the missing
+index, online) passes on both engines and puts the planted problem back
+afterwards, so search still fails its SLO by design between runs. PXC
+nodes at 2Gi with a pinned 768M buffer pool.
 
 ## 2026-10-27: PostgreSQL at 150 requests/s; orders 0.1.2 (no retries on a statement timeout)
 
@@ -30,6 +32,114 @@ design (the planted missing index, runbook 17).
   - Test `doesNotRetryAStatementTimeout` uses Spring's real PostgreSQL translator; the suite passes 13/13. Image `orders:0.1.2` is loaded into the nodes; the `app_image` default is now `orders:0.1.2`.
 - **To verify:** apply the app root, then rerun `load_test.sh pg run 150 5m`. Expect 0 search retries and a search maximum of about 8 s (3 s acquire plus 5 s statement).
 - **Still to exercise before committing:** `docker_shutdown.sh` without `--keep-docker`.
+
+## 2026-10-28: runbook 17 on PostgreSQL passed (repeatable version); restart waits for every target
+
+- **Restart 22:3x:** relational 45/45; platform 12/13 for the third restart in a row, "36 up, 1 down" for a few seconds (all 37 up moments later).
+  - Fix in `docker_restart.sh`: `scraped` also waits until no target is down (`count(up == 0)`). Passes on the live cluster; the down case is proven at the next restart.
+- **Run `runbook-17-pg-20261028-224134.txt` (committed log), 3.0 million orders, primary pg-1:**
+
+  | step | result |
+  |---|---|
+  | 0 | the index from 10-27 dropped (`DROP INDEX CONCURRENTLY`) |
+  | 1 before | Parallel Seq Scans: 140 ms (status), 68 ms (30 days) |
+  | 3 change | `CREATE INDEX CONCURRENTLY` in 2 s, first attempt |
+  | 4 during (20 req/s) | 1,647 writes, 0 failed, 0 lost; write p95 3-5 ms (no visible slowdown, unlike pt-osc) |
+  | 5 after | valid on pg-1, pg-2, pg-3; Index Scan Backward 4.1 ms and 0.06 ms |
+  | 6 verify, 150 req/s 5 m | passed; 0 connections waiting in either pool |
+  | 7 restore | gone from all three; Parallel Seq Scans again (125 ms, 95 ms) |
+
+- **Runbook 17 done on both engines, repeatably.** Only the latest log per engine is kept (user, 10-28); older and failed logs deleted.
+
+## 2026-10-28: runbook 17 on MySQL passed (repeatable version); restart notes; shutdown fix
+
+- **Restart after the battery swap (21:47):** Galera 3 Synced through crash recovery; relational 44/45, platform 12/13. The one missing scrape was an orders-mysql pod restarting until MySQL was back; fine minutes later.
+  - **PostgreSQL failed over during the cold start:** CloudNativePG at 21:51:38, "Current primary isn't healthy, initiating a failover from pg-2 to pg-1". The cluster stayed healthy, both replicas streaming. Earlier restarts did not do this: a timing race. Follow-up: a small `failoverDelay`, so a primary that is only starting keeps its role.
+- **Run `runbook-17-mysql-20261028-215757.txt` (committed log), 3.0 million orders, pxc-0 the writer:**
+
+  | step | result |
+  |---|---|
+  | 0 | the leftover index dropped in about 1 s (`ALGORITHM=INPLACE`, no LOCK clause) |
+  | 1 before | table scans of 3.01 million rows: 996 ms (status), 590 ms (30 days) |
+  | 3 change | pt-osc `--chunk-time 0.1`: dry run 1 s, copy 1 min 34 s (21:59:06-22:00:40), swap 1 s |
+  | 4 during (20 req/s) | 6,287 writes succeeded, **0 failed**, 0 lost. Writer-pool wait max 0.37 s (3.0 s with 0.5 s chunks). 9 Galera certification failures on pxc-0, absorbed by the app's retries |
+  | 5 after | index on all 3 nodes; index lookups 2.05 ms and 0.34 ms |
+  | 6 verify, 150 req/s 5 m | passed: search p95 2.64 ms, create 3.87, update 3.56, delete 3.06, read 1.18 ms; 0 errors; 0 connections waiting in either pool (runbook 40's Verify on MySQL) |
+  | 7 restore | index gone from all 3 nodes; table scans again (673 ms, 644 ms) |
+
+- **Memory:** peak 1,702 MiB on pxc-0 of 2,048 (17% headroom, less than the 25% estimated); pxc-1 1,542, pxc-2 1,555. Watch it; next lever is a smaller pinned buffer pool.
+- **`docker_shutdown.sh` fixed:** a node that will not stop is tried once more; if it still runs, the script exits 1 and leaves Docker Desktop running instead of killing it. Tested against a fake `docker` whose worker3 never stops: retried, reported, exit 1, Docker Desktop never quit.
+- **Writes slowed during the copy, none failed:** the background load's write p95 was 15-20 ms (about 3 ms without the copy), max 1.56-1.8 s. Its k6 summary said FAILED, for search only: slow until the index existed. The script now labels that block as not judged.
+- **Shutdown 22:3x:** `docker_shutdown.sh` (the fixed version) stopped all four nodes cleanly, then quit Docker Desktop.
+- **Next:** start with `docker_restart.sh`, rerun runbook 17 on pg with the repeatable version (its index is still in place from 10-27), then commit.
+
+## 2026-10-28: stopped for a laptop battery swap (work uncommitted)
+
+- **Shutdown:** `docker_shutdown.sh` at ~02:45 UTC, at the user's request. worker3 (mysql-pxc-0, the writer, and pg-3) refused to stop ("tried to kill container, but did not receive an exit event"), and the script quit Docker Desktop anyway, which killed it uncleanly.
+  - Expect PXC full-cluster crash recovery and pg-3 to catch up on restart.
+  - **Script bug to fix:** `docker_shutdown.sh` should stop, and not quit Docker Desktop, when a node does not stop.
+- **Resume:** `docker_restart.sh` (13/13 and 45/45 expected), then `runbook_17_index.sh mysql` (step 0 drops the leftover index; the drop's `LOCK=NONE` fix has not run yet), then a `pg` rerun with the repeatable version, then commit.
+
+## 2026-10-28: runbook 17 on MySQL, third try: pt-osc succeeded, script misjudged it; runbook made repeatable
+
+- **Run 02:18 (`-FAILED` log, local):** checks 45/45 first.
+  - The pt-osc copy succeeded: 3.1 million rows in 2 min 22 s (02:22:08-02:24:30), swap in 1 s, triggers and old table dropped, index on all three nodes, nothing left behind.
+  - Memory as predicted: the pools filled (free 11-16 MB). Peak 1,573 MiB on the writer pxc-0 of 2,048 (23% headroom); 1,343 and 1,513 on the others. No restarts.
+- **Script bug:** `pt_osc` waited only 60 s for the Job's verdict after following its log. The log follow had started before the pod and returned at once, so the script declared failure at ~02:23 while the copy ran.
+  - The same Ready-wait cost the 3 s dry-run 3 minutes (a finished pod never reports Ready).
+  - Fixed: wait for the container to start, follow the log, then wait for the verdict with no cap. `activeDeadlineSeconds` 3600 on the Job bounds it.
+- **1 write failed during the copy** (02:23:16): a create got a 503 after a 3.0 s writer-pool wait on one app pod; 1 of 4,779 writes in the run, no lost writes.
+  - pt-osc grows chunks until each takes 0.5 s and reads them `LOCK IN SHARE MODE`. App updates to rows in the chunk being copied wait, and Galera recorded 5 certification failures and 6 brute-force aborts. Writer connections held by those waits filled a 10-connection pool for a moment.
+  - Within k6's 1% SLO, but the runbook asks for 0. Change: `--chunk-time 0.1`, so about a fifth of the rows are locked at a time.
+- **Repeatable runbook (user's request):** a lab runbook should leave the cluster as it found it.
+  - Step 0 now drops an index left by an earlier run, so every run starts from the planted problem. Step 7 drops the index again after the verify and confirms the plans scan again; it runs even when the verify fails. `--keep` leaves the fix.
+  - Drops: PostgreSQL `DROP INDEX CONCURRENTLY`; MySQL an in-place `DROP INDEX` (metadata only; Galera TOI, 5 s lock wait, retried). PXC refuses `LOCK=NONE` for it (error 1845, "Try LOCK=SHARED"; the first try of the drop failed on it), so no LOCK clause.
+  - The PostgreSQL index from the 23:20 run is still in place; the next pg run drops it first.
+
+## 2026-10-28: runbook 17 on MySQL found the PXC memory trap; nodes at 2Gi, buffer pool pinned
+
+- **First MySQL try (23:32):** failed safely in the pt-osc `--dry-run`. The script's `COLUMNS` variable is bash's terminal width, reset after each command when run from a terminal: the ALTER read `ADD INDEX ... (102)`. Renamed `INDEX_COLUMNS`. The PostgreSQL run had no terminal, so it was unaffected.
+  - The dry-run still proved the setup: root through the Secret-built defaults file, TLS through HAProxy, pt-osc's PXC checks, scratch table cleaned up.
+- **Second try (23:35):** pt-osc copied 66% of 3.1 million rows (chunks grown to ~23,500 rows), then lost its connection at 23:38:32: **the writer mysql-pxc-0 was OOMKilled at 23:38:20**.
+  - pt-osc removed its triggers and copy; `orders` was not altered. HAProxy moved the writer, and pxc-0 rejoined.
+  - The k6 load at 20 requests/s saw 22 of 9,159 requests fail (17 creates, 2 updates, 3 reads): a real unplanned failover. No acknowledged write was lost.
+- **Cause: the buffer pool fills only when used.** The operator sets `innodb_buffer_pool_size` to half the limit (768M of 1536Mi).
+  - Before the copy each pool was about half used (~360 MB free); the copy filled it on every node within a minute (free 9 MB). Memory on pxc-0 went 1,153 to 1,520 MiB.
+  - mysqld needs the pool plus about 760 MB (total minus pool, the same at both times). So 1536Mi had no headroom once the pool filled; the spare ~380 MiB seen until then was the empty half of the pool.
+  - Galera queues were small (receive queue at most 32, certification index ~150k keys): not the cause.
+  - The earlier seed peak (1,131 MiB) never filled the pool. Any whole-table job (index build, backup, report) would have done this.
+- **Fix (user's choice of three), applied 01:27-01:29 UTC:** memory 2Gi and `innodb_buffer_pool_size=768M`, pinned (the module's new `innodb_buffer_pool_size` variable, rendered into the mysqld config). Expected peak ~1.53 GB of 2 GB (25% headroom).
+  - Rolling restart: pxc-2, pxc-1, then the writer pxc-0. All three Synced with a 768 MB pool.
+  - Mid-rollout, checks showed 41/45 (cluster initializing; `mysql_up` counted twice while the restarted node's old-IP series expired).
+
+## 2026-10-27: runbook 17 on PostgreSQL passed (the missing index, online); runbook logs
+
+- **Runbook logs:** `runbook_log` in `scripts/private_env.sh` copies a script's output to `<category>/logs/<name>-<UTC time>.txt`.
+  - A successful run keeps its log, to commit. A failed run's log becomes `-FAILED.txt`, which git ignores.
+  - A load test called from a runbook writes into the runbook's log. Two runs in the same second get separate files.
+  - All of this was tested with a scratch script.
+- **`relational/scripts/runbook_17_index.sh pg|mysql`:**
+  1. Before plans.
+  2. k6 at 20 requests/s.
+  3. Adds `orders_customer_created_idx (customer_id, created_at, id)`: `CREATE INDEX CONCURRENTLY` with `lock_timeout` 5 s, and an INVALID leftover is dropped and the build retried. PXC uses pt-online-schema-change 3.7.1 as a Job, pausing on flow control.
+  4. Write failures and lost writes from k6 in Prometheus; the change must end before the load does.
+  5. The index on every node, and the plans after.
+  6. 150 requests/s for 5 m, every SLO.
+  - One index for both search shapes: each filters one customer and wants the newest 20.
+- **PostgreSQL run** (`relational/logs/runbook-17-pg-20261027-232010.txt`), 3.0 million orders. Claude started it while meaning to test only the script's Docker-down path; Docker was already back up.
+
+  | | before | after |
+  |---|---|---|
+  | Search plan (pg-1) | Parallel Seq Scan: 151 ms (status), 63 ms (30 days) | Index Scan Backward: 0.48 ms, 0.11 ms |
+  | Index build | | 2 s, first attempt |
+  | Writes during the change | | 1,720 succeeded, 0 failed, 0 lost |
+  | 150 requests/s, 5 m | FAILED: search p95 4.43 s, 26.9% errors | passed: search p95 2.03 ms, 0 errors |
+  | create / read / update p95 | 60 / 30 / 58 ms | 2.2 / 0.67 / 1.72 ms |
+  | Max waiting, reader / writer pool | 52 / 0 | 0 / 0 |
+
+  - That is also runbook 40's full Verify. Writes got faster too: the scans had been taking the CPU.
+- **Next:** `runbook_17_index.sh mysql` (pt-online-schema-change, about 20 minutes).
+- **Not changed:** Flyway still creates the schema without the index, so a new cluster keeps the planted problem for runbooks 2 and 17.
 
 ## 2026-10-27: full shutdown and restart; orders-mysql truststore crash loop
 

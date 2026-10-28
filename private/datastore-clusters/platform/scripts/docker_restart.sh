@@ -103,11 +103,23 @@ fresh_count() {
   echo "${n:-0}"
 }
 
-# Prometheus has scraped every database exporter since the restart, and each
-# MySQL exporter has logged in to its node (up is 1 even when it can't).
+# Prometheus has scraped every database exporter since the restart, each
+# MySQL exporter has logged in to its node (up is 1 even when it can't), and
+# no target anywhere is down: the app pods restart until their database is
+# back, and the platform check fails on any down target (three restarts in a
+# row showed "36 up, 1 down" for a few seconds, 2026-10-28).
 scraped() {
   [[ "$(fresh_count 'up{namespace="relational"}')" -ge 6 ]] && # 3 PostgreSQL + 3 MySQL
-    [[ "$(fresh_count 'mysql_up{namespace="relational"}')" -ge 3 ]]
+    [[ "$(fresh_count 'mysql_up{namespace="relational"}')" -ge 3 ]] &&
+    [[ "$(down_count)" -eq 0 ]]
+}
+
+# Targets whose last scrape failed (empty result: none).
+down_count() {
+  local n
+  n="$(k get --raw "/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy/api/v1/query?query=$(printf %s 'count(up == 0)' | jq -sRr @uri)" |
+    grep -oE '"[0-9]+"\]' | tr -dc '0-9')"
+  echo "${n:-0}"
 }
 
 if ! docker info >/dev/null 2>&1; then

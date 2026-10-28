@@ -38,13 +38,14 @@ resource "kubernetes_manifest" "cluster" {
       tls            = { enabled = true }
 
       pxc = {
-        size          = var.size
-        image         = var.pxc_image
-        autoRecovery  = true
-        configuration = <<-CNF
-          [mysqld]
-          require_secure_transport=ON
-        CNF
+        size         = var.size
+        image        = var.pxc_image
+        autoRecovery = true
+        configuration = format("%s\n", join("\n", compact([
+          "[mysqld]",
+          "require_secure_transport=ON",
+          var.innodb_buffer_pool_size == null ? "" : "innodb_buffer_pool_size=${var.innodb_buffer_pool_size}",
+        ])))
         resources = {
           requests = { cpu = var.cpu_request, memory = var.memory }
           limits   = { memory = var.memory }

@@ -32,7 +32,23 @@ if [[ -n "$(running control-plane)" ]]; then
   echo "Stopping $CLUSTER-control-plane"
   docker stop -t 120 "$CLUSTER-control-plane" >/dev/null
 fi
+# A node Docker could not stop is tried once more. If it still runs, stop
+# here: quitting Docker Desktop would kill it without a clean shutdown
+# (2026-10-28: "did not receive an exit event" on worker3, then the quit
+# killed the MySQL writer).
+LEFT="$(running '')"
+if [[ -n "$LEFT" ]]; then
+  echo "Still running, trying again: $(echo "$LEFT" | xargs)"
+  # shellcheck disable=SC2086 # one name per word
+  docker stop -t 120 $LEFT >/dev/null
+fi
 docker ps -a --filter "name=^$CLUSTER-" --format '  {{.Names}}: {{.Status}}'
+LEFT="$(running '')"
+if [[ -n "$LEFT" ]]; then
+  echo "Could not stop $(echo "$LEFT" | xargs); Docker Desktop left running so nothing is killed." >&2
+  echo "Try 'docker stop -t 120 <name>' or restart Docker Desktop from its menu, then rerun this." >&2
+  exit 1
+fi
 
 if [[ "${1:-}" == "--keep-docker" ]]; then
   exit 0

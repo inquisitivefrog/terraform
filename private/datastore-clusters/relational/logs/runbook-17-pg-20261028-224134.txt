@@ -1,0 +1,218 @@
+# runbook_17_index.sh pg (2026-10-28T22:41:34Z, kind cluster datastore-dev)
+
+== 22:41:34 0. Preconditions
+  primary pg-1, replicas pg-2 pg-3 streaming; orders ~3025484 rows; index: t
+  orders_customer_created_idx is already there (an earlier run, or --keep): dropping it, so this run starts from the planted problem
+
+== 22:41:34 1. Before: the search plans (customer 282)
+  customer and status (pg-2):
+                  ->  Parallel Seq Scan on orders (actual time=5.932..133.731 rows=17 loops=3)
+    Execution Time: 140.332 ms
+  customer, last 30 days (pg-2):
+                  ->  Parallel Seq Scan on orders (actual time=10.732..65.629 rows=13 loops=3)
+    Execution Time: 68.005 ms
+
+== 22:41:35 2. Load during the change: 20 requests/s for 4m
+  k6 run pg-run-20261028-224135; 60 s to settle
+
+== 22:42:36 3. Add orders_customer_created_idx (customer_id, created_at, id)
+  Attempt 1: CREATE INDEX CONCURRENTLY orders_customer_created_idx ON orders (customer_id, created_at, id)
+  Done in 2 s
+
+== 22:42:38 4. Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: searches are
+  slow until the index exists. This step judges only failed and lost writes.
+  | Job k6-pg-run-20261028-224135: run against orders-pg at 20 req/s for 4m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261028-224135 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=4.95ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=3.15ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=50.44ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=4.08ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 4801    20.001379/s
+  |     checks_succeeded...: 100.00% 4801 out of 4801
+  |     checks_failed......: 0.00%   0 out of 4801
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 920    3.832799/s
+  |     orders_deleted.................: 250    1.041521/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=4.57ms  min=524.12µs med=1.85ms max=152.76ms p(90)=4.03ms  p(95)=42.79ms
+  |       { expected_response:true }...: avg=4.57ms  min=524.12µs med=1.85ms max=152.76ms p(90)=4.03ms  p(95)=42.79ms
+  |       { op:create }................: avg=3.56ms  min=1.87ms   med=3.05ms max=79.31ms  p(90)=4.27ms  p(95)=4.95ms 
+  |       { op:delete }................: avg=2.29ms  min=1.08ms   med=1.87ms max=52.74ms  p(90)=2.6ms   p(95)=3.15ms 
+  |       { op:read }..................: avg=1.27ms  min=524.12µs med=1.16ms max=6.72ms   p(90)=1.76ms  p(95)=2ms    
+  |       { op:search }................: avg=14.75ms min=986.95µs med=2.84ms max=152.76ms p(90)=49.04ms p(95)=50.44ms
+  |       { op:update }................: avg=2.93ms  min=1.4ms    med=2.39ms max=73.55ms  p(90)=3.34ms  p(95)=4.08ms 
+  |     http_req_failed................: 0.00%  0 out of 4802
+  |       { op:create }................: 0.00%  0 out of 920
+  |       { op:delete }................: 0.00%  0 out of 250
+  |       { op:read }..................: 0.00%  0 out of 2212
+  |       { op:search }................: 0.00%  0 out of 942
+  |       { op:update }................: 0.00%  0 out of 477
+  |     http_reqs......................: 4802   20.005545/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=4.71ms  min=596.75µs med=1.99ms max=153.11ms p(90)=4.2ms   p(95)=42.9ms 
+  |     iterations.....................: 4801   20.001379/s
+  |     vus............................: 0      min=0         max=1 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 5.7 MB 24 kB/s
+  |     data_sent......................: 831 kB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261028-224135: passed.
+  During the run: 1647 writes succeeded, 0 failed, 0 acknowledged writes lost
+  The change ran 22:42:36-22:42:38; the load ended 2026-10-28T22:45:38Z
+
+== 22:45:49 5. After: the index on every node, and the plans
+  pg-1: orders_customer_created_idx valid
+  pg-2: orders_customer_created_idx valid
+  pg-3: orders_customer_created_idx valid
+  customer and status (pg-2):
+      ->  Index Scan Backward using orders_customer_created_idx on orders (actual time=0.182..4.043 rows=20 loops=1)
+    Execution Time: 4.086 ms
+  customer, last 30 days (pg-2):
+      ->  Index Scan Backward using orders_customer_created_idx on orders (actual time=0.022..0.048 rows=20 loops=1)
+    Execution Time: 0.064 ms
+
+== 22:45:50 6. Verify: 150 requests/s for 5m, every SLO
+Job k6-pg-run-20261028-224550: run against orders-pg at 150 req/s for 5m
+Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261028-224550 (port-forward: platform/scripts/grafana_restart.sh)
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{op:create}
+    ✓ 'p(95)<200' p(95)=2.77ms
+
+    http_req_duration{op:delete}
+    ✓ 'p(95)<200' p(95)=1.77ms
+
+    http_req_duration{op:read}
+    ✓ 'p(95)<100' p(95)=904.44µs
+
+    http_req_duration{op:search}
+    ✓ 'p(95)<300' p(95)=2.51ms
+
+    http_req_duration{op:update}
+    ✓ 'p(95)<200' p(95)=2.21ms
+
+    http_req_failed{op:create}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:delete}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:read}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:search}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:update}
+    ✓ 'rate<0.01' rate=0.00%
+
+    orders_lost
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 45001   149.996507/s
+    checks_succeeded...: 100.00% 45001 out of 45001
+    checks_failed......: 0.00%   0 out of 45001
+
+
+    CUSTOM
+    orders_created.................: 9098   30.325287/s
+    orders_deleted.................: 2282   7.60632/s
+    orders_lost....................: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=971.16µs min=162.04µs med=766.02µs max=92.16ms p(90)=1.81ms   p(95)=2.2ms   
+      { expected_response:true }...: avg=971.16µs min=162.04µs med=766.02µs max=92.16ms p(90)=1.81ms   p(95)=2.2ms   
+      { op:create }................: avg=1.61ms   min=619.5µs  med=1.46ms   max=40.99ms p(90)=2.31ms   p(95)=2.77ms  
+      { op:delete }................: avg=1.01ms   min=489.75µs med=900.52µs max=39.24ms p(90)=1.44ms   p(95)=1.77ms  
+      { op:read }..................: avg=475.64µs min=162.04µs med=393.95µs max=68.02ms p(90)=735.31µs p(95)=904.44µs
+      { op:search }................: avg=1.24ms   min=312.95µs med=1ms      max=58.71ms p(90)=2.13ms   p(95)=2.51ms  
+      { op:update }................: avg=1.3ms    min=548.41µs med=1.12ms   max=92.16ms p(90)=1.83ms   p(95)=2.21ms  
+    http_req_failed................: 0.00%  0 out of 45002
+      { op:create }................: 0.00%  0 out of 9098
+      { op:delete }................: 0.00%  0 out of 2282
+      { op:read }..................: 0.00%  0 out of 20046
+      { op:search }................: 0.00%  0 out of 9061
+      { op:update }................: 0.00%  0 out of 4514
+    http_reqs......................: 45002  149.99984/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.04ms   min=193.7µs  med=841.41µs max=92.68ms p(90)=1.91ms   p(95)=2.31ms  
+    iterations.....................: 45001  149.996507/s
+    vus............................: 0      min=0          max=1 
+    vus_max........................: 20     min=20         max=20
+
+    NETWORK
+    data_received..................: 54 MB  181 kB/s
+    data_sent......................: 7.9 MB 26 kB/s
+
+
+
+
+Run pg-run-20261028-224550: passed.
+  Most connections waiting per app pod in the last 6 m (runbook 40 expects 0):
+    reader: 0
+    writer: 0
+
+== 22:50:54 7. Restore the planted problem: drop orders_customer_created_idx
+  Gone from pg-1 pg-2 pg-3
+  customer and status (pg-2):
+                  ->  Parallel Seq Scan on orders (actual time=7.605..122.480 rows=17 loops=3)
+    Execution Time: 125.243 ms
+  customer, last 30 days (pg-2):
+                  ->  Parallel Seq Scan on orders (actual time=14.238..90.888 rows=14 loops=3)
+    Execution Time: 94.768 ms
+
+== 22:50:55 Runbook 17 (pg): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-17-pg-20261028-224134.txt

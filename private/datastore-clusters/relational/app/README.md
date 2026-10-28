@@ -104,4 +104,7 @@ non-zero if any operation missed its SLO or a write was lost.
 | Results | Pushed to Prometheus every 5 s (labels `testid` = the run id, `engine`, `op`) |
 
 Expect the search SLO to fail once the data is seeded: that is the planted
-problem for runbooks 2 and 17.
+problem for runbooks 2 and 17. `scripts/runbook_17_index.sh` fixes it on a
+running cluster and then puts the problem back (`--keep` to leave the fix);
+Flyway's migrations keep the planted problem too, so a new cluster starts
+without the index.

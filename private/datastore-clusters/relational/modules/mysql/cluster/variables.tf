@@ -56,9 +56,15 @@ variable "cpu_request" {
 }
 
 variable "memory" {
-  description = "Memory request and limit per node; the operator sizes the InnoDB buffer pool from it"
+  description = "Memory request and limit per node; unless innodb_buffer_pool_size is set, the operator sizes the buffer pool from it (about half)"
   type        = string
   default     = "768Mi"
+}
+
+variable "innodb_buffer_pool_size" {
+  description = "InnoDB buffer pool size (e.g. \"768M\"); null lets the operator choose. Leave memory for the rest of mysqld: about 760 MB measured with 3 nodes and the orders app"
+  type        = string
+  default     = null
 }
 
 variable "exporter_image" {

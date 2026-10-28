@@ -43,6 +43,8 @@ quorum 4 of 6).
 | `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext; the app once deployed |
 | `scripts/build_app.sh [--test]` | Build the orders image and load it into the kind nodes |
 | `scripts/load_test.sh pg\|mysql seed\|run` | Run the k6 load as a Job; results in Grafana |
+| `scripts/runbook_17_index.sh [--keep] pg\|mysql [rate] [duration]` | Runbook 17, repeatable: adds the missing search index online under k6 load (PostgreSQL `CREATE INDEX CONCURRENTLY`; PXC pt-online-schema-change), proves no write failed, verifies every SLO at 150 requests/s, then drops the index again so the next run starts from the planted problem (`--keep` leaves it) |
+| `logs/` | A record of each successful runbook run (`runbook-<n>-<engine>-<time>.txt`); failed runs stay local as `-FAILED.txt` |
 | `scripts/failover_test.sh pg\|mysql [pod\|zone]` | Takes out the writer (its pod, or its whole zone with `docker stop`) under a write probe; reports the outage and, for a zone, the time to heal |
 
 ## Build and tear down

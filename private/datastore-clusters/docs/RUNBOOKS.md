@@ -389,6 +389,21 @@ notes. Implementation status lives in the README of each category.
   `lock_timeout`; MySQL 8 `ALGORITHM=INSTANT` for many column adds, else
   gh-ost or pt-online-schema-change; Galera DDL replicates in total order and
   blocks the cluster: use online tools or rolling schema upgrade (RSU).
+  Relational lab: `runbook_17_index.sh` adds the planted missing index
+  under load. PostgreSQL, 2026-10-27, 3 million orders: `CREATE INDEX
+  CONCURRENTLY` in 2 s at 20 requests/s, 0 of 1,720 writes failed; searches
+  went from parallel table scans (151 ms) to backward index scans (0.5 ms),
+  and 150 requests/s, failing before, met every SLO (search p95 2 ms).
+  PXC, 2026-10-28: pt-online-schema-change (`--chunk-time 0.1`) copied 3
+  million rows in 1.6 min, 0 of 6,287 writes failed; with the default
+  0.5 s chunks one create had failed (row locks on the copied chunk held
+  writer connections). Online means no failed writes, not no slowdown:
+  during the copy write p95 rose from ~3 to 15-20 ms, max 1.8 s. Plain
+  ALTER would stall the cluster (Galera TOI).
+  150 requests/s then met every SLO (search p95 2.6 ms). The node memory
+  must allow a full buffer pool: the copy fills it on every node, and at
+  1536Mi the writer was OOM-killed (runbook 34). The lab script drops the
+  index again at the end, so the runbook can be repeated.
 
 #### 18. Scale out and in
 - **Goal:** add or remove members without disrupting clients.
@@ -571,7 +586,9 @@ notes. Implementation status lives in the README of each category.
   PostgreSQL at 150 requests/s showed the second half: Spring calls a
   statement timeout (`57014`) transient, so 573 timed-out 5 s scans ran
   again (searches up to 12.3 s). Orders 0.1.2 retries neither a full pool
-  nor a statement timeout.
+  nor a statement timeout. Full Verify passed after runbook 17 on
+  PostgreSQL (2026-10-27): at 150 requests/s, 0 connections waiting in
+  either pool and every SLO met.
 
 #### 33. Runaway query, lock pile-up or long transaction
 - **Goal:** stop a query or transaction that blocks others or exhausts

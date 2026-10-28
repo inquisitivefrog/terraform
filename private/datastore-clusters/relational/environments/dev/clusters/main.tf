@@ -40,9 +40,11 @@ module "mysql" {
   database       = "appdb"
   app_user       = "app"
 
-  # 768Mi (the module default) left 80-150 MiB above the steady-state RSS
-  # (610-690 MiB: the operator gives half to the buffer pool); a bulk seed
-  # pushed one node past it and it was OOMKilled (2026-10-27). The operator
-  # sizes the buffer pool from this, about half.
-  memory = "1536Mi"
+  # mysqld needs the buffer pool plus about 760 MB (connections,
+  # performance_schema, Galera). At 1536Mi the operator gave the pool half
+  # (768M), leaving 0 headroom once the pool filled: pt-online-schema-change
+  # filled it on every node and the writer was OOMKilled (2026-10-27; 768Mi
+  # had already failed under a bulk seed). Pinned pool, 25% headroom.
+  memory                  = "2Gi"
+  innodb_buffer_pool_size = "768M"
 }

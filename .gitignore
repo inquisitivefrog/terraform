@@ -56,3 +56,6 @@ aws/ecommerce-k8s/terraform-state/destroy-bucket
 *.pem
 *.key
 aws/ecommerce-k8s/README.creds.txt
+
+# Runbook logs: successes are committed; failed runs stay local
+*-FAILED.txt
