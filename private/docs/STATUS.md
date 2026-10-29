@@ -22,6 +22,50 @@ index, online) passes on both engines and puts the planted problem back
 afterwards, so search still fails its SLO by design between runs. PXC
 nodes at 2Gi with a pinned 768M buffer pool.
 
+## 2026-10-29: runbook 24 (writer failure) passes on both engines; PostgreSQL failoverDelay 30 s, smartShutdownTimeout 15 s; one log per runbook
+
+- **failoverDelay (to apply):** the PostgreSQL module has a new `failover_delay` variable (`spec.failoverDelay`, default 0); the clusters root sets 30.
+  - Why: on the 2026-10-28 cold start, CloudNativePG found the primary still starting and failed over at once (pg-2 to pg-1). 30 s lets a starting primary keep its role.
+  - Cost: up to 30 s more write outage when a primary really dies. `failover_test.sh pg` will measure it.
+  - Applied 2026-10-29: the plan changed only `failoverDelay` 0 -> 30 on `pg`, in place; no pod restarted. Platform check 13/13 afterwards.
+- **Logs:** `runbook_log` keeps only the latest log of each name. A pass deletes every older log of that name (passes and failures); a failure deletes older failures but keeps the last pass.
+  - Tested with a scratch script: pass, fail, fail, pass, fail, plus a similarly named log (`runbook-17-pg-big-...`) that must not be touched. Every step left the expected files.
+- **Runbook 24 (writer failure), new `runbook_24_writer.sh pg|mysql [rate] [duration]`, passes on both engines:** k6 at 20 requests/s for 5 m, kill the writer's pod via `failover_test.sh`, then judge:
+  - the probe's write outage within the 60 s RTO;
+  - 0 acknowledged writes lost (k6 `orders_lost`);
+  - 0 app writes failing from 30 s after the probe recovered until the load ends (Prometheus `@` time query, checked against the 10-28 run: 1,647 writes, as logged);
+  - the old writer back as a member (pg 2 replicas streaming; Galera 3 Synced); relational check passes.
+- **First run, PostgreSQL 19:17 (FAILED, log kept locally):** primary pg-1 deleted at 19:18:08; pg-2 promoted at 19:21:11.
+  - The probe's writes failed for 184 s, far over the 60 s RTO. The app's writes all succeeded: 0 of 2,167 failed, the slowest took 2.9 s, 0 lost.
+  - Cause: a deleted primary does a smart shutdown first. It waits up to `smartShutdownTimeout` (default 180 s) for clients to leave, refusing new connections; open ones keep working. The app's pools never leave, so it waited the full 180 s. Failover started on time at 30 s (failoverDelay), then waited for the replicas' WAL receivers to stop, which happened only at the fast shutdown.
+  - So new connections (the probe, a restarted app pod, a pool replacing a connection) failed for 3 minutes while old ones worked.
+  - Fix (applied 2026-10-29): new module variable `smart_shutdown_timeout`; the clusters root sets 15. Expect the outage to be about 30 s (delay) plus a few seconds.
+- **Second run, PostgreSQL 19:28: passed** (`runbook-24-pg-20261029-192840.txt`; the pass deleted the failed log, as designed).
+  - pg-2 deleted at 19:29:49; pg-1 promoted 33 s later. Probe outage ~33 s (RTO 60 s); the old primary rejoined as a replica at once.
+  - The app saw the outage this time: 53 of 2,216 writes failed (create p95 10 s, max 12.7 s, as requests waited for a connection); 9 reads failed too. 0 failed after 30 s past recovery; 0 lost; no app restarts.
+  - Relational check 45/45 afterwards.
+  - Trade-off: 30 s of the 33 s is failoverDelay. Setting it to 0 would cut the outage to a few seconds, at the price of the cold-start failovers seen 10-28.
+- **MySQL 20:23: passed** (`runbook-24-mysql-20261029-202354.txt`).
+  - Writer mysql-pxc-0 deleted at 20:25:07; HAProxy sent writes to mysql-pxc-2 within 2 s. Probe: 0 failed writes. App: 0 of 2,130 writes failed, 0 lost, no restarts.
+  - The app's reader pools found dead connections to pxc-0 at 20:26:07 ("No operations allowed after connection closed"); Hikari validated and replaced them, so no request failed.
+  - pxc-0 rejoined; the cluster was whole 46 s after the probe finished. Relational check 45/45.
+  - One search "took" 4 min 14 s and the k6 run lasted 9 min: the laptop idle-slept 20:27:20-20:31:34 (254 s, pmset log; battery 16%), and Prometheus has no scrapes then. After the failover, so the verdict stands. Search missed its SLO because of the planted missing index, as expected.
+
+  - Also: runbook 24 now checks RPO and RTO before "the load ended too soon" (that one hid the real failure).
+- **`failover_test.sh pg zone` 20:55 (after the edits): writes recovered, but ~87 s, over the 60 s RTO.** The node was stopped at 20:55:24.
+  - Detection took 50 s: the operator could not read the pod's status from 20:56:14, the same moment Kubernetes marked the node NotReady (its node-monitor grace period).
+  - Then the 30 s failoverDelay; pg-2 promoted at 20:56:48; healed 31 s after the node came back.
+  - So a zone loss costs detection (~50 s) plus failoverDelay; only failoverDelay is ours to tune.
+- **`failover_test.sh mysql zone` 20:59: ~43 s outage, within the RTO.** Writer pxc-0's node stopped at 20:59:30; HAProxy moved writes to pxc-2 47 s later, once its health check gave up on pxc-0. Platform check 13/13 beforehand.
+  - "Healed 5 s after the zone came back" is too quick to trust: the PXC status may still have read "ready" from before (the trap `docker_restart.sh` documents). Not re-checked.
+  - Both zone tests wrote one row more than the probe saw succeed (pg 21 vs 20, mysql 26 vs 25): a commit whose reply was lost in the failure. That is an extra row, not a lost one, and why retried writes must be idempotent.
+  - Decision: failoverDelay 30 -> 5 s, applied 21:01 (plan: only `failoverDelay` 30 -> 5, in place).
+- **`failover_test.sh pg zone` 21:02, failoverDelay 5: ~61 s outage, 1 s over the 60 s RTO.** Node stopped 21:02:35. Operator: pod status unreadable at 21:03:23 (48 s, Kubernetes noticing the lost node), failover at 21:03:29 (the 5 s delay), new primary labelled at 21:03:32; the probe's next write a few seconds later. Healed 30 s after the node came back.
+  - Detection is 48 of the 61 s, and failoverDelay 0 would save only 5 more.
+- **Runbook 24 pg 21:21, failoverDelay 5: passed** (`runbook-24-pg-20261029-212129.txt`, replacing the 19:28 log). pg-1 deleted 21:22:38; pg-2 promoted 17 s later: the old primary's 15 s smart shutdown plus a few seconds (promotion waits for it to stop streaming). App: 0 of 2,113 writes failed (its pooled connections kept writing to the stopping primary; slowest 2.9 s), 0 lost, no restarts. Relational check 45/45. (App restarts 27 -> 31 between runs came from the zone tests, which stopped the nodes its pods ran on.) A zone loss on PostgreSQL here is about 60 s; meeting the RTO with margin needs faster node detection (the platform's node-monitor grace period), not operator settings.
+  - `failover_test.sh mysql zone` straight after refused to start: PXC was still rejoining the restarted node (ready 3 a minute later); 3 scrape targets down for the same reason.
+- **`failover_test.sh`:** passes when writes recover, even when no new writer appears (a PostgreSQL primary back within `failoverDelay` keeps its role; before, that read as a failure). Its last line, `RESULT start= first_fail= last_fail= writer=`, is what runbook 24 reads.
+
 ## 2026-10-27: PostgreSQL at 150 requests/s; orders 0.1.2 (no retries on a statement timeout)
 
 - **Run:** `load_test.sh pg run 150 5m` at 3 million orders: FAILED, search only.

@@ -469,6 +469,21 @@ notes. Implementation status lives in the README of each category.
   no committed data lost, and clients follow it.
 - **Steps (test):** kill the writer's pod (crash) or stop its node (host
   loss) under k6 load (`failover_test.sh <engine> pod|zone`).
+  Relational lab: `runbook_24_writer.sh pg|mysql` does the pod case under
+  k6 load and judges RPO 0, outage within the RTO, and the app's writes
+  succeeding after recovery. PostgreSQL waits `failoverDelay` (5 s here)
+  before promoting, so a primary whose pod restarts sooner keeps its role.
+  Results 2026-10-29, 20 requests/s: PostgreSQL ~17 s write outage for new
+  connections (5 s failoverDelay, then the 15 s smart shutdown), 0 app
+  writes failed, 0 lost; with failoverDelay 30 it was ~33 s and 53 app
+  writes failed. Zone loss (`failover_test.sh pg zone`): ~61 s, of which 48
+  s is Kubernetes noticing the lost node; PXC zone ~43 s (HAProxy's health
+  check).
+  The first run took 184 s: a deleted primary does a smart shutdown,
+  refusing new connections while open ones keep working, for up to
+  `smartShutdownTimeout` (default 180 s), and failover waits for it. Pooled
+  clients never disconnect, so it waits the full time: set it low (15 s
+  here). PXC: HAProxy moved writes in 2 s; 0 failed writes, 0 lost.
 - **Expected:** detection, election and repointing of the writer endpoint
   within the RTO; RPO 0 with synchronous or quorum commit; the old writer
   returns as a replica (CloudNativePG rewinds it with `pg_rewind`; a Galera

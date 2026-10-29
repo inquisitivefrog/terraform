@@ -16,6 +16,19 @@ module "postgres" {
   database  = "appdb"
   owner     = "app"
 
+  # Seconds before failing over a primary found unhealthy. Every second is
+  # added to a real failure's write outage, after Kubernetes takes ~50 s to
+  # notice a lost node: at 30 s a zone loss took 87 s, over the 60 s RTO
+  # (2026-10-29). 5 s rides out a brief hiccup; a cold start of the whole
+  # cluster may still fail over (2026-10-28: harmless, nothing lost).
+  failover_delay = 5
+  # A deleted primary pod first waits for its clients to disconnect, refusing
+  # new connections. Pooled clients never disconnect, so it waited the whole
+  # default 180 s and failover waited with it: new connections failed for
+  # 184 s while the app's open ones kept writing (runbook 24, 2026-10-29).
+  # 15 s, then a fast shutdown cuts the remaining sessions.
+  smart_shutdown_timeout = 15
+
   parameters = {
     log_min_duration_statement = "2000" # ms; the slow-query log
     # Replicas tell the primary which row versions their queries still read,

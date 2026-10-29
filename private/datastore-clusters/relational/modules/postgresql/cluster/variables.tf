@@ -57,6 +57,18 @@ variable "synchronous_replicas" {
   default     = 1
 }
 
+variable "failover_delay" {
+  description = "Seconds the primary may be unhealthy before CloudNativePG fails over (0: at once). Every second is added to the write outage of a real primary failure"
+  type        = number
+  default     = 0
+}
+
+variable "smart_shutdown_timeout" {
+  description = "Seconds a stopping instance waits for clients to disconnect before a fast shutdown (CloudNativePG default 180). A stopping primary refuses new connections all that time, and failover waits for it"
+  type        = number
+  default     = 180
+}
+
 variable "parameters" {
   description = "postgresql.conf parameters"
   type        = map(string)

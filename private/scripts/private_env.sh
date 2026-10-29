@@ -36,13 +36,16 @@ k() { kubectl --context "$CTX" "$@"; }
 # runbook_log <logs dir> <name> "$@": copy everything the script prints into
 # <dir>/<name>-<UTC time>.txt, the record of a run. A run that exits 0 keeps
 # it (committed with the work); a failed run's log becomes -FAILED.txt,
-# which git ignores. A script called by one that already logs (a load test
+# which git ignores. Only the latest of each name is kept: a pass deletes
+# every older log of that name, a failure deletes older failures but keeps
+# the last pass. A script called by one that already logs (a load test
 # inside a runbook) writes into its caller's log instead of starting one.
 runbook_log() {
   [[ -n "${RUNBOOK_LOG:-}" ]] && return
   mkdir -p "$1"
   export RUNBOOK_LOG
-  RUNBOOK_LOG="$(cd "$1" && pwd)/$2-$(date -u +%Y%m%d-%H%M%S).txt"
+  _RUNBOOK_LOG_PREFIX="$(cd "$1" && pwd)/$2-"
+  RUNBOOK_LOG="$_RUNBOOK_LOG_PREFIX$(date -u +%Y%m%d-%H%M%S).txt"
   # Two runs in the same second must not share (or rename) one log
   [[ -e "$RUNBOOK_LOG" || -e "${RUNBOOK_LOG%.txt}-FAILED.txt" ]] && RUNBOOK_LOG="${RUNBOOK_LOG%.txt}-$$.txt"
   exec > >(tee "$RUNBOOK_LOG") 2>&1
@@ -50,10 +53,19 @@ runbook_log() {
   echo "# $(basename "$0") ${*:3} ($(date -u +%Y-%m-%dT%H:%M:%SZ), kind cluster ${CLUSTER:-?})"
 }
 _runbook_log_end() {
+  local f keep="$RUNBOOK_LOG"
+  if [[ "$1" -ne 0 ]]; then
+    keep="${RUNBOOK_LOG%.txt}-FAILED.txt"
+    mv "$RUNBOOK_LOG" "$keep"
+  fi
+  # <name>-<digits>: "runbook-17-pg" must not match "runbook-17-pg-big-..."
+  for f in "$_RUNBOOK_LOG_PREFIX"[0-9]*.txt; do
+    [[ -e "$f" && "$f" != "$keep" ]] || continue
+    [[ "$1" -eq 0 || "$f" == *-FAILED.txt ]] && rm -f "$f"
+  done
   if [[ "$1" -eq 0 ]]; then
-    echo "Log: $RUNBOOK_LOG"
+    echo "Log: $keep"
   else
-    mv "$RUNBOOK_LOG" "${RUNBOOK_LOG%.txt}-FAILED.txt"
-    echo "Log (failed run, not committed): ${RUNBOOK_LOG%.txt}-FAILED.txt"
+    echo "Log (failed run, not committed): $keep"
   fi
 }

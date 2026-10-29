@@ -7,9 +7,12 @@
 #   zone  stop the writer's whole node container: a zone losing power. The
 #         node comes back at the end and the test waits for the cluster to
 #         heal, reporting how long the rejoin took.
-# This changes the cluster (another node becomes the writer). Nothing
-# committed is lost: PostgreSQL commits wait for a replica, Galera for a
-# majority. The probe table is dropped at the end.
+# This changes the cluster (another node usually becomes the writer; a
+# PostgreSQL primary that is back within failoverDelay keeps its role).
+# Nothing committed is lost: PostgreSQL commits wait for a replica, Galera
+# for a majority. The probe table is dropped at the end.
+# The last line is for runbook_24_writer.sh: RESULT start=<epoch>
+# first_fail=<epoch|-> last_fail=<epoch|-> writer=<old>-><new|same>
 
 set -uo pipefail
 source "$(dirname "$0")/../../../scripts/private_env.sh" # use_cluster, k, CTX
@@ -136,7 +139,7 @@ else
   echo "$(date +%T) stopped node $OLD_NODE: zone $OLD_ZONE is down"
 fi
 
-NEW_POD="" NEW_AT=""
+NEW_POD="" NEW_AT="" RECOVERED=""
 for _ in $(seq 1 150); do
   sleep 2
   if [[ -z "$NEW_POD" ]]; then
@@ -146,8 +149,10 @@ for _ in $(seq 1 150); do
       echo "$(date +%T) new writer after ${NEW_AT} s: $NEW_POD ($(zone_of_pod "$NEW_POD"))"
     fi
   fi
-  # Done once the new writer is in and the last 15 writes succeeded.
-  [[ -n "$NEW_POD" ]] && [[ "$(tail -15 "${TMPDIR:-/tmp}/$PROBE.$$" | grep -c ' ok$')" -eq 15 ]] && break
+  # Done once writes have recovered: the writer changed or a write failed
+  # (the same writer back), and the last 15 writes succeeded.
+  [[ -n "$NEW_POD" ]] || grep -q ' fail$' "${TMPDIR:-/tmp}/$PROBE.$$" || continue
+  [[ "$(tail -15 "${TMPDIR:-/tmp}/$PROBE.$$" | grep -c ' ok$')" -eq 15 ]] && RECOVERED=1 && break
 done
 kill "$LOOP" 2>/dev/null
 wait "$LOOP" 2>/dev/null
@@ -161,12 +166,12 @@ rm -f "$LOG"
 
 echo
 echo "== Result for $CR ($MODE failure)"
-echo "  writer:        $OLD_POD ($OLD_ZONE) -> ${NEW_POD:-unchanged}${NEW_POD:+ ($(zone_of_pod "$NEW_POD"))}"
+echo "  writer:        $OLD_POD ($OLD_ZONE) -> ${NEW_POD:-the same, back after a restart}${NEW_POD:+ ($(zone_of_pod "$NEW_POD"))}"
 echo "  writes:        $OK succeeded, $FAILED failed"
 if [[ "$FAILED" -gt 0 ]]; then
   echo "  write outage:  from $((FIRST - START)) s to $((LAST - START)) s after the failure (~$((LAST - FIRST + 1)) s)"
 fi
-if [[ -n "$NEW_POD" ]]; then
+if [[ -n "$RECOVERED" ]]; then
   probe_exec "$CLIENT \"$([[ "$ENGINE" == "pg" ]] && echo "select count(*) from failover_probe" || echo "select count(*) from probe.failover_probe")\"" |
     sed 's/^/  rows written:  /'
 fi
@@ -185,7 +190,8 @@ if [[ "$MODE" == "zone" ]]; then
     echo "  NOT healed after 10 minutes: see kube_use.sh" >&2
   fi
 fi
-[[ -n "$NEW_POD" ]] || {
-  echo "No new writer within 5 minutes." >&2
+echo "RESULT start=$START first_fail=${FIRST:--} last_fail=${LAST:--} writer=$OLD_POD->${NEW_POD:-same}"
+[[ -n "$RECOVERED" ]] || {
+  echo "Writes did not recover within 5 minutes." >&2
   exit 1
 }

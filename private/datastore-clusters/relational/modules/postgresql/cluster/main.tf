@@ -31,6 +31,8 @@ resource "kubernetes_manifest" "cluster" {
       imageName             = var.image
       primaryUpdateStrategy = "unsupervised"
       enablePDB             = true
+      failoverDelay         = var.failover_delay
+      smartShutdownTimeout  = var.smart_shutdown_timeout
 
       bootstrap = {
         initdb = {
