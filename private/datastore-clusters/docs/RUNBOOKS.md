@@ -257,6 +257,8 @@ notes. Implementation status lives in the README of each category.
 - **When:** before and after every Change runbook; after upgrades.
 - **Steps:** run the category's k6 test at fixed rates; store results in
   Prometheus; compare p50/p95/p99 and errors per operation.
+  Relational lab: `load_test.sh pg|mysql run [rate] [duration]`, logged as
+  runbook 5.
 
 #### 6. Audit trail review
 - **Goal:** know who connected and what privileged actions they took.
@@ -463,6 +465,11 @@ notes. Implementation status lives in the README of each category.
   manually only after making sure the old primary is truly down (fencing).
   Accept and record the data that only the lost members had.
 - **Verify:** exactly one writer; clients reconnected; no split brain (28).
+  Relational lab: `runbook_23_switchover.sh pg|mysql` does the planned
+  switchover and back under k6 load. PXC has no switchover command:
+  `pxc_maint_mode=MAINTENANCE` fails the node's HAProxy health check
+  (`haproxy_check_pxc.sh` requires `DISABLED`), so writes move while the
+  node stays in the cluster.
 
 #### 24. Writer failure (unplanned election)
 - **Goal:** when the writer dies, a new writer is elected automatically with
@@ -504,12 +511,17 @@ notes. Implementation status lives in the README of each category.
   is a quorum loss (runbook 27).
 - **Measure:** read errors and p95 during the failure; time until the
   replica is back and caught up.
+  Relational lab: `runbook_25_reader.sh pg|mysql` covers the pod case (one
+  replica) under k6 load; the node and two-replica cases are not scripted.
 
 #### 26. Zone outage
 - **Goal:** survive losing one zone with no data loss.
 - **Steps (test):** `docker stop` every node in a zone; measure failover and
   the k6 view; restart; measure the rejoin and catch-up.
 - **Expected:** writes resume within the RTO; RPO 0.
+  Relational lab: `failover_test.sh pg|mysql zone` (logged as runbook 26,
+  write probe only, no k6). 2026-10-29: PostgreSQL ~61 s (48 s of it
+  Kubernetes noticing the lost node), PXC ~43 s.
 
 #### 27. Quorum loss
 - **Goal:** know what happens when a majority is lost, and recover safely.

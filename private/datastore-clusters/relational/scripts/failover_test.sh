@@ -11,6 +11,8 @@
 # PostgreSQL primary that is back within failoverDelay keeps its role).
 # Nothing committed is lost: PostgreSQL commits wait for a replica, Galera
 # for a majority. The probe table is dropped at the end.
+# zone is runbook 26: logged in relational/logs/runbook-26-<engine>-<time>.txt,
+# and it fails if the cluster has not healed 10 minutes after the zone is back.
 # The last line is for runbook_24_writer.sh: RESULT start=<epoch>
 # first_fail=<epoch|-> last_fail=<epoch|-> writer=<old>-><new|same>
 
@@ -27,6 +29,7 @@ ENV="${3:-dev}"
 NS="relational"
 PROBE="failover-probe"
 use_cluster "datastore-$ENV"
+[[ "$MODE" == zone ]] && runbook_log "$(dirname "$0")/../logs" "runbook-26-$ENGINE" "$@"
 
 zone_of_pod() { k get node "$(k -n "$NS" get pod "$1" -o jsonpath='{.spec.nodeName}')" -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}'; }
 node_of_pod() { k -n "$NS" get pod "$1" -o jsonpath='{.spec.nodeName}'; }
@@ -36,6 +39,7 @@ if [[ "$ENGINE" == "pg" ]]; then
   CR="clusters.postgresql.cnpg.io/pg"
   IMAGE="$(k -n "$NS" get "$CR" -o jsonpath='{.spec.imageName}')"
   healthy() { [[ "$(k -n "$NS" get "$CR" -o jsonpath='{.status.phase}')" == "Cluster in healthy state" ]]; }
+  MEMBERS="cnpg.io/cluster=pg"
   writer() { k -n "$NS" get "$CR" -o jsonpath='{.status.currentPrimary}'; }
   SECRET_NAME="pg-app" SECRET_KEY="password" PW_ENV="PGPASSWORD"
   # statement_timeout: a write must not hang on a dead primary
@@ -46,6 +50,7 @@ else
   CR="perconaxtradbclusters.pxc.percona.com/mysql"
   IMAGE="$(k -n "$NS" get "$CR" -o jsonpath='{.spec.pxc.image}')"
   healthy() { [[ "$(k -n "$NS" get "$CR" -o jsonpath='{.status.state}')" == "ready" ]]; }
+  MEMBERS="app.kubernetes.io/instance=mysql,app.kubernetes.io/component=pxc"
   writer() { probe_exec "$CLIENT 'select @@hostname'" 2>/dev/null; }
   SECRET_NAME="mysql-secrets" SECRET_KEY="root" PW_ENV="MYSQL_PWD"
   CLIENT='timeout 5 mysql -uroot -h mysql-haproxy --ssl-mode=REQUIRED --connect-timeout=2 -NBe'
@@ -104,7 +109,8 @@ cleanup() {
   probe_exec "$CLIENT '$([[ "$ENGINE" == "pg" ]] && echo "drop table if exists failover_probe" || echo "drop database if exists probe")'" >/dev/null 2>&1
   k -n "$NS" delete pod "$PROBE" --wait=false >/dev/null 2>&1
 }
-trap cleanup EXIT
+# Clean up first, then close the runbook log if this script opened one
+trap 'rc=$?; cleanup; [[ -n "${_RUNBOOK_LOG_PREFIX:-}" ]] && _runbook_log_end "$rc"; exit "$rc"' EXIT
 
 k -n "$NS" delete pod "$PROBE" --ignore-not-found --wait=true >/dev/null
 start_probe "$AVOID_ZONE"
@@ -180,14 +186,22 @@ if [[ "$MODE" == "zone" ]]; then
   docker start "$STOPPED_NODE" >/dev/null && STOPPED_NODE=""
   HEAL_START=$(date +%s)
   echo "$(date +%T) node $OLD_NODE restarted; waiting for the cluster to heal"
+  # The operator's status can still read healthy from before the zone went
+  # down (2026-10-29: "healed 5 s" while pxc-0 rejoined for 50 s). Every
+  # member pod must be ready too: Kubernetes marked them not ready when
+  # their node was lost, so ready now means since the node came back.
+  healed() {
+    healthy && [[ "$(k -n "$NS" get pods -l "$MEMBERS" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True)" -eq 3 ]]
+  }
   for _ in $(seq 1 120); do
     sleep 5
-    healthy && break
+    healed && break
   done
-  if healthy; then
+  if healed; then
     echo "  healed:        $(($(date +%s) - HEAL_START)) s after the zone came back"
   else
     echo "  NOT healed after 10 minutes: see kube_use.sh" >&2
+    HEAL_FAILED=1
   fi
 fi
 echo "RESULT start=$START first_fail=${FIRST:--} last_fail=${LAST:--} writer=$OLD_POD->${NEW_POD:-same}"
@@ -195,3 +209,4 @@ echo "RESULT start=$START first_fail=${FIRST:--} last_fail=${LAST:--} writer=$OL
   echo "Writes did not recover within 5 minutes." >&2
   exit 1
 }
+[[ -z "${HEAL_FAILED:-}" ]] || exit 1

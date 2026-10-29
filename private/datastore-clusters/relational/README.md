@@ -45,8 +45,11 @@ quorum 4 of 6).
 | `scripts/load_test.sh pg\|mysql seed\|run` | Run the k6 load as a Job; results in Grafana |
 | `scripts/runbook_17_index.sh [--keep] pg\|mysql [rate] [duration]` | Runbook 17, repeatable: adds the missing search index online under k6 load (PostgreSQL `CREATE INDEX CONCURRENTLY`; PXC pt-online-schema-change), proves no write failed, verifies every SLO at 150 requests/s, then drops the index again so the next run starts from the planted problem (`--keep` leaves it) |
 | `scripts/runbook_24_writer.sh pg\|mysql [rate] [duration]` | Runbook 24, repeatable: kills the writer's pod under k6 load (via `failover_test.sh`), then proves the write outage is within the 60 s RTO, no acknowledged write was lost, the app's writes all succeed once the writer is back, the old writer rejoined, and the relational check passes |
+| `scripts/runbook_23_switchover.sh pg\|mysql [rate] [duration]` | Runbook 23, repeatable: moves the writer on purpose under k6 load (PostgreSQL: CloudNativePG switchover to a replica; PXC: `pxc_maint_mode=MAINTENANCE` so HAProxy moves writes), checks writes succeed on the new writer, then moves it back; no write lost, one writer, the original |
+| `scripts/runbook_25_reader.sh pg\|mysql [rate] [duration]` | Runbook 25, repeatable: deletes a replica's pod under k6 load; no write may fail or be lost, reads must all succeed once it is back; reports how long it took to rejoin and catch up |
+| `scripts/runbook_lib.sh` | Shared by the runbook scripts: log, cluster health, the background k6 load and its results in Prometheus, the final check |
 | `logs/` | The latest run of each runbook per engine (`runbook-<n>-<engine>-<time>.txt`); a pass replaces the older logs; a failed run stays local as `-FAILED.txt` (only the newest) |
-| `scripts/failover_test.sh pg\|mysql [pod\|zone]` | Takes out the writer (its pod, or its whole zone with `docker stop`) under a write probe; reports the outage and, for a zone, the time to heal. Passes when writes recover, with a new writer or the same one back (a PostgreSQL primary back within `failoverDelay` keeps its role) |
+| `scripts/failover_test.sh pg\|mysql [pod\|zone]` | `zone` is runbook 26 (logged). Takes out the writer (its pod, or its whole zone with `docker stop`) under a write probe; reports the outage and, for a zone, the time to heal. Passes when writes recover, with a new writer or the same one back (a PostgreSQL primary back within `failoverDelay` keeps its role) |
 
 ## Build and tear down
 

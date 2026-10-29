@@ -11,6 +11,8 @@
 #         time (default 5m). Exits non-zero if any SLO threshold failed or
 #         an acknowledged write was lost.
 # Rows written by a run are tagged with its id (run_id column, testid label).
+# A run is runbook 5: logged in relational/logs/runbook-5-<engine>-<time>.txt
+# (into the caller's log when a runbook script runs it).
 
 set -uo pipefail
 source "$(dirname "$0")/../../../scripts/private_env.sh" # use_cluster, k, CTX
@@ -27,8 +29,14 @@ if [[ "$MODE" == seed ]]; then
 else
   SEED_ORDERS="" RATE="${3:-50}" DURATION="${4:-5m}" ENV="${5:-dev}"
 fi
+# A bare number reaches k6 as milliseconds ("2" is 2ms), which it rejects
+# only after the Job has started
+[[ -z "$RATE" || "$RATE" =~ ^[1-9][0-9]*$ ]] || { echo "rate must be a whole number of requests/s, not '$RATE'" >&2; exit 1; }
+[[ -z "$DURATION" || "$DURATION" =~ ^([0-9]+[hms])+$ ]] || { echo "duration needs a unit, e.g. 90s, 2m or 1h30m, not '$DURATION'" >&2; exit 1; }
+[[ -z "$SEED_ORDERS" || "$SEED_ORDERS" =~ ^[1-9][0-9]*$ ]] || { echo "orders must be a whole number, not '$SEED_ORDERS'" >&2; exit 1; }
 NS="relational"
 use_cluster "datastore-$ENV"
+[[ "$MODE" == run ]] && runbook_log "$(dirname "$0")/../logs" "runbook-5-$ENGINE" "$@"
 
 [[ "$ENGINE" == pg ]] && LABEL="postgresql" || LABEL="mysql"
 APP="orders-$ENGINE"

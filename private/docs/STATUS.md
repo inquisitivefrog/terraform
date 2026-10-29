@@ -22,6 +22,30 @@ index, online) passes on both engines and puts the planted problem back
 afterwards, so search still fails its SLO by design between runs. PXC
 nodes at 2Gi with a pinned 768M buffer pool.
 
+## 2026-10-29: runbooks 23 and 25 pass on both engines; runbooks 5 and 26 logged; zone heal time fixed
+
+- **Logs:** `load_test.sh … run` logs as runbook 5, `failover_test.sh … zone` as runbook 26 (into the caller's log when a runbook runs them). Zone mode now exits 1 if the cluster has not healed in 10 minutes (it only printed a warning). `failover_test.sh` chains its cleanup with the log's exit trap.
+- **`runbook_lib.sh`:** the shared parts: log, cluster health (`whole`, `wait_whole`), writer lookup, the background k6 load, k6 counters in Prometheus at a point in time, the write/read verdict, the final check. Runbook 24 now uses it, so it needs a rerun; runbook 17 does not use it yet.
+  - `judge_writes` also fails on reads still failing after the cutoff (new for runbook 24).
+  - Checked read-only on the live cluster: both clusters whole, writers pg-2 and mysql-pxc-0, the counter at a time matches the 21:21 log (2,113 writes).
+- **`runbook_25_reader.sh`:** deletes a replica's pod (pg: a CloudNativePG replica; mysql: a node HAProxy is not writing to) under k6 load. No write may fail or be lost; the writer must not move; reads must all succeed from 30 s after the cluster is whole again.
+- **`runbook_23_switchover.sh`:** switches the writer and back under 6 m of k6 load. Fails if a write fails 30 s after either switch, if a write is lost, or if the writer does not end where it started.
+  - pg: the status request `kubectl cnpg promote` makes (patched with `--subresource=status`; the plugin isn't installed).
+  - mysql: `pxc_maint_mode=MAINTENANCE` on the writer. HAProxy's `haproxy_check_pxc.sh` marks any node not `DISABLED` down (read in the pod). An exit trap puts the node back in service if the script stops early.
+- **Results (20 requests/s, all logged):**
+  - **25 pg 21:43: passed.** Replica pg-1 deleted; whole again after 31 s, replay lag under 1 ms. 0 of 2,111 writes failed, 0 reads failed, 0 lost, primary unchanged.
+  - **25 mysql 21:54: passed.** mysql-pxc-1 deleted; whole after 56 s. 0 of 2,101 writes failed, 0 reads failed, 0 lost, writer unchanged.
+  - **23 pg 22:01: passed.** pg-2 -> pg-1 in 4 s, back in 3 s, whole after ~15 s each. 18 of 2,538 writes and 1 read failed, 17 of them in the first switch (create p95 4.1 s, max 10.8 s); none 30 s after either switch; 0 lost; one primary, the original.
+  - **23 mysql 22:09: passed.** Maintenance moved writes pxc-0 -> pxc-2 in 2 s; back in service, HAProxy returned to pxc-0 in 8 s. 0 of 2,466 writes failed, 0 lost. The exit trap's restore ran as the normal switch back.
+  - **24 pg 22:16 and mysql 22:23 (on runbook_lib.sh): passed.** pg ~17 s probe outage, 0 app writes failed; mysql 0 s; 0 lost on both. These logs replace the earlier ones.
+  - **5 pg 22:30: FAILED, by mistake:** duration `2` with no unit reached k6 as 2 ms. Exercised the runbook 5 log's failure path. `load_test.sh` now rejects a rate, duration or order count it can't use before starting a Job (tested: `2`, `20x`, `0`, `abc` rejected; `90s`, `2m`, `1h30m` accepted).
+  - **26 mysql 22:35: writes recovered in ~50 s (RTO 60 s), but "healed 5 s after the zone came back" was false.** The node returned at 22:37:03; pxc-0's database started 22:37:11 and was ready about 22:37:52. The operator's status still read "ready 3" from before the outage (the same false 5 s as the 20:59 test). The log ends "Log: …", so the chained exit trap works.
+    - Fix: the heal wait also needs all three member pods Ready (Kubernetes set them not ready when the node was lost, so Ready now means since it came back). Tested read-only: 3 of 3 Ready on both clusters now.
+  - **5 pg 22:39: passed** (`load_test.sh pg run 20 2m`): every SLO met, 0 failed, 0 lost; the pass removed the 22:30 failed log.
+  - **26 mysql 22:50 (heal fix): ~46 s outage; healed 46 s after the zone came back**, a real number this time.
+  - **26 pg 22:52 (heal fix): ~64 s outage, over the 60 s RTO** (61 s at 21:02; detection by Kubernetes dominates, see above); healed 36 s after the zone came back.
+  - `failover_test.sh` measures but does not judge the RTO, so a zone log can be kept while over it. A runbook 26 script with k6 and an RTO verdict is still to write.
+
 ## 2026-10-29: runbook 24 (writer failure) passes on both engines; PostgreSQL failoverDelay 30 s, smartShutdownTimeout 15 s; one log per runbook
 
 - **failoverDelay (to apply):** the PostgreSQL module has a new `failover_delay` variable (`spec.failoverDelay`, default 0); the clusters root sets 30.

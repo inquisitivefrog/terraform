@@ -1,0 +1,14 @@
+# failover_test.sh mysql zone (2026-10-29T22:50:04Z, kind cluster datastore-dev)
+== perconaxtradbclusters.pxc.percona.com/mysql: writer is mysql-pxc-0 (dc1-c, node datastore-dev-worker3); probe in dc1-b
+15:50:19 stopped node datastore-dev-worker3: zone dc1-c is down
+15:51:02 new writer after 46 s: mysql-pxc-2 (dc1-a)
+
+== Result for perconaxtradbclusters.pxc.percona.com/mysql (zone failure)
+  writer:        mysql-pxc-0 (dc1-c) -> mysql-pxc-2 (dc1-a)
+  writes:        21 succeeded, 16 failed
+  write outage:  from 3 s to 48 s after the failure (~46 s)
+  rows written:  22
+15:51:21 node datastore-dev-worker3 restarted; waiting for the cluster to heal
+  healed:        46 s after the zone came back
+RESULT start=1793314216 first_fail=1793314219 last_fail=1793314264 writer=mysql-pxc-0->mysql-pxc-2
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-26-mysql-20261029-225004.txt
