@@ -11,6 +11,8 @@
 #         time (default 5m). Exits non-zero if any SLO threshold failed or
 #         an acknowledged write was lost.
 # Rows written by a run are tagged with its id (run_id column, testid label).
+# K6_AVOID_ZONE=<zone> keeps the k6 pod out of that zone (runbook 26 takes
+# a zone down; the users are not in it).
 # A run is runbook 5: logged in relational/logs/runbook-5-<engine>-<time>.txt
 # (into the caller's log when a runbook script runs it).
 
@@ -52,6 +54,15 @@ k -n "$NS" get configmap orders-k6 >/dev/null 2>&1 || {
   exit 1
 }
 
+AFFINITY=""
+[[ -n "${K6_AVOID_ZONE:-}" ]] && AFFINITY="
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - {key: topology.kubernetes.io/zone, operator: NotIn, values: [\"$K6_AVOID_ZONE\"]}"
+
 k -n "$NS" apply -f - >/dev/null <<EOF
 apiVersion: batch/v1
 kind: Job
@@ -65,7 +76,7 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: k6, app.kubernetes.io/instance: $APP}
     spec:
-      restartPolicy: Never
+      restartPolicy: Never$AFFINITY
       securityContext: {runAsNonRoot: true, runAsUser: 12345, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: k6

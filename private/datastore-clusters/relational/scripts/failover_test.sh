@@ -11,8 +11,8 @@
 # PostgreSQL primary that is back within failoverDelay keeps its role).
 # Nothing committed is lost: PostgreSQL commits wait for a replica, Galera
 # for a majority. The probe table is dropped at the end.
-# zone is runbook 26: logged in relational/logs/runbook-26-<engine>-<time>.txt,
-# and it fails if the cluster has not healed 10 minutes after the zone is back.
+# zone fails if the cluster has not healed 10 minutes after the zone is
+# back. runbook_26_zone.sh runs it under k6 load and judges the RTO.
 # The last line is for runbook_24_writer.sh: RESULT start=<epoch>
 # first_fail=<epoch|-> last_fail=<epoch|-> writer=<old>-><new|same>
 
@@ -29,7 +29,6 @@ ENV="${3:-dev}"
 NS="relational"
 PROBE="failover-probe"
 use_cluster "datastore-$ENV"
-[[ "$MODE" == zone ]] && runbook_log "$(dirname "$0")/../logs" "runbook-26-$ENGINE" "$@"
 
 zone_of_pod() { k get node "$(k -n "$NS" get pod "$1" -o jsonpath='{.spec.nodeName}')" -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}'; }
 node_of_pod() { k -n "$NS" get pod "$1" -o jsonpath='{.spec.nodeName}'; }
@@ -109,8 +108,7 @@ cleanup() {
   probe_exec "$CLIENT '$([[ "$ENGINE" == "pg" ]] && echo "drop table if exists failover_probe" || echo "drop database if exists probe")'" >/dev/null 2>&1
   k -n "$NS" delete pod "$PROBE" --wait=false >/dev/null 2>&1
 }
-# Clean up first, then close the runbook log if this script opened one
-trap 'rc=$?; cleanup; [[ -n "${_RUNBOOK_LOG_PREFIX:-}" ]] && _runbook_log_end "$rc"; exit "$rc"' EXIT
+trap cleanup EXIT
 
 k -n "$NS" delete pod "$PROBE" --ignore-not-found --wait=true >/dev/null
 start_probe "$AVOID_ZONE"

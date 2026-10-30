@@ -11,6 +11,8 @@
 #   load_start <rate> <duration>  k6 run in the background; 60 s to settle
 #   load_finish <why>             wait for it, print its output; sets END_EPOCH
 #   k6_count <metric> <labels> [epoch]   a counter of this run (at a time)
+#   k6_fail_window <labels>       "first last" epochs of the run's failed
+#                                 requests (5 s resolution); empty if none
 #   judge_writes <cutoff>         0 lost; no write failed after <cutoff>
 #   app_restarts                  restarts of the app's pods, summed
 #   verify_check                  relational check_resources.sh passes
@@ -81,6 +83,7 @@ load_start() {
   LOAD_OUT="$(mktemp)"
   "$LIB_DIR/load_test.sh" "$ENGINE" run "$1" "$2" "$ENV" >"$LOAD_OUT" 2>&1 &
   LOAD_PID=$!
+  LOAD_EPOCH="$(date +%s)"
   TESTID=""
   for _ in $(seq 1 30); do
     TESTID="$(grep -m1 -oE '^Job k6-[a-z]+-run-[0-9-]+' "$LOAD_OUT" | sed 's/^Job k6-//')"
@@ -105,6 +108,14 @@ load_finish() {
   return 0
 }
 k6_count() { prom_value "sum(max_over_time($1{testid=\"$TESTID\"$2}[2h]${3:+ @ $3}))"; }
+# Each push that raised the failure count, from the load's start to its end
+k6_fail_window() {
+  local q="sum(k6_http_reqs_total{testid=\"$TESTID\",expected_response=\"false\"$1})"
+  k get --raw "/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy/api/v1/query_range?query=$(printf %s "$q" | jq -sRr @uri)&start=$LOAD_EPOCH&end=$END_EPOCH&step=5" 2>/dev/null |
+    jq -r '(.data.result[0].values // []) as $v
+      | [range($v | length) | select(. == 0 or ($v[.][1] | tonumber) > ($v[. - 1][1] | tonumber)) | $v[.][0] | floor]
+      | select(length > 0) | "\(first) \(last)"'
+}
 WRITES=',op=~"create|update|delete"'
 READS=',op=~"read|search"'
 # judge_writes <cutoff epoch>: prints the write and read totals, then fails

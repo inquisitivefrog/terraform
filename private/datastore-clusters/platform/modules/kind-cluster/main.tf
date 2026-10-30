@@ -5,6 +5,9 @@
 # The control plane keeps its NoSchedule taint, so databases run only on the
 # zone workers. Storage is kind's local-path provisioner: a volume lives on
 # one node, like an EBS volume in one AZ.
+# node_monitor_grace_period: how long the control plane waits without hearing
+# from a node before marking it NotReady. Until then a dead zone's pods stay
+# in Service endpoints and CloudNativePG does not fail over (runbook 26).
 
 locals {
   topology = { "topology.kubernetes.io/region" = var.region }
@@ -23,6 +26,13 @@ resource "kind_cluster" "this" {
     node {
       role   = "control-plane"
       labels = local.topology
+
+      # Merged into kind's own kubeadm ClusterConfiguration (v1beta3: extraArgs
+      # is a map, so kind's enable-hostpath-provisioner stays)
+      kubeadm_config_patches = [yamlencode({
+        kind              = "ClusterConfiguration"
+        controllerManager = { extraArgs = { "node-monitor-grace-period" = var.node_monitor_grace_period } }
+      })]
     }
 
     dynamic "node" {

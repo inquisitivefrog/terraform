@@ -27,3 +27,14 @@ variable "zones" {
     error_message = "Use at least three zones: a 3-member quorum must survive losing one."
   }
 }
+
+variable "node_monitor_grace_period" {
+  description = "kube-controller-manager --node-monitor-grace-period: silence before a node is NotReady (Kubernetes default 50s). Changing it replaces the cluster."
+  type        = string
+  default     = "50s"
+
+  validation {
+    condition     = can(regex("^[0-9]+s$", var.node_monitor_grace_period))
+    error_message = "Use whole seconds, such as 20s."
+  }
+}

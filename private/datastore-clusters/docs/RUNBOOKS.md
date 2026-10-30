@@ -535,9 +535,15 @@ notes. Implementation status lives in the README of each category.
 - **Steps (test):** `docker stop` every node in a zone; measure failover and
   the k6 view; restart; measure the rejoin and catch-up.
 - **Expected:** writes resume within the RTO; RPO 0.
-  Relational lab: `failover_test.sh pg|mysql zone` (logged as runbook 26,
-  write probe only, no k6). 2026-10-29: PostgreSQL ~61 s (48 s of it
-  Kubernetes noticing the lost node), PXC ~43 s.
+  Relational lab: `runbook_26_zone.sh pg|mysql` stops the writer's zone
+  under k6 load (k6 outside the zone) through `failover_test.sh … zone`
+  and judges the RTO, RPO and recovery. Probe-only results 2026-10-29:
+  PostgreSQL ~61-64 s (48 s of it Kubernetes noticing the lost node),
+  PXC ~43-50 s. First runbook run (PXC, 2026-10-30): database ~42 s, but
+  the app ~77 s: the dead zone's app pod stays in the Service until the
+  node is NotReady (50 s by default). The lab now sets
+  node-monitor-grace-period to 20 s, and the runbook judges the app's
+  outage (k6) as well as the database's.
 
 #### 27. Quorum loss
 - **Goal:** know what happens when a majority is lost, and recover safely.

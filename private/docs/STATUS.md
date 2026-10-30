@@ -22,6 +22,22 @@ index, online) passes on both engines and puts the planted problem back
 afterwards, so search still fails its SLO by design between runs. PXC
 nodes at 2Gi with a pinned 768M buffer pool.
 
+## 2026-10-30: runbook 26 mysql failed on the app tier; node-monitor grace period 20 s (to apply: rebuilds the cluster)
+
+- **First run, mysql 03:26: FAILED** (`logs/runbook-26-mysql-20261030-032618-FAILED.txt`). Database fine: probe outage ~42 s, healed 56 s after the zone came back, 0 lost. But k6 requests failed until ~03:28:50, ~77 s: "no route to host" / "i/o timeout" to the orders-mysql Service. The app pod in the dead zone stayed in the Service until Kubernetes marked the node NotReady, after the 50 s default grace period (Kubernetes 1.35). The same 50 s is most of PostgreSQL's 61-64 s zone failover.
+- **pg 03:36 (same night, 50 s grace): FAILED, not judged** (`logs/runbook-26-pg-20261030-033620-FAILED.txt`). Probe outage ~60 s (pg-2 -> pg-1; new writer after 57 s), healed 31 s after the zone came back; k6 saw 513 of 6693 requests fail (431 creates). The script then died at line 82 ("e: command not found", syntax error): it was edited while running (bash reads a script as it goes), so there is no verdict. The current file passes `bash -n`.
+- **Fix (platform, chosen over judging only the database):** kind module `node_monitor_grace_period` (kubeadm patch on the control plane: kube-controller-manager `--node-monitor-grace-period`), dev set to 20 s. Changing it replaces the kind cluster: destroy and re-apply platform, relational clusters and app. fmt and validate pass; not applied.
+- **Stopped for the night after the teardown.** Nothing is running. Resume at step 2 (apply platform `cluster`, check the grace period with `docker exec datastore-dev-control-plane grep grace /etc/kubernetes/manifests/kube-controller-manager.yaml`), then services, operators, clusters, `build_app.sh`, app, seed both engines to 3,000,000, then runbook 26 mysql and pg. All changes uncommitted.
+- **Teardown done (2026-10-30):** app (10), clusters (8), operators (2), services (1), kind cluster (1) destroyed in that order. CNPG's CRDs went with the cluster (Helm keeps them).
+- **Runbook 26 now judges the app's outage too:** `k6_fail_window` (runbook_lib) gives the first and last failed k6 request (creates, updates, deletes, reads; 5 s resolution); both it and the probe's outage must be within the 60 s RTO. On the failed run's data it reports 03:27:38-03:28:53, ~80 s (log: 03:27:33-03:28:50).
+
+## 2026-10-30: runbook 26 (zone outage) scripted; to run
+
+- **`runbook_26_zone.sh pg|mysql`:** finds the writer's zone, starts k6 outside it, runs `failover_test.sh <engine> zone` (stop the node, probe the outage, start it, wait for every member Ready), then judges: 0 lost, no request failing from 30 s after the probe recovered, write outage within the 60 s RTO, relational check passes. The zone also holds an app pod, so the app tier loses a pod too (e.g. pg-2's node: orders-pg, mysql-pxc-2, an HAProxy).
+- **`load_test.sh`:** `K6_AVOID_ZONE=<zone>` keeps the k6 pod out of a zone (server dry run: the affinity appears only when set).
+- **`failover_test.sh zone`** no longer logs as runbook 26; the runbook does. Its committed runbook-26 logs (probe only) are replaced by the runbook's first passes.
+- **Expect PostgreSQL to fail the RTO** (61-64 s in the probe-only runs; detection by Kubernetes is 48 s of it).
+
 ## 2026-10-30: runbook 1 (alerts) passes on both engines
 
 - **Before:** no database or app alerts at all, only kube-prometheus-stack's Kubernetes rules; Alertmanager's only receiver is "null".
