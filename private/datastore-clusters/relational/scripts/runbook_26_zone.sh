@@ -21,6 +21,10 @@
 #      as below), which also waits for Kubernetes to drop the dead zone's
 #      app pod from the Service
 #   5. verify: relational check_resources.sh passes
+# The log says which case the run covered: whether an app pod and an
+# operator copy were in the lost zone. The scheduler places them, so the
+# worst case (an app pod in the lost zone: k6 waits on it until it times out)
+# takes reruns until it comes up.
 # The search SLO is not judged: it fails by design on mysql while the
 # planted missing index is in place (runbook 17).
 # Usage: private/datastore-clusters/relational/scripts/runbook_26_zone.sh pg|mysql [rate] [duration] [dev]
@@ -46,7 +50,7 @@ zone_of() { k get node "$(k -n "${2:-$NS}" get pod "$1" -o jsonpath='{.spec.node
 # --- 0. preconditions ---
 step "0. Preconditions"
 whole || die "the $ENGINE cluster is not whole (run check_resources.sh)"
-[[ -n "$(k -n "$NS" get pods -l "app.kubernetes.io/instance=orders-$ENGINE" -o name)" ]] || die "no orders-$ENGINE pods: apply the app root first"
+[[ -n "$(k -n "$NS" get pods -l "$APP_PODS" -o name)" ]] || die "no orders-$ENGINE pods: apply the app root first"
 if [[ "$ENGINE" == pg ]]; then WRITER="$(pg_primary)"; else WRITER="$(my_writer)"; fi
 [[ -n "$WRITER" ]] || die "could not tell which node is the writer"
 ZONE="$(zone_of "$WRITER")"
@@ -55,6 +59,10 @@ NODE="$(k -n "$NS" get pod "$WRITER" -o jsonpath='{.spec.nodeName}')"
 echo "  writer $WRITER in zone $ZONE (node $NODE)"
 echo "  also in $ZONE: $(k -n "$NS" get pods --field-selector "spec.nodeName=$NODE,status.phase=Running" -o name | sed 's|pod/||' | grep -vx "$WRITER" | xargs)"
 echo "  orders-$ENGINE app restarts so far: $RESTARTS0"
+APP_ZONES="$(for p in $(k -n "$NS" get pods -l "$APP_PODS" -o name); do
+  zone_of "${p#pod/}"; echo; done | sort | xargs)"
+if [[ " $APP_ZONES " == *" $ZONE "* ]]; then APP_IN_ZONE=yes; else APP_IN_ZONE=no; fi
+echo "  orders-$ENGINE app pods in zones: $APP_ZONES (one in $ZONE: $APP_IN_ZONE)"
 # The run proves an operator's takeover only if one of its copies was in $ZONE.
 for op in cnpg-system:cloudnative-pg pxc-operator:pxc-operator; do
   ops_ns="${op%%:*}"
@@ -104,6 +112,7 @@ echo "  orders-$ENGINE app restarts: $RESTARTS0 -> $(app_restarts)"
 # --- 4. the RTO ---
 step "4. Outages against the RTO"
 echo "  database ~$OUTAGE s (probe), app ~$USER_OUTAGE s (k6); RTO $RTO s"
+echo "  An app pod was in the lost zone: $APP_IN_ZONE$([[ "$APP_IN_ZONE" == yes ]] && echo " (the worst case)")"
 [[ "$OUTAGE" -le "$RTO" ]] || die "the write outage (~$OUTAGE s) exceeded the RTO ($RTO s)"
 [[ "$USER_OUTAGE" -le "$RTO" ]] || die "the app's outage (~$USER_OUTAGE s) exceeded the RTO ($RTO s)"
 

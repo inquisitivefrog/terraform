@@ -58,7 +58,8 @@ variable "replicas" {
 }
 
 variable "memory" {
-  description = "Memory request and limit per pod (the JVM heap is 60% of it)"
+  description = "Memory request and limit per pod (the JVM heap is 50% of it)"
   type        = string
-  default     = "512Mi"
+  # 384 MiB of heap, and ~170 MiB to spare at the peak seen in a failover
+  default = "768Mi"
 }

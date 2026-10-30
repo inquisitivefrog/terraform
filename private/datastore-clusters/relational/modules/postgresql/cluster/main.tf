@@ -30,9 +30,13 @@ resource "kubernetes_manifest" "cluster" {
       instances             = var.instances
       imageName             = var.image
       primaryUpdateStrategy = "unsupervised"
-      enablePDB             = true
-      failoverDelay         = var.failover_delay
-      smartShutdownTimeout  = var.smart_shutdown_timeout
+      # On a new image the replicas update first; then switch over to one of
+      # them (seconds of errors) rather than restart the primary in place
+      # (the default: no writer until it is back). Runbook 13.
+      primaryUpdateMethod  = "switchover"
+      enablePDB            = true
+      failoverDelay        = var.failover_delay
+      smartShutdownTimeout = var.smart_shutdown_timeout
 
       bootstrap = {
         initdb = {

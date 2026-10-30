@@ -360,6 +360,14 @@ notes. Implementation status lives in the README of each category.
 - **Engine notes:** CloudNativePG does replicas then switchover when the image
   changes (`primaryUpdateStrategy`); PXC's SmartUpdate restarts nodes one at a
   time, the writer last.
+  Relational lab: `runbook_13_patch.sh pg|mysql` watches a Terraform apply
+  of the new image under k6 load. CloudNativePG's `primaryUpdateMethod`
+  defaults to `restart` (the primary restarts in place, no writer
+  meanwhile); the lab sets `switchover`. 2026-10-30: PostgreSQL 16.13 ->
+  16.15 in 188 s (replicas, switchover, old primary), ~5 s of app errors
+  (3 of 17,922 requests); PXC 8.0.44 -> 8.0.46 in 347 s (writer last; writes
+  moved away and back), ~20 s of app errors (65 of 17,880); 0 acknowledged
+  writes lost on both. MySQL 8.0 cannot go back a minor.
 
 #### 14. **Major version upgrade**
 - **Goal:** move to a newer major release before the old one ends support,

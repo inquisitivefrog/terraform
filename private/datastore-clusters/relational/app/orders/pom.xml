@@ -18,7 +18,7 @@
 
   <groupId>dev.datastore</groupId>
   <artifactId>orders</artifactId>
-  <version>0.1.2</version>
+  <version>0.1.3</version>
   <name>orders</name>
 
   <properties>

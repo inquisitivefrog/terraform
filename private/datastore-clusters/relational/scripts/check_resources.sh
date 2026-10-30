@@ -72,6 +72,7 @@ else
   else
     PG_APP_PW="$(secret "$PG-app" password)"
     expect "Cluster healthy" "Cluster in healthy state" k -n "$NS" get clusters.postgresql.cnpg.io "$PG" -o jsonpath='{.status.phase}'
+    expect "Primary updated by switchover, not restarted in place" "switchover" k -n "$NS" get clusters.postgresql.cnpg.io "$PG" -o jsonpath='{.spec.primaryUpdateMethod}'
     expect "Three instances ready" "3" k -n "$NS" get clusters.postgresql.cnpg.io "$PG" -o jsonpath='{.status.readyInstances}'
     expect "Instances in three different zones" "$ZONES" zones "cnpg.io/cluster=$PG,cnpg.io/podRole=instance"
     expect "Primary is $PG_PRIMARY, alone in its role" "$PG_PRIMARY" k -n "$NS" get pods -l "cnpg.io/cluster=$PG,cnpg.io/instanceRole=primary" -o jsonpath='{.items[*].metadata.name}'
@@ -138,6 +139,9 @@ else
     app_get() { k get --raw "/api/v1/namespaces/$NS/services/$1:http/proxy$2" 2>&1; }
     for APP in orders-pg orders-mysql; do
       expect "$APP: 2 pods ready" "2" k -n "$NS" get deploy "$APP" -o jsonpath='{.status.readyReplicas}'
+      # Heap is 50% of it (Dockerfile): 512Mi left no room when requests piled up in a failover.
+      expect "$APP: memory request / limit" "768Mi 768Mi" k -n "$NS" get deploy "$APP" \
+        -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory} {.spec.template.spec.containers[0].resources.limits.memory}'
       match "$APP: pods in 2 different zones" '^(dc1-a dc1-[bc]|dc1-b dc1-c)$' zones "app.kubernetes.io/name=orders,app.kubernetes.io/instance=$APP"
       match "$APP: healthy, database included" '"status":"UP"' app_get "$APP" /actuator/health
       match "$APP: schema migrated (customers readable through the reader)" '^\[' app_get "$APP" "/customers/ids?limit=1"

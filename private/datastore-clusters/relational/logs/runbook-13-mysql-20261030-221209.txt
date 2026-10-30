@@ -1,0 +1,132 @@
+# runbook_13_patch.sh mysql (2026-10-30T22:12:09Z, kind cluster datastore-dev)
+
+== 22:12:09 0. Preconditions
+  target (variables.tf pxc_image): percona/percona-xtradb-cluster:8.0.46-38.1
+  mysql-pxc-0: percona/percona-xtradb-cluster:8.0.44-35.1, server 8.0.44-35.1
+  mysql-pxc-1: percona/percona-xtradb-cluster:8.0.44-35.1, server 8.0.44-35.1
+  mysql-pxc-2: percona/percona-xtradb-cluster:8.0.44-35.1, server 8.0.44-35.1
+  writer mysql-pxc-0; orders-mysql app restarts so far: 0
+
+== 22:12:10 Load: 20 requests/s for 15m
+  k6 run mysql-run-20261030-221210; 60 s to settle
+
+== 22:13:11 2. Apply the patch now, in a second terminal:
+    cd /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/environments/dev/clusters
+    terraform plan -out plan-clusters   # expect 1 to change: pxc_image -> percona/percona-xtradb-cluster:8.0.46-38.1
+    terraform apply plan-clusters
+  Waiting up to 10 minutes for the first member to change
+  22:14:44 the rollout started
+
+== 22:14:44 3. Rollout
+  22:16:24 mysql-pxc-2 back on the new image (+100 s)
+  22:18:26 mysql-pxc-1 back on the new image (+222 s)
+  22:18:57 writer mysql-pxc-0 -> mysql-pxc-2
+  22:20:20 mysql-pxc-0 back on the new image (+336 s)
+  22:20:20 writer mysql-pxc-2 -> mysql-pxc-0
+  Whole after 11 s
+  Rollout: 347 s from the first change to whole; writer mysql-pxc-0 -> mysql-pxc-0
+
+== 22:20:31 4. Versions, from inside each server
+  mysql-pxc-0: 8.0.46-38.1
+  mysql-pxc-1: 8.0.46-38.1
+  mysql-pxc-2: 8.0.46-38.1
+
+== 22:20:32 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design on mysql (runbook 17).
+  This step judges lost writes, the app's errors and requests failing after the rollout.
+  | Job k6-mysql-run-20261030-221210: run against orders-mysql at 20 req/s for 15m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261030-221210 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=175.59ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=10.86ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=4.47ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=1.07s
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=11.68ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✗ 'rate<0.01' rate=1.30%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.22%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.15%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.11%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 17879  19.863747/s
+  |     checks_succeeded...: 99.63% 17814 out of 17879
+  |     checks_failed......: 0.36%  65 out of 17879
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 3699   4.109626/s
+  |     orders_deleted.................: 905    1.005464/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=243.06ms min=683µs    med=3.68ms  max=12.7s  p(90)=755.78ms p(95)=901.18ms
+  |       { expected_response:true }...: avg=202.04ms min=683µs    med=3.66ms  max=12.65s p(90)=747.75ms p(95)=889.16ms
+  |       { op:create }................: avg=358.85ms min=2.27ms   med=5.17ms  max=12.7s  p(90)=10.99ms  p(95)=175.59ms
+  |       { op:delete }................: avg=36.51ms  min=1.65ms   med=3.57ms  max=12.7s  p(90)=7.01ms   p(95)=10.86ms 
+  |       { op:read }..................: avg=24.88ms  min=683µs    med=1.69ms  max=12.7s  p(90)=3.01ms   p(95)=4.47ms  
+  |       { op:search }................: avg=778.63ms min=488.03ms med=731.6ms max=4.97s  p(90)=979.86ms p(95)=1.07s   
+  |       { op:update }................: avg=23.91ms  min=2.16ms   med=4.61ms  max=12.7s  p(90)=8.32ms   p(95)=11.68ms 
+  |     http_req_failed................: 0.36%  65 out of 17880
+  |       { op:create }................: 1.30%  49 out of 3748
+  |       { op:delete }................: 0.22%  2 out of 907
+  |       { op:read }..................: 0.15%  12 out of 8000
+  |       { op:search }................: 0.00%  0 out of 3503
+  |       { op:update }................: 0.11%  2 out of 1721
+  |     http_reqs......................: 17880  19.864858/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 122    0.135543/s
+  |     iteration_duration.............: avg=243.31ms min=758.58µs med=3.89ms  max=12.71s p(90)=756.03ms p(95)=901.47ms
+  |     iterations.....................: 17879  19.863747/s
+  |     vus............................: 1      min=0           max=139
+  |     vus_max........................: 142    min=20          max=142
+  | 
+  |     NETWORK
+  |     data_received..................: 21 MB  23 kB/s
+  |     data_sent......................: 3.2 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-10-30T22:27:11Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}, http_req_failed{op:create}' have been crossed"
+  | 
+  | Run mysql-run-20261030-221210: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  The app's requests failed from 22:18:45 to 22:19:00: ~20 s
+  Writes: 6323 succeeded, 53 failed (0 after 22:21:01); 0 acknowledged writes lost
+  Reads and searches failed: 12 (0 after 22:21:01)
+  orders-mysql app restarts: 0 -> 0
+
+== 22:27:24 Verify: relational check_resources.sh
+  
+  == Summary: 50 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 22:27:28 Runbook 13 (mysql): passed, every member on 8.0.46
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-13-mysql-20261030-221209.txt

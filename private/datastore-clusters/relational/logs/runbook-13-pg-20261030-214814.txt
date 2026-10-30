@@ -1,0 +1,130 @@
+# runbook_13_patch.sh pg (2026-10-30T21:48:14Z, kind cluster datastore-dev)
+
+== 21:48:14 0. Preconditions
+  target (variables.tf postgres_image): ghcr.io/cloudnative-pg/postgresql:16.15-standard-trixie
+  pg-1: ghcr.io/cloudnative-pg/postgresql:16.13-standard-trixie, server 16.13 (Debian 16.13-1.pgdg13+1)
+  pg-2: ghcr.io/cloudnative-pg/postgresql:16.13-standard-trixie, server 16.13 (Debian 16.13-1.pgdg13+1)
+  pg-3: ghcr.io/cloudnative-pg/postgresql:16.13-standard-trixie, server 16.13 (Debian 16.13-1.pgdg13+1)
+  writer pg-1; orders-pg app restarts so far: 8
+
+== 21:48:15 Load: 20 requests/s for 15m
+  k6 run pg-run-20261030-214815; 60 s to settle
+
+== 21:49:16 2. Apply the patch now, in a second terminal:
+    cd /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/environments/dev/clusters
+    terraform plan -out plan-clusters   # expect 1 to change: postgres_image -> ghcr.io/cloudnative-pg/postgresql:16.15-standard-trixie
+    terraform apply plan-clusters
+  Waiting up to 10 minutes for the first member to change
+  21:54:53 the rollout started
+
+== 21:54:53 3. Rollout
+  21:55:44 pg-3 back on the new image (+51 s)
+  21:56:52 pg-2 back on the new image (+119 s)
+  21:56:55 writer pg-1 -> pg-2
+  21:58:00 pg-1 back on the new image (+187 s)
+  Whole after 1 s
+  Rollout: 188 s from the first change to whole; writer pg-1 -> pg-2
+
+== 21:58:01 4. Versions, from inside each server
+  pg-1: 16.15 (Debian 16.15-1.pgdg13+2)
+  pg-2: 16.15 (Debian 16.15-1.pgdg13+2)
+  pg-3: 16.15 (Debian 16.15-1.pgdg13+2)
+
+== 21:58:01 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design on mysql (runbook 17).
+  This step judges lost writes, the app's errors and requests failing after the rollout.
+  | Job k6-pg-run-20261030-214815: run against orders-pg at 20 req/s for 15m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261030-214815 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=6.3ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=3.86ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=1.93ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=109.67ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=4.39ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.05%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.01%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 17921  19.910676/s
+  |     checks_succeeded...: 99.98% 17918 out of 17921
+  |     checks_failed......: 0.01%  3 out of 17921
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 3644   4.048574/s
+  |     orders_deleted.................: 899    0.998811/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=46.41ms  min=290.37µs med=1.76ms   max=10.26s   p(90)=57.27ms p(95)=69.99ms 
+  |       { expected_response:true }...: avg=44.81ms  min=290.37µs med=1.76ms   max=10.26s   p(90)=57.26ms p(95)=69.89ms 
+  |       { op:create }................: avg=122.53ms min=1.09ms   med=2.49ms   max=10.11s   p(90)=4.31ms  p(95)=6.3ms   
+  |       { op:delete }................: avg=12.18ms  min=859.83µs med=1.6ms    max=9.16s    p(90)=2.83ms  p(95)=3.86ms  
+  |       { op:read }..................: avg=13.2ms   min=290.37µs med=818.41µs max=10.26s   p(90)=1.52ms  p(95)=1.93ms  
+  |       { op:search }................: avg=65.06ms  min=45.99ms  med=56.64ms  max=424.62ms p(90)=91.06ms p(95)=109.67ms
+  |       { op:update }................: avg=19.38ms  min=1.02ms   med=1.94ms   max=10.01s   p(90)=3.43ms  p(95)=4.39ms  
+  |     http_req_failed................: 0.01%  3 out of 17922
+  |       { op:create }................: 0.05%  2 out of 3646
+  |       { op:delete }................: 0.00%  0 out of 899
+  |       { op:read }..................: 0.01%  1 out of 8007
+  |       { op:search }................: 0.00%  0 out of 3596
+  |       { op:update }................: 0.00%  0 out of 1773
+  |     http_reqs......................: 17922  19.911787/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 80     0.088882/s
+  |     iteration_duration.............: avg=46.59ms  min=358.04µs med=1.93ms   max=10.26s   p(90)=57.45ms p(95)=70.21ms 
+  |     iterations.....................: 17921  19.910676/s
+  |     vus............................: 1      min=0          max=94 
+  |     vus_max........................: 100    min=20         max=100
+  | 
+  |     NETWORK
+  |     data_received..................: 21 MB  23 kB/s
+  |     data_sent......................: 3.1 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261030-214815: passed.
+  The app's requests failed from 21:57:05 to 21:57:05: ~5 s
+  Writes: 6316 succeeded, 2 failed (0 after 21:58:31); 0 acknowledged writes lost
+  Reads and searches failed: 1 (0 after 21:58:31)
+  orders-pg app restarts: 8 -> 8
+
+== 22:03:29 Verify: relational check_resources.sh
+  
+  == Summary: 48 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 22:03:33 Runbook 13 (pg): passed, every member on 16.15
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-13-pg-20261030-214814.txt

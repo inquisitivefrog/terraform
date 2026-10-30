@@ -35,7 +35,7 @@ runbook_start 25 "$@"
 # --- 0. preconditions ---
 step "0. Preconditions"
 whole || die "the $ENGINE cluster is not whole (run check_resources.sh)"
-[[ -n "$(k -n "$NS" get pods -l "app.kubernetes.io/instance=orders-$ENGINE" -o name)" ]] || die "no orders-$ENGINE pods: apply the app root first"
+[[ -n "$(k -n "$NS" get pods -l "$APP_PODS" -o name)" ]] || die "no orders-$ENGINE pods: apply the app root first"
 RESTARTS0="$(app_restarts)"
 if [[ "$ENGINE" == pg ]]; then
   WRITER="$(pg_primary)"

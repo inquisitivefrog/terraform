@@ -14,6 +14,8 @@
 #   k6_fail_window <labels>       "first last" epochs of the run's failed
 #                                 requests (5 s resolution); empty if none
 #   judge_writes <cutoff>         0 lost; no write failed after <cutoff>
+#   APP_PODS                      label selector for the app's pods (not k6's,
+#                                 which share the instance label)
 #   app_restarts                  restarts of the app's pods, summed
 #   verify_check                  relational check_resources.sh passes
 
@@ -27,6 +29,7 @@ runbook_start() {
   local n="$1"
   shift
   use_cluster "datastore-$ENV"
+  APP_PODS="app.kubernetes.io/name=orders,app.kubernetes.io/instance=orders-$ENGINE"
   runbook_log "$LIB_DIR/../logs" "runbook-$n-$ENGINE" "$@"
   [[ "$ENGINE" == mysql ]] && MY_ROOT_PW="$(k -n "$NS" get secret mysql-secrets -o jsonpath='{.data.root}' | base64 -d)"
   return 0
@@ -73,7 +76,7 @@ wait_whole() {
   echo "  Whole after $((SECONDS - start)) s"
 }
 app_restarts() {
-  k -n "$NS" get pods -l "app.kubernetes.io/instance=orders-$ENGINE" \
+  k -n "$NS" get pods -l "$APP_PODS" \
     -o jsonpath='{range .items[*]}{.status.containerStatuses[0].restartCount}{"\n"}{end}' | awk '{n += $1} END {print n + 0}'
 }
 

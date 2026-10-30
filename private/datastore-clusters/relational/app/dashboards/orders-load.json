@@ -692,7 +692,7 @@
     {
       "type": "timeseries",
       "title": "JVM heap by pod",
-      "description": "Heap is capped at 60% of the container's memory limit.",
+      "description": "Heap is capped at 50% of the container's memory limit.",
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
