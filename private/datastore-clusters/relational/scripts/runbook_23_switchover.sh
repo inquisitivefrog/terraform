@@ -68,7 +68,7 @@ restore_maint() {
   echo "  Putting $MAINT_NODE back in service (pxc_maint_mode=DISABLED)"
   my_maint "$MAINT_NODE" DISABLED && MAINT_NODE=""
 }
-trap 'rc=$?; restore_maint; _runbook_log_end "$rc"; exit "$rc"' EXIT
+trap 'rc=$?; (restore_maint); _runbook_log_end "$rc"; exit "$rc"' EXIT
 
 # --- 0. preconditions ---
 step "0. Preconditions"

@@ -22,6 +22,31 @@ index, online) passes on both engines and puts the planted problem back
 afterwards, so search still fails its SLO by design between runs. PXC
 nodes at 2Gi with a pinned 768M buffer pool.
 
+## 2026-10-30: runbook 1 (alerts) passes on both engines
+
+- **Before:** no database or app alerts at all, only kube-prometheus-stack's Kubernetes rules; Alertmanager's only receiver is "null".
+- **New PrometheusRules** (the shared Prometheus loads every rule: `ruleSelector {}`):
+  - `modules/postgresql/cluster/alerts.tf`: instance down, primary count not 1, replicas not streaming, replication lag > 30 s, connections > 80%, memory > 80%.
+  - `modules/mysql/cluster/alerts.tf`: member down (mysql_up or wsrep_cluster_size), not Primary, not Synced 5 m, apply queue > 50, connections > 80%, memory > 80%.
+  - `modules/orders-app/alerts.tf`: p95 per operation over its k6 SLO for 5 m (with traffic), errors > 1%.
+  - Every expression run as a query against live Prometheus first: all parse; all healthy now. MySQL search p95 over the last hour of load is 857 ms, so its SLO alert will fire under load (the planted missing index); pxc-2 at 64% of its memory limit (83% under pt-osc on 10-27 would have fired).
+  - No disk alert per volume: local-path volumes report no usage (no `kubelet_volume_stats_*`). No certificate or backup metric.
+- **`runbook_1_alerts.sh pg|mysql`:** see RUNBOOKS 1. Tested read-only so far: usage; `alert_state` (Watchdog firing, KubeJobFailed pending, unknown none; a jq `index()` bug found and fixed); the Alertmanager lookup (Watchdog there); `firing_now` (nothing of ours). Fixed before running: "firing now" filtered on a namespace label that `count()` alerts don't have.
+- **Applied 2026-10-30 02:0x:** clusters root (pg-alerts, mysql-alerts) and app root (orders-pg-alerts, orders-mysql-alerts), 2 adds each, nothing else changed. All 4 groups visible in Prometheus a minute or two later.
+- **First run, pg 02:02: FAILED at step 0, "0 of the 4 rule groups":** started seconds after the apply, before the operator had pushed the rules to Prometheus. Step 0 now waits up to 3 minutes.
+  - That failure exposed a worse bug: the exit trap's undo used `$VICTIM` before step 0 set it; under `set -u` the trap stopped there, so the log was not renamed `-FAILED` (renamed by hand), and a failure mid-test could have left a trigger in place. Fixed: `VICTIM` starts empty and the undo runs in a subshell (runbook 23's trap too). Tested with a scratch script whose undo hits an unset variable: the log still ends `-FAILED.txt`, exit 1.
+- **Second run, pg 02:06: FAILED, PostgreSQLInstanceDown did not fire in 300 s** (log kept locally; the undo ran and unfenced pg-1). Fencing worked, but `cnpg_collector_up` stayed 1 for pg-1 the whole time (it reports the exporter, not PostgreSQL), and `cnpg_collector_last_collection_error` stayed 0. What did change: pg-1's `cnpg_pg_replication_in_recovery` series stopped a minute after fencing (count 3 -> 2 from 02:08:30), and streaming replicas went 2 -> 1.
+  - Fix (to apply): the alert counts `cnpg_pg_replication_in_recovery` series, reported only while PostgreSQL answers. On the 02:06 data it would have fired about 02:09:30.
+- **Third run, pg 02:23 (new InstanceDown rule applied): 2 of 3 alerts passed, then FAILED on the connections test's pod.**
+  - PostgreSQLInstanceDown: fired 91 s after fencing pg-1, in Alertmanager, cleared 31 s after unfencing.
+  - PostgreSQLReplicationLag: fired 151 s after pausing replay on pg-1, cleared 61 s after resuming.
+  - PostgreSQLConnectionsHigh: the pod's YAML was invalid. The psql connection string's double quotes sat inside a double-quoted `command` string. Now a block literal; both engines' pods pass `kubectl apply --dry-run=server`.
+- **Fourth run, pg 02:37: passed** (`runbook-1-pg-20261030-023700.txt`). InstanceDown fired 91 s after fencing pg-1, cleared 31 s after unfencing; ReplicationLag fired 152 s after the replay pause, cleared 61 s after resuming; ConnectionsHigh fired 111 s after the pod opened 83 sessions on pg-1, cleared 61 s after it went. Each reached Alertmanager. The search SLO alert stayed quiet. k6: 0 of 18,000 requests failed, 0 lost; search p95 205 ms (usually ~70 ms: reads squeezed onto one replica while pg-1 was fenced, paused or full). Relational check 45/45.
+- **mysql 02:55: passed** (`runbook-1-mysql-20261030-025556.txt`). MemberDown fired 111 s after freezing pxc-1's mysqld (the liveness probe restarted it twice, 02:59), cleared 91 s after thawing; ApplyQueue fired 112 s after desync + FLUSH TABLES WITH READ LOCK on pxc-1, cleared 61 s after; ConnectionsHigh fired 112 s after 143 idle sessions on pxc-1, cleared 31 s after. Each reached Alertmanager. The search SLO alert fired under load and cleared 302 s after it ended. 0 lost; relational check 45/45.
+  - **Finding: a hung Galera node stalls the whole cluster's writes.** All 12 failed writes (creates) came at 02:57, as pxc-1, a non-writer, froze: Galera waits on every member until it evicts one that stops answering (suspect/inactive timeouts, ~5-15 s). A clean pod deletion (runbooks 24, 25) failed none, because a stopping node leaves the group.
+  - 36 searches failed 03:05-03:12, after the tests (search p95 3.8 s, max 10.8 s). Cause not proven; likely pxc-1 back with an empty buffer pool after its restarts, scanning from disk on top of the planted missing index. The user's VPN, turned on during the session, does not touch in-cluster traffic (Docker's internal network; kubectl on 127.0.0.1).
+- **Runbook 1 passes on both engines.** Not fired: primary/quorum loss, memory, disk, certificates, backups; error-rate alert defined but not fired on purpose. Alertmanager's receiver is still "null".
+
 ## 2026-10-29: runbooks 23 and 25 pass on both engines; runbooks 5 and 26 logged; zone heal time fixed
 
 - **Logs:** `load_test.sh … run` logs as runbook 5, `failover_test.sh … zone` as runbook 26 (into the caller's log when a runbook runs them). Zone mode now exits 1 if the cluster has not healed in 10 minutes (it only printed a warning). `failover_test.sh` chains its cleanup with the log's exit trap.

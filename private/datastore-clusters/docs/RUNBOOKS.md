@@ -207,6 +207,22 @@ notes. Implementation status lives in the README of each category.
   rate or p95 over SLO.
 - **Verify:** each alert fired once on purpose (stop a replica, fill a
   volume) and cleared.
+  Relational lab: rules in `modules/postgresql/cluster/alerts.tf`,
+  `modules/mysql/cluster/alerts.tf` and `modules/orders-app/alerts.tf`
+  (p95 per operation against the k6 SLO, error rate). `runbook_1_alerts.sh
+  pg|mysql` fires member down (PostgreSQL: fence a replica; PXC: SIGSTOP a
+  non-writer's mysqld from its node), lag (pause WAL replay; desync plus
+  `FLUSH TABLES WITH READ LOCK`), connections over 80% (a pod of idle
+  sessions) and the search SLO, and sees each reach Alertmanager and clear.
+  Not fired: primary or quorum loss, memory, disk (local-path volumes
+  report no usage; the stack's node filesystem rules cover the shared
+  disk), certificates and backups (no metric, no backups yet).
+  Alertmanager's receiver is still "null": nothing is sent anywhere.
+  Results 2026-10-30: every tested alert fired in 91-152 s and cleared in
+  31-91 s. `cnpg_collector_up` stays 1 for a fenced instance: count the
+  instances that answer instead. A hung (frozen) Galera node stalled
+  writes cluster-wide until it was evicted (12 failed creates); a
+  cleanly stopped one does not.
 
 #### 2. Find a performance problem
 - **Goal:** go from "it's slow" to the cause: a query, a lock, a hot node, a

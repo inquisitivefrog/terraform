@@ -1,0 +1,137 @@
+# runbook_1_alerts.sh pg (2026-10-30T02:37:00Z, kind cluster datastore-dev)
+
+== 02:37:00 0. Preconditions
+  primary pg-2; tests on replica pg-1
+  rule groups loaded: 4; none firing
+
+== 02:37:01 Load: 20 requests/s for 15m
+  k6 run pg-run-20261030-023702; 60 s to settle
+
+== 02:38:02 PostgreSQLInstanceDown: trigger
+  firing after 91 s; in Alertmanager: 1
+  firing now: PostgreSQLInstanceDown
+
+== 02:39:34 PostgreSQLInstanceDown: undo
+  cleared after 31 s
+  Whole after 0 s
+
+== 02:40:05 PostgreSQLReplicationLag: trigger
+  firing after 152 s; in Alertmanager: 1
+  firing now: PostgreSQLReplicationLag pg-1
+
+== 02:42:37 PostgreSQLReplicationLag: undo
+  cleared after 61 s
+  Whole after 1 s
+
+== 02:43:39 PostgreSQLConnectionsHigh: trigger
+  pg-1: 2 of 100 connections; opening 83
+  firing after 111 s; in Alertmanager: 1
+  firing now: PostgreSQLConnectionsHigh pg-1
+
+== 02:45:33 PostgreSQLConnectionsHigh: undo
+  cleared after 61 s
+  Whole after 0 s
+
+== 02:46:37 5. Latency SLO alert for orders-pg search
+  now: not active
+
+== 02:46:37 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design on mysql (runbook 17), and the triggers above
+  may slow requests. This step judges lost writes only.
+  | Job k6-pg-run-20261030-023702: run against orders-pg at 20 req/s for 15m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261030-023702 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=31.02ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=24.33ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=5.73ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=204.63ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=26.3ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 18000   19.999037/s
+  |     checks_succeeded...: 100.00% 18000 out of 18000
+  |     checks_failed......: 0.00%   0 out of 18000
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 3579   3.976475/s
+  |     orders_deleted.................: 902    1.002174/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=32.42ms  min=411.08µs med=3.52ms   max=1.14s    p(90)=126.62ms p(95)=144.72ms
+  |       { expected_response:true }...: avg=32.42ms  min=411.08µs med=3.52ms   max=1.14s    p(90)=126.62ms p(95)=144.72ms
+  |       { op:create }................: avg=9.64ms   min=1.9ms    med=5.23ms   max=174.87ms p(90)=22.6ms   p(95)=31.02ms 
+  |       { op:delete }................: avg=7.6ms    min=1.55ms   med=4.17ms   max=80.29ms  p(90)=17.24ms  p(95)=24.33ms 
+  |       { op:read }..................: avg=2.19ms   min=411.08µs med=1.37ms   max=71.67ms  p(90)=4.07ms   p(95)=5.73ms  
+  |       { op:search }................: avg=137.92ms min=87.02ms  med=125.94ms max=1.14s    p(90)=172.44ms p(95)=204.63ms
+  |       { op:update }................: avg=8.59ms   min=1.93ms   med=4.6ms    max=245.91ms p(90)=19.32ms  p(95)=26.3ms  
+  |     http_req_failed................: 0.00%  0 out of 18001
+  |       { op:create }................: 0.00%  0 out of 3579
+  |       { op:delete }................: 0.00%  0 out of 902
+  |       { op:read }..................: 0.00%  0 out of 8028
+  |       { op:search }................: 0.00%  0 out of 3692
+  |       { op:update }................: 0.00%  0 out of 1799
+  |     http_reqs......................: 18001  20.000148/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=32.72ms  min=525µs    med=3.82ms   max=1.14s    p(90)=126.9ms  p(95)=145.05ms
+  |     iterations.....................: 18000  19.999037/s
+  |     vus............................: 1      min=0          max=5 
+  |     vus_max........................: 20     min=20         max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 22 MB  25 kB/s
+  |     data_sent......................: 3.1 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261030-023702: passed.
+  Writes failed: 0; reads failed: 0; acknowledged writes lost: 0
+
+== 02:52:19 Verify: relational check_resources.sh
+  
+  == Summary: 45 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 02:52:25 Results
+  PostgreSQLInstanceDown: fired after 91 s, cleared 31 s after the undo
+  PostgreSQLReplicationLag: fired after 152 s, cleared 61 s after the undo
+  PostgreSQLConnectionsHigh: fired after 111 s, cleared 61 s after the undo
+  OrdersLatencySLO (search): stayed quiet, as PostgreSQL search meets its SLO
+
+== 02:52:25 Runbook 1 (pg): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-1-pg-20261030-023700.txt
