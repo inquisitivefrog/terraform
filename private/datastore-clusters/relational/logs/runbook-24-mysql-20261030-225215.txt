@@ -1,0 +1,121 @@
+# runbook_24_writer.sh mysql (2026-10-30T22:52:15Z, kind cluster datastore-dev)
+
+== 22:52:15 0. Preconditions
+  PXC ready, Galera 3 members Synced; writer mysql-pxc-0
+  orders-mysql app restarts so far: 0
+
+== 22:52:15 Load: 20 requests/s for 5m
+  k6 run mysql-run-20261030-225216; 60 s to settle
+
+== 22:53:16 2. Kill the writer's pod (failover_test.sh mysql pod)
+  | == perconaxtradbclusters.pxc.percona.com/mysql: writer is mysql-pxc-0 (dc1-a, node datastore-dev-worker); probe in dc1-c
+  | 15:53:30 deleted pod mysql-pxc-0
+  | 15:53:32 new writer after 2 s: mysql-pxc-2 (dc1-b)
+  | 
+  | == Result for perconaxtradbclusters.pxc.percona.com/mysql (pod failure)
+  |   writer:        mysql-pxc-0 (dc1-a) -> mysql-pxc-2 (dc1-b)
+  |   writes:        15 succeeded, 0 failed
+  |   rows written:  16
+  | RESULT start=1793400810 first_fail=- last_fail=- writer=mysql-pxc-0->mysql-pxc-2
+  Probe: writer mysql-pxc-0->mysql-pxc-2; write outage ~0 s (RTO 60 s)
+
+== 22:53:40 3. The old writer is back as a member
+  Whole after 46 s
+
+== 22:54:26 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: writes fail during the outage, and search fails by design (runbook 17).
+  This step judges lost writes and whether requests kept failing after the writer was back.
+  | Job k6-mysql-run-20261030-225216: run against orders-mysql at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261030-225216 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=6.94ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=5.34ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=790.83ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=6.88ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    19.963182/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1185   3.942071/s
+  |     orders_deleted.................: 305    1.014626/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=139.37ms min=581.29µs med=2.86ms   max=2.81s    p(90)=641.07ms p(95)=695.86ms
+  |       { expected_response:true }...: avg=139.37ms min=581.29µs med=2.86ms   max=2.81s    p(90)=641.07ms p(95)=695.86ms
+  |       { op:create }................: avg=6.91ms   min=2.12ms   med=3.97ms   max=783.53ms p(90)=5.78ms   p(95)=6.94ms  
+  |       { op:delete }................: avg=6.71ms   min=1.57ms   med=2.9ms    max=715.63ms p(90)=4.58ms   p(95)=5.34ms  
+  |       { op:read }..................: avg=3.2ms    min=581.29µs med=1.19ms   max=829.96ms p(90)=1.61ms   p(95)=2ms     
+  |       { op:search }................: avg=654.18ms min=490.15ms med=636.51ms max=2.81s    p(90)=750.14ms p(95)=790.83ms
+  |       { op:update }................: avg=5.37ms   min=1.85ms   med=3.56ms   max=577.57ms p(90)=5.71ms   p(95)=6.88ms  
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1185
+  |       { op:delete }................: 0.00%  0 out of 305
+  |       { op:read }..................: 0.00%  0 out of 2651
+  |       { op:search }................: 0.00%  0 out of 1245
+  |       { op:update }................: 0.00%  0 out of 615
+  |     http_reqs......................: 6002   19.966508/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=139.59ms min=682.87µs med=3.05ms   max=2.81s    p(90)=641.26ms p(95)=696.04ms
+  |     iterations.....................: 6001   19.963182/s
+  |     vus............................: 6      min=0         max=14
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.3 MB 24 kB/s
+  |     data_sent......................: 1.1 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-10-30T22:57:17Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261030-225216: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  Writes: 2105 succeeded, 0 failed (0 after 22:54:00); 0 acknowledged writes lost
+  Reads and searches failed: 0 (0 after 22:54:00)
+  orders-mysql app restarts: 0 -> 0
+
+== 22:57:30 Verify: relational check_resources.sh
+  
+  == Summary: 50 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 22:57:34 Runbook 24 (mysql): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-24-mysql-20261030-225215.txt
