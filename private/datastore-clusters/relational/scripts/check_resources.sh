@@ -18,10 +18,10 @@ ZONES="dc1-a dc1-b dc1-c"
 
 secret() { k -n "$NS" get secret "$1" -o jsonpath="{.data.$2}" | base64 -d; }
 
-# zones <label selector>: sorted, space-separated zones of the nodes running the selected pods
+# zones <label selector> [namespace]: sorted, space-separated zones of the nodes running the selected pods
 zones() {
   local node
-  for node in $(k -n "$NS" get pods -l "$1" -o jsonpath='{.items[*].spec.nodeName}'); do
+  for node in $(k -n "${2:-$NS}" get pods -l "$1" -o jsonpath='{.items[*].spec.nodeName}'); do
     k get node "$node" -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}{"\n"}'
   done | sort | tr '\n' ' ' | sed 's/ $//'
 }
@@ -48,13 +48,16 @@ echo "== relational $ENV (namespace $NS, kind cluster $CLUSTER) =="
 
 echo
 echo "-- operators --"
-expect "CloudNativePG operator available" "1" k -n cnpg-system get deploy -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].status.availableReplicas}'
+expect "CloudNativePG operator available" "2" k -n cnpg-system get deploy -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].status.availableReplicas}'
 # Without one it is BestEffort: the first pod evicted, and then nothing fails PostgreSQL over.
 expect "CloudNativePG operator memory request / limit" "128Mi 256Mi" k -n cnpg-system get deploy -l app.kubernetes.io/name=cloudnative-pg \
   -o jsonpath='{.items[0].spec.template.spec.containers[0].resources.requests.memory} {.items[0].spec.template.spec.containers[0].resources.limits.memory}'
 expect "Percona PXC operator memory request / limit, no CPU limit" "128Mi 512Mi none" k -n pxc-operator get deploy pxc-operator \
   -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory} {.spec.template.spec.containers[0].resources.limits.memory} {.spec.template.spec.containers[0].resources.limits.cpu}none'
-expect "Percona PXC operator available" "1" k -n pxc-operator get deploy -o jsonpath='{.items[0].status.availableReplicas}'
+expect "Percona PXC operator available" "2" k -n pxc-operator get deploy -o jsonpath='{.items[0].status.availableReplicas}'
+# One copy per zone: a zone outage must leave each operator a copy to take over.
+match "CloudNativePG operator: 2 copies in 2 different zones" '^(dc1-a dc1-[bc]|dc1-b dc1-c)$' zones "app.kubernetes.io/name=cloudnative-pg" cnpg-system
+match "Percona PXC operator: 2 copies in 2 different zones" '^(dc1-a dc1-[bc]|dc1-b dc1-c)$' zones "app.kubernetes.io/name=pxc-operator" pxc-operator
 expect "PXC operator watches all namespaces" "all" sh -c "v=\$(kubectl --context $CTX -n pxc-operator get deploy \
   -o jsonpath='{.items[0].spec.template.spec.containers[0].env[?(@.name==\"WATCH_NAMESPACE\")].value}'); echo \"\${v:-all}\""
 
@@ -117,7 +120,7 @@ else
   else
     echo "-- metrics and dashboards --"
     expect "Prometheus scrapes every $PG instance" "3" prom_count "up{namespace=\"$NS\", job=\"$NS/$PG\"} == 1"
-    expect "CloudNativePG operator scraped" "1" prom_count 'up{namespace="cnpg-system"} == 1'
+    expect "CloudNativePG operator scraped (both copies)" "2" prom_count 'up{namespace="cnpg-system"} == 1'
     expect "mysqld_exporter sidecar ready on every node" "3 3" sh -c "kubectl --context $CTX -n $NS get pods -l app.kubernetes.io/instance=$MY,app.kubernetes.io/component=pxc \
       -o jsonpath='{range .items[*]}{.status.containerStatuses[?(@.name==\"mysqld-exporter\")].ready}{\"\\n\"}{end}' | grep -c true | xargs printf '%s 3'"
     expect "Every exporter logged in to its node (mysql_up)" "3" prom_value "sum(mysql_up{namespace=\"$NS\"})"

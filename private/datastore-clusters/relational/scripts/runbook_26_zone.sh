@@ -40,7 +40,8 @@ SETTLE=30 # seconds after the probe recovered before k6 requests must all succee
 source "$(dirname "$0")/runbook_lib.sh"
 runbook_start 26 "$@"
 
-zone_of() { k get node "$(k -n "$NS" get pod "$1" -o jsonpath='{.spec.nodeName}')" -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}'; }
+# zone_of <pod> [namespace]
+zone_of() { k get node "$(k -n "${2:-$NS}" get pod "$1" -o jsonpath='{.spec.nodeName}')" -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}'; }
 
 # --- 0. preconditions ---
 step "0. Preconditions"
@@ -54,6 +55,12 @@ NODE="$(k -n "$NS" get pod "$WRITER" -o jsonpath='{.spec.nodeName}')"
 echo "  writer $WRITER in zone $ZONE (node $NODE)"
 echo "  also in $ZONE: $(k -n "$NS" get pods --field-selector "spec.nodeName=$NODE,status.phase=Running" -o name | sed 's|pod/||' | grep -vx "$WRITER" | xargs)"
 echo "  orders-$ENGINE app restarts so far: $RESTARTS0"
+# The run proves an operator's takeover only if one of its copies was in $ZONE.
+for op in cnpg-system:cloudnative-pg pxc-operator:pxc-operator; do
+  ops_ns="${op%%:*}"
+  echo "  $ops_ns operator in zones: $(for p in $(k -n "$ops_ns" get pods -l "app.kubernetes.io/name=${op#*:}" -o name); do
+    zone_of "${p#pod/}" "$ops_ns"; echo; done | sort | xargs)"
+done
 
 # --- 1. load, from outside the zone ---
 export K6_AVOID_ZONE="$ZONE"

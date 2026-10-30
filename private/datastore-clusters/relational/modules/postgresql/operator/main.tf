@@ -25,5 +25,22 @@ resource "helm_release" "operator" {
       requests = { cpu = "50m", memory = "128Mi" }
       limits   = { memory = "256Mi" }
     }
+    # The operator, not the instances, decides a failover: one copy in the
+    # zone that fails means no failover until Kubernetes evicts it (300 s;
+    # runbook 26, 2026-10-30). Two copies in different zones, one leading
+    # (15 s lease): the other takes over when its zone goes.
+    replicaCount = 2
+    affinity     = local.one_per_zone
   })]
+}
+
+locals {
+  one_per_zone = {
+    podAntiAffinity = {
+      requiredDuringSchedulingIgnoredDuringExecution = [{
+        topologyKey   = "topology.kubernetes.io/zone"
+        labelSelector = { matchLabels = { "app.kubernetes.io/name" = "cloudnative-pg" } }
+      }]
+    }
+  }
 }

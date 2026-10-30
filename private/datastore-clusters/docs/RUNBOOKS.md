@@ -544,6 +544,15 @@ notes. Implementation status lives in the README of each category.
   node is NotReady (50 s by default). The lab now sets
   node-monitor-grace-period to 20 s, and the runbook judges the app's
   outage (k6) as well as the database's.
+  With 20 s (2026-10-30): PXC database ~14-22 s; PostgreSQL ~28 s, but
+  one run had no failover for ~314 s: CloudNativePG's operator, not the
+  instances, decides a failover, and its only copy was in the lost zone
+  (evicted after the default 300 s). Both operators now run 2 copies, one
+  per zone; with the leading copy killed alongside the primary, the
+  standby took over at once and the failover took 30 s (database ~35 s).
+  k6's 30 s connect wait on a pod in the lost zone inflated the app's
+  outage to ~60 s; requests now time out at 15 s (above the app's ~13 s
+  retry budget). Passes: PXC app ~10 s, PostgreSQL app ~25 s.
 
 #### 27. Quorum loss
 - **Goal:** know what happens when a majority is lost, and recover safely.

@@ -34,6 +34,11 @@ const SEED_BATCH = 10000;
 const MIX = [['create', 20], ['read', 45], ['search', 20], ['update', 10], ['delete', 5]];
 const STATUSES = ['NEW', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const MAX_TRACKED = 5000;
+// A user gives up after 15 s. Above the app's own budget (about 13 s of
+// database retries, then 503), so its answer is what's measured; below k6's
+// 30 s connect wait, which held requests to a pod in a lost zone and counted
+// them as failures half a minute late (runbook 26).
+const REQUEST_TIMEOUT = '15s';
 
 const ordersLost = new Counter('orders_lost');
 const ordersCreated = new Counter('orders_created');
@@ -120,7 +125,7 @@ function nextMine() {
 }
 
 function tags(op, name) {
-  return { tags: { op, name }, headers: JSON_HEADERS };
+  return { tags: { op, name }, headers: JSON_HEADERS, timeout: REQUEST_TIMEOUT };
 }
 
 function create(data) {

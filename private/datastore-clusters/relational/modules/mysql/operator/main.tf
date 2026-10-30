@@ -20,5 +20,25 @@ resource "helm_release" "operator" {
       requests = { cpu = "50m", memory = "128Mi" }
       limits   = { cpu = null, memory = "512Mi" }
     }
+    # Galera and HAProxy fail over without the operator, but recovering from
+    # a lost quorum (autoRecovery), healing, backups and certificates need it.
+    # Two copies in different zones, one leading; the chart's 60 s lease
+    # would leave it leaderless for up to a minute, so CloudNativePG's 15 s.
+    replicaCount  = 2
+    affinity      = local.one_per_zone
+    leaseDuration = "15s"
+    renewDeadline = "10s"
+    retryPeriod   = "2s"
   })]
+}
+
+locals {
+  one_per_zone = {
+    podAntiAffinity = {
+      requiredDuringSchedulingIgnoredDuringExecution = [{
+        topologyKey   = "topology.kubernetes.io/zone"
+        labelSelector = { matchLabels = { "app.kubernetes.io/name" = "pxc-operator" } }
+      }]
+    }
+  }
 }
