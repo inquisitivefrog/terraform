@@ -1,18 +1,55 @@
-# aws CLI commands used in this repo
+# AWS
 
-The AWS CLI commands found across `aws/` (scripts, READMEs and old notes),
-grouped by service, with the closest gcloud command beside each. The GCP side
-is in `../gcp/README.gcloud.md`.
+This repository (https://github.com/inquisitivefrog/terraform) demonstrates
+use of Terraform to create environments in Amazon Web Services (and, since
+October 2026, ports of the same design to GCP in `../gcp/` and Azure in
+`../azure/`). Everything it creates is demo data: the value is reproducible
+code and notes, so tear down and rebuild freely.
 
-Account `650836812595` (Free plan; profile and IAM user `blue-elephant`)
-since 2026-10-22; before that `084375569056`. Region: `us-east-2` for dev,
-prod and ecommerce-k8s, the only region the organization's SCP allows. Run
+All work was completed with the assistance of xAI Grok Generative Text tool.
+
+## Account and region
+
+Since 2026-10-22: account `650836812595` (Free plan, credits until
+2027-04-22), CLI profile and IAM user `blue-elephant`, region `us-east-2`
+for dev, prod and ecommerce-k8s. An SCP from the organization's management
+account denies every other region. Providers and backends pin the profile,
+and providers set `allowed_account_ids`; the scripts read the same settings
+from `scripts/aws_env.sh`. (Until 2026-10-21 everything ran in account
+`084375569056`, us-west-2 and us-west-1, with `bluedragon` names.) Run
 `export AWS_PROFILE=blue-elephant` before the commands below; the helper
-scripts set it themselves (`scripts/aws_env.sh`).
+scripts set it themselves.
 
 Never point these at the grid-meter account (`184375956348`, profile
 `grid-meter-freetier`): it runs a live demo. Check with
 `aws sts get-caller-identity` first.
+
+## Layout
+
+| Root | Creates | State |
+|---|---|---|
+| `tfstate/bootstrap/{dev,prod}` | State bucket `blue-elephant-tfstate-admin-{env}` and its log bucket | local `terraform.tfstate` |
+| `tfstate/environments/{dev,prod}` | KMS key `alias/tfstate-{env}` that encrypts single_instance state | bootstrap bucket, key `terraform.tfstate` |
+| `single_instance/environments/{dev,prod}` | VPC, EC2 (public + private), EKS, ECS, ElastiCache Redis, SNS, S3, IAM; names end in `-{env}` | bootstrap bucket, key `single_instance/terraform.tfstate` |
+| `ecommerce-k8s/` | Separate EKS project (two stages) | its own bucket `blue-elephant-ecommerce-terraform-state` |
+
+Shared IAM (users, roles, DeveloperPolicy, AdminPolicy) is global, so dev
+creates it and prod reads it: apply dev before prod, destroy prod before dev.
+EC2 key pair: `blue-elephant` (private key `~/.ssh/aws_ssh`), one for both
+environments (see "EC2 SSH key pair").
+
+## More
+
+- Status, change log, open items: `tfstate/docs/STATUS.md`
+- Test and scan tools (tflint, trivy, checkov): `README.aws.test.md`
+- Repo checks (hook, GitHub Action): `../docs/REPO_CHECKS.md`
+- Cost: `scripts/estimate_costs.sh`; kubectl and SSH: `scripts/kube_use.sh`, `scripts/ssh_ec2.sh`
+
+## aws CLI commands
+
+The AWS CLI commands found across `aws/` (scripts, READMEs and old notes),
+grouped by service, with the closest gcloud command beside each. The GCP side
+is in `../gcp/README.gcloud.md`.
 
 Tips:
 
@@ -39,6 +76,9 @@ env, from `aws/`:
 | 2 | `tfstate/environments/<env>`: state CMK `alias/tfstate-<env>` | delete `single_instance/terraform.tfstate` from the state bucket |
 | 3 | `single_instance/environments/<env>` (dev before prod) | `tfstate/environments/<env>` |
 | 4 | `scripts/check_resources.sh <env>` | `tfstate/bootstrap/<env>` (empty the versioned buckets first), or keep it: it costs cents |
+
+Check `curl -4 ifconfig.me` against `my_laptop_cidr_block` in each
+`terraform.tfvars` first: the EKS API and SSH allow only that address.
 
 Each Terraform step: `terraform init -reconfigure -backend-config=backend.hcl`
 (bootstrap has no backend file), then `terraform plan -out p && terraform apply p`;

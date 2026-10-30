@@ -105,6 +105,16 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ## Change log
 
+### 2026-10-30: README.AWS.md merged into aws/README.aws.md
+
+The root `README.AWS.md` (account and region, layout, build summary, links)
+now opens `aws/README.aws.md`, ahead of the aws CLI commands; the duplicate
+account paragraph and build order were merged, not repeated. Links updated
+in `aws/tfstate/README.md`. The root `README.md` is rewritten as a short
+guide: one row per top-level folder (aws, gcp, azure, private, docs,
+scripts), the STATUS files, and the repo checks. Older entries below still
+name `README.AWS.md`.
+
 ### 2026-10-26: aws/datastore-clusters removed
 
 The uncommitted Aurora tree is deleted from the repo; the design now lives

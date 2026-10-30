@@ -1,7 +1,7 @@
 # aws/tfstate
 
 The state layer every other AWS root depends on. Account `650836812595`,
-profile `blue-elephant`, region `us-east-2` (see `../../README.AWS.md`).
+profile `blue-elephant`, region `us-east-2` (see `../README.aws.md`).
 
 | Root | Creates | State |
 |---|---|---|
