@@ -1,0 +1,202 @@
+# runbook_26_zone.sh mysql (2026-10-30T23:31:39Z, kind cluster datastore-dev)
+
+== 23:31:39 0. Preconditions
+  writer mysql-pxc-0 in zone dc1-a (node datastore-dev-worker)
+  also in dc1-a: mysql-haproxy-2 orders-mysql-7fd78d66dd-cqm27 pg-1
+  orders-mysql app restarts so far: 0
+  orders-mysql app pods in zones: dc1-a dc1-b (one in dc1-a: yes)
+  cnpg-system operator in zones: dc1-a dc1-c
+  pxc-operator operator in zones: dc1-a dc1-c
+
+== 23:31:40 Load: 20 requests/s for 6m
+  k6 run mysql-run-20261030-233140; 60 s to settle
+  k6 runs in zone dc1-c
+
+== 23:32:41 2. Zone dc1-a down (failover_test.sh mysql zone)
+  | == perconaxtradbclusters.pxc.percona.com/mysql: writer is mysql-pxc-0 (dc1-a, node datastore-dev-worker); probe in dc1-c
+  | 16:32:57 stopped node datastore-dev-worker: zone dc1-a is down
+  | 16:33:16 new writer after 22 s: mysql-pxc-2 (dc1-b)
+  | 
+  | == Result for perconaxtradbclusters.pxc.percona.com/mysql (zone failure)
+  |   writer:        mysql-pxc-0 (dc1-a) -> mysql-pxc-2 (dc1-b)
+  |   writes:        24 succeeded, 9 failed
+  |   write outage:  from 5 s to 21 s after the failure (~17 s)
+  |   rows written:  24
+  | 16:33:32 node datastore-dev-worker restarted; waiting for the cluster to heal
+  |   healed:        46 s after the zone came back
+  | RESULT start=1793403174 first_fail=1793403179 last_fail=1793403195 writer=mysql-pxc-0->mysql-pxc-2
+  Probe: writer mysql-pxc-0->mysql-pxc-2; write outage ~17 s (RTO 60 s)
+  Whole after 1 s
+
+== 23:34:19 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: writes fail during the outage, and search fails by design on mysql
+  (runbook 17). This step judges lost writes and requests failing after recovery.
+  | Job k6-mysql-run-20261030-233140: run against orders-mysql at 20 req/s for 6m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261030-233140 (port-forward: platform/scripts/grafana_restart.sh)
+  | time="2026-10-30T23:32:54Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": dial tcp 10.96.201.16:8080: connect: connection refused"
+  | time="2026-10-30T23:33:09Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:10Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:10Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=5104&status=PAID&limit=20\": request timeout"
+  | time="2026-10-30T23:33:10Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:10Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders/9035202\": request timeout"
+  | time="2026-10-30T23:33:13Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:13Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=5563&status=DELIVERED&limit=20\": request timeout"
+  | time="2026-10-30T23:33:13Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:14Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:14Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:14Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:14Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:14Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:14Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:15Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:15Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:15Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:15Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:16Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:16Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:16Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=5386&status=DELIVERED&limit=20\": request timeout"
+  | time="2026-10-30T23:33:17Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:17Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:17Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:17Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:17Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:17Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=571&status=PAID&limit=20\": request timeout"
+  | time="2026-10-30T23:33:18Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:18Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:18Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:18Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:19Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:20Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:20Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:20Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:21Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:21Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:21Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:21Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=7&status=NEW&limit=20\": request timeout"
+  | time="2026-10-30T23:33:21Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=4342&status=CANCELLED&limit=20\": request timeout"
+  | time="2026-10-30T23:33:22Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:22Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:22Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:23Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:23Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:24Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:24Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:24Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:24Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:24Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=4732&status=PAID&limit=20\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders/9034965\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=3859&status=DELIVERED&limit=20\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Patch \"http://orders-mysql.relational.svc:8080/orders/9034596\": request timeout"
+  | time="2026-10-30T23:33:25Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders/9034362\": request timeout"
+  | time="2026-10-30T23:33:26Z" level=warning msg="Request Failed" error="Patch \"http://orders-mysql.relational.svc:8080/orders/9034869\": request timeout"
+  | time="2026-10-30T23:33:26Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders/9034830\": request timeout"
+  | time="2026-10-30T23:33:26Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:33:26Z" level=warning msg="Request Failed" error="Get \"http://orders-mysql.relational.svc:8080/orders?customerId=2542&status=SHIPPED&limit=20\": request timeout"
+  | time="2026-10-30T23:33:26Z" level=warning msg="Request Failed" error="Post \"http://orders-mysql.relational.svc:8080/orders/_search\": request timeout"
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✗ 'p(95)<200' p(95)=2.42s
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=5.05ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2.14ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=806.63ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=7.12ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✗ 'rate<0.01' rate=4.17%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.56%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.36%
+  | 
+  |     http_req_failed{op:search}
+  |     ✗ 'rate<0.01' rate=1.47%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.44%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 7068   19.606714/s
+  |     checks_succeeded...: 98.50% 6962 out of 7068
+  |     checks_failed......: 1.49%  106 out of 7068
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1606   4.455063/s
+  |     orders_deleted.................: 353    0.979226/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=254.95ms min=0s       med=2.65ms   max=12.7s  p(90)=600.27ms p(95)=686.09ms
+  |       { expected_response:true }...: avg=192.71ms min=461µs    med=2.67ms   max=12.57s p(90)=595.4ms  p(95)=674.37ms
+  |       { op:create }................: avg=465.59ms min=0s       med=3.7ms    max=12.7s  p(90)=8.64ms   p(95)=2.42s   
+  |       { op:delete }................: avg=74.45ms  min=1.39ms   med=2.62ms   max=12.7s  p(90)=4.39ms   p(95)=5.05ms  
+  |       { op:read }..................: avg=45.98ms  min=0s       med=1.01ms   max=12.7s  p(90)=1.62ms   p(95)=2.14ms  
+  |       { op:search }................: avg=613.06ms min=0s       med=583.98ms max=3.79s  p(90)=729.44ms p(95)=806.63ms
+  |       { op:update }................: avg=40.92ms  min=0s       med=3.22ms   max=12.7s  p(90)=5.48ms   p(95)=7.12ms  
+  |     http_req_failed................: 1.49%  106 out of 7069
+  |       { op:create }................: 4.17%  70 out of 1676
+  |       { op:delete }................: 0.56%  2 out of 355
+  |       { op:read }..................: 0.36%  11 out of 3012
+  |       { op:search }................: 1.47%  20 out of 1353
+  |       { op:update }................: 0.44%  3 out of 672
+  |     http_reqs......................: 7069   19.609488/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 133    0.368944/s
+  |     iteration_duration.............: avg=399.49ms min=525.16µs med=2.88ms   max=15s    p(90)=611.13ms p(95)=718.33ms
+  |     iterations.....................: 7068   19.606714/s
+  |     vus............................: 3      min=0           max=149
+  |     vus_max........................: 153    min=20          max=153
+  | 
+  |     NETWORK
+  |     data_received..................: 8.0 MB 22 kB/s
+  |     data_sent......................: 1.3 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | time="2026-10-30T23:37:42Z" level=error msg="thresholds on metrics 'http_req_duration{op:create}, http_req_duration{op:search}, http_req_failed{op:create}, http_req_failed{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261030-233140: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  The app's requests failed from 23:32:55 to 23:33:30: ~40 s
+  Writes: 2628 succeeded, 75 failed (0 after 23:33:46); 0 acknowledged writes lost
+  Reads and searches failed: 31 (0 after 23:33:46)
+  orders-mysql app restarts: 0 -> 2
+
+== 23:37:55 4. Outages against the RTO
+  database ~17 s (probe), app ~40 s (k6); RTO 60 s
+  An app pod was in the lost zone: yes (the worst case)
+
+== 23:37:55 Verify: relational check_resources.sh
+  
+  == Summary: 50 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 23:37:59 Runbook 26 (mysql): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-26-mysql-20261030-233139.txt

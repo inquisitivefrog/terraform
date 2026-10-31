@@ -560,7 +560,8 @@ notes. Implementation status lives in the README of each category.
   standby took over at once and the failover took 30 s (database ~35 s).
   k6's 30 s connect wait on a pod in the lost zone inflated the app's
   outage to ~60 s; requests now time out at 15 s (above the app's ~13 s
-  retry budget). Passes: PXC app ~10 s, PostgreSQL app ~25 s.
+  retry budget). Passes: PXC app ~10 s, PostgreSQL app ~25 s; with an
+  app pod in the lost zone (the worst case) ~40 s on both.
 
 #### 27. Quorum loss
 - **Goal:** know what happens when a majority is lost, and recover safely.

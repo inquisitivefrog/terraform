@@ -1,0 +1,229 @@
+# runbook_26_zone.sh pg (2026-10-30T23:38:15Z, kind cluster datastore-dev)
+
+== 23:38:15 0. Preconditions
+  writer pg-2 in zone dc1-b (node datastore-dev-worker2)
+  also in dc1-b: mysql-haproxy-1 mysql-pxc-2 orders-mysql-7fd78d66dd-g2xzq orders-pg-6d84948c4d-ttjmf
+  orders-pg app restarts so far: 0
+  orders-pg app pods in zones: dc1-b dc1-c (one in dc1-b: yes)
+  cnpg-system operator in zones: dc1-a dc1-c
+  pxc-operator operator in zones: dc1-a dc1-c
+
+== 23:38:16 Load: 20 requests/s for 6m
+  k6 run pg-run-20261030-233816; 60 s to settle
+  k6 runs in zone dc1-a
+
+== 23:39:17 2. Zone dc1-b down (failover_test.sh pg zone)
+  | == clusters.postgresql.cnpg.io/pg: writer is pg-2 (dc1-b, node datastore-dev-worker2); probe in dc1-a
+  | 16:39:27 stopped node datastore-dev-worker2: zone dc1-b is down
+  | 16:39:50 new writer after 26 s: pg-1 (dc1-a)
+  | 
+  | == Result for clusters.postgresql.cnpg.io/pg (zone failure)
+  |   writer:        pg-2 (dc1-b) -> pg-1 (dc1-a)
+  |   writes:        20 succeeded, 17 failed
+  |   write outage:  from 0 s to 29 s after the failure (~30 s)
+  |   rows written:  20
+  | 16:40:15 node datastore-dev-worker2 restarted; waiting for the cluster to heal
+  |   healed:        30 s after the zone came back
+  | RESULT start=1793403564 first_fail=1793403564 last_fail=1793403593 writer=pg-2->pg-1
+  Probe: writer pg-2->pg-1; write outage ~30 s (RTO 60 s)
+  Whole after 0 s
+
+== 23:40:46 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: writes fail during the outage, and search fails by design on mysql
+  (runbook 17). This step judges lost writes and requests failing after recovery.
+  | Job k6-pg-run-20261030-233816: run against orders-pg at 20 req/s for 6m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261030-233816 (port-forward: platform/scripts/grafana_restart.sh)
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Patch \"http://orders-pg.relational.svc:8080/orders/3014248\": EOF"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014243\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Patch \"http://orders-pg.relational.svc:8080/orders/3014356\": EOF"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014143\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014312\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=1067&status=CANCELLED&limit=20\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014385\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": EOF"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": EOF"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:25Z" level=warning msg="Request Failed" error="Delete \"http://orders-pg.relational.svc:8080/orders/3014147\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014164\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014359\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014191\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Patch \"http://orders-pg.relational.svc:8080/orders/3014320\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014373\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014174\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=918&status=NEW&limit=20\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014206\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:26Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:27Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:27Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:27Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=975&status=CANCELLED&limit=20\": dial tcp 10.96.232.221:8080: connect: connection refused"
+  | time="2026-10-30T23:39:40Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014308\": request timeout"
+  | time="2026-10-30T23:39:43Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:43Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:43Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:43Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:43Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:43Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=1785&status=NEW&limit=20\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=1628&status=PAID&limit=20\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:44Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:45Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:45Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:45Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:45Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:45Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:46Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:46Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:47Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=642&status=DELIVERED&limit=20\": request timeout"
+  | time="2026-10-30T23:39:47Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:47Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:47Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:47Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:48Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:48Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=293&status=NEW&limit=20\": request timeout"
+  | time="2026-10-30T23:39:48Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:49Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:49Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014349\": request timeout"
+  | time="2026-10-30T23:39:49Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:49Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:50Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:50Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=1690&status=PAID&limit=20\": request timeout"
+  | time="2026-10-30T23:39:50Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:50Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:51Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:51Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:52Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:52Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:52Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:52Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:52Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=1992&status=PAID&limit=20\": request timeout"
+  | time="2026-10-30T23:39:52Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders?customerId=1666&status=DELIVERED&limit=20\": request timeout"
+  | time="2026-10-30T23:39:53Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014219\": request timeout"
+  | time="2026-10-30T23:39:53Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:53Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:53Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:53Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014165\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Delete \"http://orders-pg.relational.svc:8080/orders/3014339\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:54Z" level=warning msg="Request Failed" error="Get \"http://orders-pg.relational.svc:8080/orders/3014225\": request timeout"
+  | time="2026-10-30T23:39:55Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:55Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:55Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:55Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders/_search\": request timeout"
+  | time="2026-10-30T23:39:55Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:56Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:56Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:56Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:56Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:56Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:57Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:57Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | time="2026-10-30T23:39:57Z" level=warning msg="Request Failed" error="Post \"http://orders-pg.relational.svc:8080/orders\": request timeout"
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✗ 'p(95)<200' p(95)=12.7s
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=3.79ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=1.31ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=79.31ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=3.05ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✗ 'rate<0.01' rate=17.27%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✗ 'rate<0.01' rate=1.31%
+  | 
+  |     http_req_failed{op:read}
+  |     ✗ 'rate<0.01' rate=1.64%
+  | 
+  |     http_req_failed{op:search}
+  |     ✗ 'rate<0.01' rate=1.43%
+  | 
+  |     http_req_failed{op:update}
+  |     ✗ 'rate<0.01' rate=1.75%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 7031   19.529032/s
+  |     checks_succeeded...: 94.26% 6628 out of 7031
+  |     checks_failed......: 5.73%  403 out of 7031
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1537   4.269111/s
+  |     orders_deleted.................: 301    0.836046/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=440.44ms min=0s       med=1.59ms   max=15s      p(90)=60.43ms p(95)=1.15s  
+  |       { expected_response:true }...: avg=43.21ms  min=292.62µs med=1.54ms   max=14.32s   p(90)=57.07ms p(95)=61.67ms
+  |       { op:create }................: avg=1.4s     min=0s       med=2.23ms   max=14.32s   p(90)=6.1s    p(95)=12.7s  
+  |       { op:delete }................: avg=85.77ms  min=0s       med=1.36ms   max=12.7s    p(90)=2.32ms  p(95)=3.79ms 
+  |       { op:read }..................: avg=98.23ms  min=0s       med=623.58µs max=15s      p(90)=1.04ms  p(95)=1.31ms 
+  |       { op:search }................: avg=62.01ms  min=0s       med=56.21ms  max=773.81ms p(90)=66.89ms p(95)=79.31ms
+  |       { op:update }................: avg=143.47ms min=0s       med=1.6ms    max=12.71s   p(90)=2.52ms  p(95)=3.05ms 
+  |     http_req_failed................: 5.73%  403 out of 7032
+  |       { op:create }................: 17.27% 321 out of 1858
+  |       { op:delete }................: 1.31%  4 out of 305
+  |       { op:read }..................: 1.64%  47 out of 2851
+  |       { op:search }................: 1.43%  20 out of 1389
+  |       { op:update }................: 1.75%  11 out of 628
+  |     http_reqs......................: 7032   19.53181/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 169    0.469408/s
+  |     iteration_duration.............: avg=592.16ms min=203.91µs med=1.8ms    max=15s      p(90)=62.06ms p(95)=3s     
+  |     iterations.....................: 7031   19.529032/s
+  |     vus............................: 1      min=0           max=186
+  |     vus_max........................: 189    min=20          max=189
+  | 
+  |     NETWORK
+  |     data_received..................: 8.1 MB 22 kB/s
+  |     data_sent......................: 1.3 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | time="2026-10-30T23:44:17Z" level=error msg="thresholds on metrics 'http_req_duration{op:create}, http_req_failed{op:create}, http_req_failed{op:delete}, http_req_failed{op:read}, http_req_failed{op:search}, http_req_failed{op:update}' have been crossed"
+  | 
+  | Run pg-run-20261030-233816: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  The app's requests failed from 23:39:26 to 23:40:01: ~40 s
+  Writes: 2455 succeeded, 336 failed (0 after 23:40:24); 0 acknowledged writes lost
+  Reads and searches failed: 67 (0 after 23:40:24)
+  orders-pg app restarts: 0 -> 2
+
+== 23:44:30 4. Outages against the RTO
+  database ~30 s (probe), app ~40 s (k6); RTO 60 s
+  An app pod was in the lost zone: yes (the worst case)
+
+== 23:44:30 Verify: relational check_resources.sh
+  
+  == Summary: 50 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 23:44:34 Runbook 26 (pg): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-26-pg-20261030-233815.txt
