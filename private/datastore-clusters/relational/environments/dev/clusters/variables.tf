@@ -24,6 +24,15 @@ variable "pxc_image" {
   default     = "percona/percona-xtradb-cluster:8.0.46-38.1"
 }
 
+# XtraBackup must handle the server's version. Operator 1.20.0 pairs PXC
+# 8.0.45 with 8.0.35-35.1; 8.0.35-36.1 is the last 8.0 build (Percona: the
+# 8.0.35 line backs up any later 8.0 server). Moves to 8.4 with the server.
+variable "xtrabackup_image" {
+  description = "Percona XtraBackup image for PXC backups"
+  type        = string
+  default     = "percona/percona-xtrabackup:8.0.35-36.1"
+}
+
 variable "haproxy_image" {
   type    = string
   default = "percona/haproxy:2.8.18-1"

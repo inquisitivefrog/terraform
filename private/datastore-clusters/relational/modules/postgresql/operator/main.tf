@@ -34,6 +34,31 @@ resource "helm_release" "operator" {
   })]
 }
 
+# The Barman Cloud plugin: backups and WAL archiving to an S3-compatible
+# store, through CloudNativePG's plugin interface (CNPG-I). It replaces the
+# operator's built-in barmanObjectStore, deprecated and due for removal.
+# Two parts: this Deployment, which the operator calls over mutual TLS
+# (certificates from cert-manager, platform services) to add a sidecar to
+# every instance pod; and that sidecar, which runs barman-cloud to ship WAL
+# and take base backups. It must run in the operator's namespace.
+# One copy (the chart supports only that): while it is down, existing
+# instances keep archiving, but pods can't be created. See docs/BACKUPS.md.
+resource "helm_release" "barman_cloud" {
+  name       = "plugin-barman-cloud"
+  repository = "https://cloudnative-pg.github.io/charts"
+  chart      = "plugin-barman-cloud"
+  version    = var.barman_cloud_chart_version
+  namespace  = helm_release.operator.namespace
+  wait       = true
+
+  values = [yamlencode({
+    resources = {
+      requests = { cpu = "20m", memory = "64Mi" }
+      limits   = { memory = "256Mi" }
+    }
+  })]
+}
+
 locals {
   one_per_zone = {
     podAntiAffinity = {

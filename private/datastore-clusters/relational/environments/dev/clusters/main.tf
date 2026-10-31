@@ -38,6 +38,17 @@ module "postgres" {
     # dead rows as long as the longest replica query (5 s statement_timeout).
     hot_standby_feedback = "on"
   }
+
+  # WAL archived continuously; a full base backup each Sunday 03:00 UTC (the
+  # runbooks take more on demand); 7 days restorable. Short: the laptop has
+  # little disk. docs/BACKUPS.md.
+  backup = {
+    endpoint  = local.store.endpoint_in_cluster
+    bucket    = local.store.buckets.pg
+    secret    = "pg-backup-s3" # from scripts/backup_secrets.sh
+    retention = "7d"
+    schedule  = "0 0 3 * * 0"
+  }
 }
 
 module "mysql" {
@@ -60,4 +71,20 @@ module "mysql" {
   # had already failed under a bulk seed). Pinned pool, 25% headroom.
   memory                  = "2Gi"
   innodb_buffer_pool_size = "768M"
+
+  # Binlogs uploaded each minute; a full backup each Sunday 03:00 UTC (the
+  # runbooks take more on demand); the last 2 scheduled ones kept.
+  # docs/BACKUPS.md.
+  backup = {
+    endpoint = local.store.endpoint_in_cluster
+    bucket   = local.store.buckets.mysql
+    secret   = "mysql-backup-s3" # from scripts/backup_secrets.sh
+    schedule = "0 3 * * 0"
+    keep     = 2
+    image    = var.xtrabackup_image
+  }
+}
+
+locals {
+  store = data.terraform_remote_state.backup_store.outputs
 }

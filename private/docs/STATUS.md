@@ -3,24 +3,54 @@
 Rolling record for the private cloud (Docker Desktop + kind on the laptop).
 Newest first.
 
-## Current state (2026-10-27): platform, relational and the orders app applied
+## Current state (2026-10-30 night): stopped, backups half-applied
 
-kind cluster `datastore-dev` (4 nodes, zones dc1-a/b/c) with
-kube-prometheus-stack; CloudNativePG and Percona PXC operators; `pg`
-(PostgreSQL 16.13, 3 instances) and `mysql` (PXC 8.0.44, 3 nodes + 3
-HAProxies) in namespace `relational`, both scraped by Prometheus with
-dashboards in Grafana. Verified: platform check 13/13 (including
-monitoring), relational check 35/35 before the app. Disk blocker cleared (65 GB free); Docker
-Desktop at 14 GB memory, 8 CPUs.
+Everything is **stopped, not destroyed** (`platform/scripts/docker_shutdown.sh`):
+the kind cluster `datastore-dev`, the backup store container, and Docker
+Desktop. `platform/scripts/docker_restart.sh` brings them back (it now starts
+the store too) and runs both checks.
 
-2026-10-27: the orders app (`orders:0.1.2`, Spring Boot) runs against both
-clusters, two pods each, with k6 load and a Grafana dashboard. Both engines
-hold about 3 million orders. PXC nodes at 1536Mi; PostgreSQL
-`hot_standby_feedback` on. Checks: platform 13/13, relational 45/45, also
-after a full Docker Desktop shutdown and restart. Runbook 17 (the missing
-index, online) passes on both engines and puts the planted problem back
-afterwards, so search still fails its SLO by design between runs. PXC
-nodes at 2Gi with a pinned 768M buffer pool.
+What is applied and verified:
+- Platform: kind cluster (20 s node grace period), kube-prometheus-stack;
+  platform check 24/24 (13 cluster + monitoring, 11 backup store).
+- Backup store: SeaweedFS 4.48 container `datastore-backups`, volume
+  `datastore-backups-data`, buckets `pg-backups` and `mysql-backups`
+  (empty), keys in `~/.config/datastore-dev/backup-store/s3.json`.
+- Relational: both operators (2 copies each, spread by zone); `pg`
+  PostgreSQL 16.15 and `mysql` PXC 8.0.46, ~3,000,000 orders each; the
+  orders app 0.1.3 (768Mi) on both.
+- Runbooks passing on both engines (logs in `relational/logs/`, the
+  expectations in `datastore-clusters/test_plans/`): 1, 13, 17, 23, 24, 25,
+  26 (worst case: an app pod in the lost zone); 5 on pg.
+
+Written, validated, **not applied** (backups, docs/BACKUPS.md):
+- cert-manager v1.21.2 (platform services root).
+- Barman Cloud plugin chart 0.8.1 (relational operators root).
+- Both clusters' backup settings (relational clusters root).
+- Until those applies the relational check is 52/62: the 10 backup checks
+  fail by design.
+
+Resume here (2026-10-31):
+1. `docker_restart.sh`; expect platform 24/24 (cert-manager skipped) and
+   relational 52/62.
+2. Apply platform services (expect 1 to add: cert-manager), then relational
+   operators (1 to add: the plugin), then `relational/scripts/backup_secrets.sh`,
+   then relational clusters (2 to add, 2 to change; pg restarts every
+   instance: replicas, then a switchover). Watch for "Provider produced
+   inconsistent result" on the PXC resource (operator-filled defaults in
+   `spec.backup`); fix with `computed_fields` as on the pg Cluster.
+3. Relational check: all backup checks pass, including WAL files in
+   `s3://pg-backups/pg/wals/` (allow up to 5 minutes, `archive_timeout`).
+4. Take a first on-demand backup per engine by hand; check its size against
+   the disk (16 GiB free on 2026-10-30; the user is freeing more), confirm the
+   "to confirm" items in docs/BACKUPS.md (bucket layout, XtraBackup 8.0.35-36.1
+   against server 8.0.46).
+5. Script runbook 7 (backup under k6 load), 8 (restore into a new cluster)
+   and 9 (point-in-time recovery to just before a planted delete, judged
+   against k6's run_id rows); add their test plans.
+6. Later: runbook 14 (major upgrades; MySQL 8.0 is end of life), runbook 17
+   onto runbook_lib.sh, the app's exit 1 on startup when its node returns,
+   an Alertmanager receiver, a "last good backup too old" alert.
 
 ## 2026-10-30: runbook 26 mysql failed on the app tier; node-monitor grace period 20 s (to apply: rebuilds the cluster)
 
@@ -45,7 +75,10 @@ nodes at 2Gi with a pinned 768M buffer pool.
 - **Runbook 13 mysql target set:** `pxc_image` default 8.0.44-35.1 -> 8.0.46-38.1 (not applied; the runbook asks).
 - **Runbook 13 mysql passed (22:12 UTC, `logs/runbook-13-mysql-20261030-221209.txt`):** 8.0.44 -> 8.0.46. SmartUpdate: mysql-pxc-2 (+100 s), mysql-pxc-1 (+222 s), then the writer mysql-pxc-0 (+336 s); HAProxy moved writes to mysql-pxc-2 at 22:18:57 and back to mysql-pxc-0 at 22:20:20; 347 s to whole; every server reports 8.0.46-38.1. App errors ~20 s (22:18:45-22:19:00, as the writer stopped; 65 of 17,880 requests); 0 lost; 50/50. Runbook 13 done on both engines; RUNBOOKS.md and relational/README.md updated. Pushed 1ce3015.
 - **Runbooks 23-25 rerun after the APP_PODS selector fix (22:32-23:08 UTC): all six pass, 50/50 each, app restarts 0 -> 0.** 23 pg: pg-2 -> pg-1 -> pg-2, 19 s and 18 s to a new writer, 14 writes failed, none after 30 s. 23 mysql: maintenance mode, 19 s and 1 s, 0 writes failed. 24 pg: kill pg-2, probe outage ~17 s, new writer pg-1, 0 app writes failed (the app's retries covered it). 24 mysql: kill mysql-pxc-0, ~0 s, 0 failed. 25 pg (pg-2) and 25 mysql (mysql-pxc-1): replica deleted, 0 failed, writer unchanged. Logs replace the 10-29 ones. Pushed 53017c8.
-- **Runbook 26 worst case (an app pod in the lost zone) passed on both engines:** mysql (23:31 UTC, `logs/runbook-26-mysql-20261030-233139.txt`): mysql-pxc-0 -> mysql-pxc-2 in 22 s, database ~17 s, app ~40 s; pg (23:38 UTC, `logs/runbook-26-pg-20261030-233815.txt`): pg-2 -> pg-1 in 26 s, database ~30 s, app ~40 s; RTO 60 s, 0 lost, 50/50 both. Requests stuck on the dead pod now fail at k6's 15 s (`request timeout`), not 30 s. No OOM: app peak working set 323-355 MiB of 768. The 2 app restarts per run are the lost zone's app pod exiting 1 on startup when its node returns (now seen on orders-mysql too). Pushed.
+- **Runbook 26 worst case (an app pod in the lost zone) passed on both engines:** mysql (23:31 UTC, `logs/runbook-26-mysql-20261030-233139.txt`): mysql-pxc-0 -> mysql-pxc-2 in 22 s, database ~17 s, app ~40 s; pg (23:38 UTC, `logs/runbook-26-pg-20261030-233815.txt`): pg-2 -> pg-1 in 26 s, database ~30 s, app ~40 s; RTO 60 s, 0 lost, 50/50 both. Requests stuck on the dead pod now fail at k6's 15 s (`request timeout`), not 30 s. No OOM: app peak working set 323-355 MiB of 768. The 2 app restarts per run are the lost zone's app pod exiting 1 on startup when its node returns (now seen on orders-mysql too). Pushed b7728c9.
+- **Test plans written: `datastore-clusters/test_plans/`.** A README (the lab, the rules every run follows, known issues) and one plan per scripted runbook (1, 5, 13, 17, 23, 24, 25, 26): purpose, how to run, preconditions, steps, pass criteria with thresholds, the measured numbers per engine with their logs, findings and caveats. Committed 2026-10-30 night.
+- **Backup store written and applied: `platform/environments/dev/backup-store` + `platform/modules/backup-store`.** SeaweedFS 4.48 (`weed mini`; MinIO CE stopped shipping images in 2025) in Docker container `datastore-backups`, outside the kind cluster so backups outlive a rebuild; data on volume `datastore-backups-data`; S3 on 127.0.0.1:8333 only, pods reach it at `host.docker.internal:8333` (pods can't resolve kind container names; a localhost-only port is reachable, tested). Buckets `pg-backups` and `mysql-backups`, one key per engine limited to its bucket, no anonymous access. Keys from the new `platform/scripts/backup_store_keys.sh` into `~/.config/datastore-dev/backup-store/s3.json` (600), mounted read-only: never in Terraform state (the README rule). Platform `check_resources.sh` gains a store section (11 checks; skipped until applied). Tested on a throwaway 4.48 container: each key 200 on its bucket, 403 on the other, anonymous 403, a pod reaches it. Applied by the user (3 added: image, volume, container); platform check 24/24 after fixing two of my checks (the container records the image by ID; the mounts template ran both mounts together). Committed 2026-10-30 night.
+- **Backups configured (not applied): cert-manager v1.21.2 (platform services), the Barman Cloud plugin chart 0.8.1 / v0.15.1 (relational operators, in `cnpg-system`), and both clusters' backup settings (relational clusters root, which now reads the store root's state).** Why the plugin: CNPG 1.30.1 still has the built-in `barmanObjectStore` but it is deprecated and was due for removal in 1.30; the plugin needs cert-manager (mTLS between operator and plugin). pg (`modules/postgresql/cluster/backup.tf`): ObjectStore `pg-backups` (bzip2 base backups, zstd WAL, 7-day recovery window, sidecar 128Mi/512Mi), Cluster `plugins` entry (WAL archiver; applying it restarts every instance, replicas first then a switchover), ScheduledBackup `pg-scheduled` Sunday 03:00 UTC from a standby. mysql: `spec.backup` with XtraBackup `8.0.35-36.1` (the last 8.0 build; operator 1.20.0 tested 8.0.35-35.1 with PXC 8.0.45), S3 storage with `forcePathStyle`, binlog collector each 60 s, weekly schedule keeping 2. Keys: new `relational/scripts/backup_secrets.sh` makes Secrets `pg-backup-s3` and `mysql-backup-s3` from the key file via kubectl stdin. Checks: platform +2 (cert-manager), relational +11 (backups section, including WAL files actually in the bucket: CNPG's archive condition and pg_stat_archiver pass even with no store configured). Both check scripts now give curl the keys on stdin, not argv. New `docs/BACKUPS.md` explains every piece for someone new to them (the user asked: unfamiliar technology); README, relational README and RUNBOOKS 7 point to it. Validated; relational check now 52/62 until applied. Committed 2026-10-30 night. The Mac has 16 GiB free (97% used; the README asks for 40): keep backup retention short.
 - **Stopped for the night after the teardown.** Nothing is running. Resume at step 2 (apply platform `cluster`, check the grace period with `docker exec datastore-dev-control-plane grep grace /etc/kubernetes/manifests/kube-controller-manager.yaml`), then services, operators, clusters, `build_app.sh`, app, seed both engines to 3,000,000, then runbook 26 mysql and pg. All changes uncommitted.
 - **Teardown done (2026-10-30):** app (10), clusters (8), operators (2), services (1), kind cluster (1) destroyed in that order. CNPG's CRDs went with the cluster (Helm keeps them).
 - **Runbook 26 now judges the app's outage too:** `k6_fail_window` (runbook_lib) gives the first and last failed k6 request (creates, updates, deletes, reads; 5 s resolution); both it and the probe's outage must be within the 60 s RTO. On the failed run's data it reports 03:27:38-03:28:53, ~80 s (log: 03:27:33-03:28:50).

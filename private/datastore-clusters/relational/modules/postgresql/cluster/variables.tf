@@ -80,3 +80,15 @@ variable "wait_timeout" {
   type        = string
   default     = "15m"
 }
+
+variable "backup" {
+  description = "Backups to an S3-compatible store (backup.tf); null for none. schedule is a 6-field cron (seconds first); retention a recovery window such as 7d."
+  type = object({
+    endpoint  = string
+    bucket    = string
+    secret    = string
+    retention = string
+    schedule  = string
+  })
+  default = null
+}

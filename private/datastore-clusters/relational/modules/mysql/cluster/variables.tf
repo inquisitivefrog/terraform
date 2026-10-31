@@ -77,3 +77,16 @@ variable "wait_timeout" {
   type        = string
   default     = "20m"
 }
+
+variable "backup" {
+  description = "Backups to an S3-compatible store (local.backup in main.tf); null for none. schedule is a 5-field cron; keep the scheduled backups to keep; image the XtraBackup image matching the server."
+  type = object({
+    endpoint = string
+    bucket   = string
+    secret   = string
+    schedule = string
+    keep     = number
+    image    = string
+  })
+  default = null
+}

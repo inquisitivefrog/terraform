@@ -26,7 +26,16 @@ resource "kubernetes_manifest" "cluster" {
       name      = var.name
       namespace = var.namespace
     }
-    spec = {
+    spec = merge(var.backup == null ? {} : {
+      # The Barman Cloud plugin archives WAL and takes base backups to the
+      # ObjectStore (backup.tf). Adding it restarts every instance (a new
+      # sidecar), replicas first, then a switchover.
+      plugins = [{
+        name          = local.barman_plugin
+        isWALArchiver = true
+        parameters    = { barmanObjectName = kubernetes_manifest.object_store[0].manifest.metadata.name }
+      }]
+      }, {
       instances             = var.instances
       imageName             = var.image
       primaryUpdateStrategy = "unsupervised"
@@ -76,7 +85,7 @@ resource "kubernetes_manifest" "cluster" {
         requests = { cpu = var.cpu_request, memory = var.memory }
         limits   = { memory = var.memory }
       }
-    }
+    })
   }
 
   wait {

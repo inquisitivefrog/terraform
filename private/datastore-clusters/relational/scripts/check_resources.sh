@@ -27,6 +27,23 @@ zones() {
 }
 
 # pg_local <sql>: as postgres on the primary, over its local socket
+# store_count <identity> <bucket> <prefix>: objects under the prefix in the
+# backup store (up to 1000), listed from the laptop with that identity's key
+# (from the key file; never printed)
+store_count() {
+  python3 - "$HOME/.config/datastore-dev/backup-store/s3.json" "$@" <<'EOF'
+import json, sys, subprocess, re
+keys, identity, bucket, prefix = sys.argv[1:]
+c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
+# The key goes to curl as a config file on stdin, not on its command line.
+out = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-",
+                      f"http://localhost:8333/{bucket}?list-type=2&prefix={prefix}"],
+                     input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
+m = re.search(r"<KeyCount>(\d+)</KeyCount>", out)
+print(m.group(1) if m else "error: " + out[:80])
+EOF
+}
+
 pg_local() { k -n "$NS" exec "$PG_PRIMARY" -c postgres -- psql -XAtq -d appdb -c "$1"; }
 
 # pg_app <service> <sslmode> <sql>: as the application role, through a Service
@@ -112,6 +129,35 @@ else
       "select concat((select count(*) from mysql.user where user = 'app'), ' ', (select count(*) from information_schema.schemata where schema_name = 'appdb'))"
     expect "PodDisruptionBudgets (nodes, HAProxies)" "2" sh -c "kubectl --context $CTX -n $NS get pdb -l app.kubernetes.io/instance=$MY --no-headers | wc -l | tr -d ' '"
   fi
+
+  # Backups to the store outside the cluster (docs/BACKUPS.md): configured,
+  # and shipping. Taking and restoring a backup is a runbook's job.
+  echo
+  echo "-- backups --"
+  STORE_URL="http://host.docker.internal:8333"
+  expect "Barman Cloud plugin available" "1" k -n cnpg-system get deploy plugin-barman-cloud -o jsonpath='{.status.availableReplicas}'
+  expect "Key Secrets (scripts/backup_secrets.sh)" "mysql-backup-s3 pg-backup-s3" sh -c \
+    "kubectl --context $CTX -n $NS get secret mysql-backup-s3 pg-backup-s3 -o name | sed 's:.*/::' | sort | xargs"
+  expect "$PG: ObjectStore $PG-backups at the store" "$STORE_URL s3://pg-backups/" k -n "$NS" get objectstores.barmancloud.cnpg.io "$PG-backups" \
+    -o jsonpath='{.spec.configuration.endpointURL} {.spec.configuration.destinationPath}'
+  expect "$PG: plugin sidecar on every instance" "3" sh -c "kubectl --context $CTX -n $NS get pods -l cnpg.io/cluster=$PG,cnpg.io/podRole=instance \
+    -o jsonpath='{range .items[*]}{.spec.initContainers[*].name} {.spec.containers[*].name}{\"\\n\"}{end}' | grep -c plugin-barman-cloud"
+  expect "$PG: WAL archiving working (cluster condition)" "True" k -n "$NS" get clusters.postgresql.cnpg.io "$PG" \
+    -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")].status}'
+  [[ -n "${PG_PRIMARY:-}" ]] && expect "$PG: WAL archived, last attempt succeeded (pg_stat_archiver)" "t" \
+    pg_local "select archived_count > 0 and (last_failed_time is null or last_archived_time > last_failed_time) from pg_stat_archiver"
+  # The condition and pg_stat_archiver also pass with no store configured
+  # (the archive command then succeeds without shipping): look in the bucket.
+  match "$PG: WAL files in the store (s3://pg-backups/$PG/wals/)" '^[1-9][0-9]*$' store_count pg pg-backups "$PG/wals/"
+  expect "$PG: base backup scheduled (Sunday 03:00 UTC)" "0 0 3 * * 0 plugin" k -n "$NS" get scheduledbackups.postgresql.cnpg.io "$PG-scheduled" \
+    -o jsonpath='{.spec.schedule} {.spec.method}'
+  expect "$MY: backup storage at the store" "$STORE_URL mysql-backups true" k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \
+    -o jsonpath='{.spec.backup.storages.s3.s3.endpointUrl} {.spec.backup.storages.s3.s3.bucket} {.spec.backup.storages.s3.s3.forcePathStyle}'
+  match "$MY: XtraBackup 8.0 image (matches the 8.0 server)" '^percona/percona-xtrabackup:8\.0\.' k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \
+    -o jsonpath='{.spec.backup.image}'
+  expect "$MY: full backup scheduled (Sunday 03:00 UTC, keep 2)" "0 3 * * 0 2" k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \
+    -o jsonpath='{.spec.backup.schedule[0].schedule} {.spec.backup.schedule[0].retention.count}'
+  expect "$MY: binlog collector ready (point-in-time recovery)" "1" k -n "$NS" get deploy "$MY-pitr" -o jsonpath='{.status.readyReplicas}'
 
   # Metrics in the shared Prometheus and the dashboards in Grafana. Right after
   # an apply, allow a minute for the first scrapes.

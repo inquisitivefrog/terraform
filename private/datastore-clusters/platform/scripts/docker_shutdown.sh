@@ -1,11 +1,11 @@
 #!/bin/bash
-# Stop the kind cluster gracefully and quit Docker Desktop, e.g. before a
-# reboot or to give the laptop its memory back (the Docker Desktop VM holds
-# about 7 GB with the relational clusters up). Nothing is destroyed: the
-# cluster, its volumes and the Terraform state stay. docker_restart.sh
-# brings it back.
+# Stop the kind cluster and the backup store gracefully and quit Docker
+# Desktop, e.g. before a reboot or to give the laptop its memory back (the
+# Docker Desktop VM holds about 7 GB with the relational clusters up).
+# Nothing is destroyed: the cluster, the backups, their volumes and the
+# Terraform state stay. docker_restart.sh brings them back.
 #
-# Usage: docker_shutdown.sh [--keep-docker]   (--keep-docker: stop only the cluster)
+# Usage: docker_shutdown.sh [--keep-docker]   (--keep-docker: stop only the cluster and the store)
 #
 # Each node container gets 120 s to stop (Docker's default is 10 s, then
 # SIGKILL), so PostgreSQL and MySQL shut down cleanly. All three Galera nodes
@@ -48,6 +48,14 @@ if [[ -n "$LEFT" ]]; then
   echo "Could not stop $(echo "$LEFT" | xargs); Docker Desktop left running so nothing is killed." >&2
   echo "Try 'docker stop -t 120 <name>' or restart Docker Desktop from its menu, then rerun this." >&2
   exit 1
+fi
+
+# The backup store (environments/dev/backup-store), after the cluster so
+# nothing is still writing to it. Stopped here, it stays stopped until
+# docker_restart.sh starts it (restart policy unless-stopped).
+if [[ -n "$(docker ps --filter name=^datastore-backups$ --format '{{.Names}}')" ]]; then
+  echo "Stopping datastore-backups (the backup store)"
+  docker stop -t 30 datastore-backups >/dev/null
 fi
 
 if [[ "${1:-}" == "--keep-docker" ]]; then

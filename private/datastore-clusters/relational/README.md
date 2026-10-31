@@ -32,15 +32,16 @@ quorum 4 of 6).
 
 | Path | Creates |
 |---|---|
-| `modules/postgresql/operator/` | CloudNativePG (Helm, namespace `cnpg-system`, watches every namespace), its PodMonitor and the official CloudNativePG Grafana dashboard |
-| `modules/postgresql/cluster/` | One `Cluster`: required zone anti-affinity, quorum sync replication, TLS-only `pg_hba`, PDB, app database and role; apply waits for Ready. `monitoring.tf`: PodMonitor for every instance |
+| `modules/postgresql/operator/` | CloudNativePG (Helm, namespace `cnpg-system`, watches every namespace), its PodMonitor and the official CloudNativePG Grafana dashboard; the Barman Cloud plugin beside it (backups, [../docs/BACKUPS.md](../docs/BACKUPS.md)) |
+| `modules/postgresql/cluster/` | One `Cluster`: required zone anti-affinity, quorum sync replication, TLS-only `pg_hba`, PDB, app database and role; apply waits for Ready. `monitoring.tf`: PodMonitor for every instance. `backup.tf`: ObjectStore (the store, compression, 7-day recovery window) and a weekly ScheduledBackup; the Cluster's plugin entry archives WAL |
 | `modules/mysql/operator/` | Percona PXC operator (Helm, namespace `pxc-operator`, watches every namespace) |
-| `modules/mysql/cluster/` | One `PerconaXtraDBCluster`: zone anti-affinity, HAProxy, TLS for clients and replication, `require_secure_transport`, PDBs, app database and user; apply waits for ready. `monitoring.tf`: `mysqld_exporter` sidecar per node, PodMonitor, and the MySQL / Galera dashboard (`dashboards/mysql-galera.json`) |
+| `modules/mysql/cluster/` | One `PerconaXtraDBCluster`: zone anti-affinity, HAProxy, TLS for clients and replication, `require_secure_transport`, PDBs, app database and user; apply waits for ready. `monitoring.tf`: `mysqld_exporter` sidecar per node, PodMonitor, and the MySQL / Galera dashboard (`dashboards/mysql-galera.json`); backups (XtraBackup weekly, keep 2; binlogs each minute for point-in-time recovery) |
 | `environments/dev/operators/` | Both operators |
 | `environments/dev/clusters/` | Namespace `relational`, `pg` and `mysql` (versions in `variables.tf`) |
 | `modules/orders-app/` | The example app for one engine: Deployment (2 pods across zones), Service, ServiceMonitor |
 | `environments/dev/app/` | The orders app for both engines, its k6 script and the Orders load dashboard (source, tests and the load: [app/README.md](app/README.md)) |
 | `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext; the app once deployed |
+| `scripts/backup_secrets.sh` | Each engine's key to the backup store as a Secret (`pg-backup-s3`, `mysql-backup-s3`), from the key file, never through Terraform; run before the clusters root, and after a key rotation |
 | `scripts/build_app.sh [--test]` | Build the orders image and load it into the kind nodes |
 | `scripts/load_test.sh pg\|mysql seed\|run` | Run the k6 load as a Job; results in Grafana |
 | `scripts/runbook_1_alerts.sh pg\|mysql [rate] [duration]` | Runbook 1, repeatable: under k6 load, fires member down, replication lag, connections over 80% and the search latency SLO on purpose, checks each reaches Alertmanager and clears, and undoes every trigger (also on failure) |
@@ -62,6 +63,7 @@ The platform (`../platform`) first. Then, from the repo root:
 cd private/datastore-clusters/relational/environments/dev/operators
 terraform init && terraform plan -out plan-operators && terraform apply plan-operators   # ~1 min
 
+../../../scripts/backup_secrets.sh   # needs the clusters' namespace: on a fresh build, after the first clusters apply
 cd ../clusters
 terraform init && terraform plan -out plan-clusters && terraform apply plan-clusters      # ~5-10 min: image pulls, then 3 nodes each
 

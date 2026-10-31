@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bring the stopped kind cluster back (after a reboot, or after
+# Bring the stopped kind cluster and backup store back (after a reboot, or after
 # docker_shutdown.sh), wait until each layer is really up, then run both
 # checks. Safe to run when everything is already running.
 #
@@ -133,6 +133,11 @@ wait_for "Docker Desktop" 180 docker info || exit 1
 T0="1970-01-01T00:00:00Z"
 if [[ "$(docker ps --filter "name=^$CLUSTER-" --format '{{.Names}}' | wc -l | tr -d ' ')" != 4 ]]; then
   T0="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+fi
+# The backup store first, if it exists: WAL archiving resumes once the
+# databases are back.
+if docker inspect datastore-backups >/dev/null 2>&1; then
+  docker start datastore-backups >/dev/null
 fi
 docker start "$CLUSTER-control-plane" >/dev/null
 docker start "$CLUSTER-worker" "$CLUSTER-worker2" "$CLUSTER-worker3" >/dev/null

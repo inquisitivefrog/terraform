@@ -7,10 +7,13 @@ follows "it's deployed". Built on the laptop (Docker Desktop + kind) because
 the same designs in AWS cost more than the Free plan allows.
 
 Why it is shaped this way, and what was decided: [docs/DESIGN.md](docs/DESIGN.md).
+How backups work (the store, cert-manager, the Barman Cloud plugin,
+XtraBackup), piece by piece: [docs/BACKUPS.md](docs/BACKUPS.md). What each
+scripted runbook must show: [test_plans/](test_plans/README.md).
 
 ```
 datastore-clusters/
-  platform/                  shared: 3-zone kind cluster; services (Prometheus + Grafana; later cert-manager, object store)
+  platform/                  shared: 3-zone kind cluster; services (Prometheus + Grafana, cert-manager); backup store (outside the cluster)
   <category>/
     modules/<engine>/operator   the engine's control plane (Helm)
     modules/<engine>/cluster    one HA cluster of it (custom resource)
@@ -84,9 +87,13 @@ upgrade last.
 |---|---|
 | `platform/modules/kind-cluster/` | One kind cluster: a control plane and one worker per zone, labelled `topology.kubernetes.io/region` and `zone` |
 | `platform/modules/monitoring/` | kube-prometheus-stack: Prometheus, Grafana, Alertmanager; picks up monitors, rules and dashboards from every namespace; remote-write receiver for k6 |
+| `platform/modules/cert-manager/` | cert-manager: TLS certificates from Certificate and Issuer resources; the Barman Cloud plugin needs it ([docs/BACKUPS.md](docs/BACKUPS.md)) |
 | `platform/environments/dev/cluster/` | kind cluster `datastore-dev`, zones `dc1-a`, `dc1-b`, `dc1-c`; kubeconfig `~/.kube/kind-datastore-dev`; local state (every other root reads it) |
-| `platform/environments/dev/services/` | Shared services: monitoring (namespace `monitoring`) |
-| `platform/scripts/check_resources.sh` | Nodes, zones, taints, localhost-only API, storage class |
+| `platform/environments/dev/services/` | Shared services: monitoring (namespace `monitoring`), cert-manager (namespace `cert-manager`) |
+| `platform/modules/backup-store/` | SeaweedFS (S3-compatible, `weed mini`) in a Docker container outside the cluster; data on a Docker volume; S3 on 127.0.0.1 only |
+| `platform/environments/dev/backup-store/` | Store `datastore-backups`: buckets `pg-backups` and `mysql-backups`, one key each limited to its bucket; laptop `http://localhost:8333`, pods `http://host.docker.internal:8333`. Its own root, so backups outlive a cluster rebuild |
+| `platform/scripts/backup_store_keys.sh` | Writes the store's keys to `~/.config/datastore-dev/backup-store/s3.json` (mode 600, outside the repo, never in state); `--rotate` replaces them |
+| `platform/scripts/check_resources.sh` | Nodes, zones, taints, localhost-only API, storage class; monitoring; the backup store (running, localhost only, each key only its own bucket, no anonymous access) |
 | `platform/scripts/kube_use.sh` | Nodes, Helm releases, and every datastore pod with its zone |
 
 Free at least 40 GB on the Mac's disk, start Docker Desktop with **12-14 GB
@@ -100,6 +107,12 @@ terraform init && terraform plan -out plan-cluster && terraform apply plan-clust
 cd ../services
 terraform init && terraform plan -out plan-services && terraform apply plan-services  # ~3 min
 
+# The backup store (outside the cluster; keep it across cluster rebuilds):
+../../../scripts/backup_store_keys.sh
+cd ../backup-store
+terraform init && terraform plan -out plan-backup-store && terraform apply plan-backup-store
+../../../scripts/check_resources.sh
+
 # Grafana (this shell only):
 export KUBECONFIG=~/.kube/kind-datastore-dev
 kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo
@@ -108,7 +121,8 @@ kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80   #
 
 Then a category, for example [relational](relational/README.md). Tear down
 in reverse: the category's clusters, its operators, then the platform's
-services and cluster
+services and cluster; leave the backup store unless you mean to delete
+every backup
 (`terraform plan -destroy -out plan-destroy-<root>`, then apply that plan).
 Destroying the platform cluster alone deletes everything, but leaves the category
 roots with state for resources that no longer exist; delete their

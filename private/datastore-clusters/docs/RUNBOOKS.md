@@ -298,6 +298,13 @@ notes. Implementation status lives in the README of each category.
 - **Verify:** the backup alert ("last good backup older than schedule")
   stays quiet; every backup is restore-tested (8).
 - **Engine notes:** caches may need no backup at all (state the decision).
+- **Lab (relational, 2026-10-30):** configured, not yet scripted or run. The
+  store is SeaweedFS in a container outside the kind cluster; PostgreSQL
+  through the Barman Cloud plugin (needs cert-manager), PXC through its
+  operator (XtraBackup Job, binlog collector). Full backups weekly, not
+  daily (the laptop is short of disk; the runbooks take them on demand); no
+  object lock or backup alert yet. What each piece is, and the gaps:
+  [BACKUPS.md](BACKUPS.md).
 
 #### 8. Restore (into a new cluster)
 - **Goal:** a working cluster from a backup, proving the backup is real.
