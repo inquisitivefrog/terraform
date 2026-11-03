@@ -88,6 +88,26 @@ desynced 32 s at 41-48 MiB/s; the Job only uploads (xbcloud). Docs and
 comments corrected (they said the Job runs XtraBackup). Store now: pg 189
 MiB, mysql 1,059 MiB.
 Failed Backup pg-manual-20261102-203829 deleted (it wrote nothing).
+Committed 29293f7 (not pushed). Runbook 8 scripted, not run:
+`relational/scripts/runbook_8_restore.sh pg|mysql [--keep]` (fresh backup
+with fingerprints before and after, restore into a one-instance
+`<engine>-restore`, amcheck / CHECK TABLE, fingerprint compare, app queries
+over TLS, delete). Its manifests pass a server-side dry run; the
+fingerprint queries take under 1 s (pg, parallel) and 4 s (mysql) on the
+live replicas. Test plans for runbooks 7 and 8 added.
+Runbook 8 pg PASSED (19:12): backup 31 s, restore 303 s (the RTO for
+~3,000,000 orders), amcheck 5 indexes clean, 3,022,030 rows identical, app
+read and write ok, cleanup 10 s. Runbook 8 mysql FAILED at the restore:
+"nil s3 backup status storage" (backupSource with storageName only;
+operator 1.20 wants the S3 settings inline). Fixed (dry run passes); the
+leftover mysql-restore deleted by hand, nothing left. Rerun PASSED (19:26):
+backup 51 s, restore 223 s (empty cluster 61 s, then the operator's
+restore 152 s, ready 10 s), CHECK TABLE OK, 3,020,568 rows identical, app
+read and write ok, cleanup 20 s, check 63/63. Runbook 8 passes on both.
+Store: pg 374 MiB (2 base backups by hand), mysql 2,609 MiB (3 full by
+hand). The two older MySQL ones (18:47, 19:19) deleted with kubectl (the
+finalizer removed them from the store: mysql-backups now 1,059 MiB, the
+19:26 backup runbook 8 restored plus binlogs).
 
 Resume here (from 2026-10-31):
 1. `docker_restart.sh`; expect platform 24/24 (cert-manager skipped) and

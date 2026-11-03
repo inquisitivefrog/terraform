@@ -298,13 +298,16 @@ notes. Implementation status lives in the README of each category.
 - **Verify:** the backup alert ("last good backup older than schedule")
   stays quiet; every backup is restore-tested (8).
 - **Engine notes:** caches may need no backup at all (state the decision).
-- **Lab (relational, 2026-10-30):** configured, not yet scripted or run. The
-  store is SeaweedFS in a container outside the kind cluster; PostgreSQL
-  through the Barman Cloud plugin (needs cert-manager), PXC through its
-  operator (XtraBackup Job, binlog collector). Full backups weekly, not
-  daily (the laptop is short of disk; the runbooks take them on demand); no
-  object lock or backup alert yet. What each piece is, and the gaps:
-  [BACKUPS.md](BACKUPS.md).
+- **Lab (relational, 2026-11-03):** configured and applied; a backup by
+  hand passes on both engines (`relational/scripts/backup_now.sh pg|mysql`):
+  pg 51 s, 185 MiB from a replica; mysql 71 s, 775 MiB donated by a
+  non-writer. The store is SeaweedFS in a container outside the kind
+  cluster; PostgreSQL through the Barman Cloud plugin (needs cert-manager),
+  PXC through its operator (backup Job, binlog collector). Full backups
+  weekly, not daily (the laptop is short of disk; the runbooks take them on
+  demand); no object lock or backup alert yet. What each piece is, and the
+  gaps: [BACKUPS.md](BACKUPS.md); test plan:
+  [../test_plans/runbook-07-backup.md](../test_plans/runbook-07-backup.md).
 
 #### 8. Restore (into a new cluster)
 - **Goal:** a working cluster from a backup, proving the backup is real.
@@ -313,6 +316,13 @@ notes. Implementation status lives in the README of each category.
   one); run consistency checks and row counts against expectations; record
   restore time (the realistic RTO); delete the temporary cluster.
 - **Verify:** application queries succeed against the restored cluster.
+- **Lab (relational, 2026-11-03):** passes on both engines: ~3,000,000
+  orders restored with every row identical, pg in 303 s, mysql in 223 s.
+  `relational/scripts/runbook_8_restore.sh pg|mysql` restores a fresh backup
+  into a one-instance `<engine>-restore` cluster, compares every row's
+  fingerprint with the source, runs amcheck / CHECK TABLE and the app's
+  queries, times it, and deletes it. Weekly automation is not set up. Test
+  plan: [../test_plans/runbook-08-restore.md](../test_plans/runbook-08-restore.md).
 
 #### 9. Point-in-time recovery
 - **Goal:** recover to just before a mistake (a bad `DELETE`, a broken

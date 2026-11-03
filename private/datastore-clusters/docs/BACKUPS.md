@@ -250,7 +250,7 @@ Backups taken by hand stay until deleted: MySQL's "keep 2" counts only
 scheduled ones. Deleting a MySQL backup resource deletes it from the store
 too (the `percona.com/delete-backup` finalizer the script sets).
 
-## Restore (runbooks 8 and 9, to script)
+## Restore (runbook 8 scripted; runbook 9 to script)
 
 - **PostgreSQL:** a **new** Cluster that bootstraps from the store:
   `bootstrap.recovery.source` names an `externalClusters` entry using the
@@ -263,9 +263,23 @@ too (the `percona.com/delete-backup` finalizer the script sets).
   a backup (`backupName`) or a location in the store (`backupSource`), with
   `pitr` for a date or a GTID. It replaces the cluster's data: the cluster
   stops, the backup is copied in, the binlogs are replayed, the nodes
-  rejoin.
-- The runbooks will check the result against k6's tagged rows: every order
-  acknowledged before the target is there, nothing after it.
+  rejoin. **Never point one at the live cluster in the lab:** runbook 8
+  restores into a separate one-node cluster, `mysql-restore`, which needs
+  a copy of the live cluster's system passwords (`mysql-secrets`): the
+  backup's `mysql.user` holds them, and the operator could not log in
+  with new ones. `backupSource` must carry the store's S3 settings inline
+  (`s3: {bucket, credentialsSecret, endpointUrl, region, forcePathStyle}`):
+  with only `storageName`, operator 1.20 fails "nil s3 backup status
+  storage". Its steps, as seen: Stopping Cluster, Restoring (copy from the
+  store), Preparing Cluster (XtraBackup applies the redo log), Starting
+  Cluster, Succeeded.
+- **Runbook 8** (`relational/scripts/runbook_8_restore.sh pg|mysql`): a
+  fresh backup, then a restore into `<engine>-restore` beside the live
+  cluster. It compares a fingerprint of every row with the source, checks
+  the indexes and tables, runs the app's queries against it, then deletes it.
+  Test plan: [../test_plans/runbook-08-restore.md](../test_plans/runbook-08-restore.md).
+- Runbook 9 (point in time) will check the result against k6's tagged rows:
+  every order acknowledged before the target is there, nothing after it.
 
 ## Known gaps
 
