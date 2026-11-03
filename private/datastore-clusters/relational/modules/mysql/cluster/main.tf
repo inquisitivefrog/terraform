@@ -44,6 +44,10 @@ resource "kubernetes_manifest" "cluster" {
         configuration = format("%s\n", join("\n", compact([
           "[mysqld]",
           "require_secure_transport=ON",
+          # Binlogs kept on each node 7 days, not MySQL's 30: the binlog
+          # collector starts a new one every minute (FLUSH BINARY LOGS), and
+          # once uploaded the store's copy is the one a restore uses.
+          "binlog_expire_logs_seconds=604800",
           var.innodb_buffer_pool_size == null ? "" : "innodb_buffer_pool_size=${var.innodb_buffer_pool_size}",
         ])))
         resources = {
@@ -99,10 +103,11 @@ resource "kubernetes_manifest" "cluster" {
 }
 
 # Backups (when var.backup is set), run by the operator:
-#   - full backups: a Job runs XtraBackup against one node, a physical copy
-#     of the data files taken while the node keeps serving, streamed to the
-#     bucket (xbcloud); weekly on a schedule, more on demand
-#     (PerconaXtraDBClusterBackup resources) in the runbooks;
+#   - full backups: a Job joins Galera as an arbitrator and asks for a full
+#     state transfer; a non-writer node donates it with XtraBackup, a
+#     physical copy of the data files taken while it keeps serving, and the
+#     Job uploads it to the bucket (xbcloud); weekly on a schedule, more on
+#     demand (PerconaXtraDBClusterBackup resources, scripts/backup_now.sh);
 #   - point-in-time recovery: a binlog collector Deployment uploads every
 #     binary log to the same bucket (each minute, or when one fills); a
 #     restore is the newest full backup before the target time, plus the
@@ -111,21 +116,27 @@ resource "kubernetes_manifest" "cluster" {
 locals {
   backup = var.backup == null ? null : {
     image = var.backup.image
+    # How long a backup Job may run. The operator writes its default (1200 s)
+    # into the spec when unset, so Terraform saw a field appear after apply
+    # ("Provider produced inconsistent result", 2026-11-02); set it here.
+    runningDeadlineSeconds = 1200
     pitr = {
       enabled            = true
       storageName        = "s3"
       timeBetweenUploads = 60
       timeoutSeconds     = 60
+      # The operator sizes the collector's upload buffer at 75% of this limit
+      # (BUFFER_SIZE). At 256Mi (a 192 MiB buffer) it was OOMKilled uploading
+      # the seed's 266 MB binlog (2026-11-02); 1Gi is Percona's example.
       resources = {
-        requests = { cpu = "20m", memory = "64Mi" }
-        limits   = { memory = "256Mi" }
+        requests = { cpu = "20m", memory = "128Mi" }
+        limits   = { memory = "1Gi" }
       }
     }
     storages = {
       s3 = {
         type = "s3"
-        # The XtraBackup Job; it reads with its own small buffer
-        # (--use-memory defaults to 100 MB).
+        # The backup Job: it receives the donor's stream and uploads it.
         resources = {
           requests = { cpu = "100m", memory = "256Mi" }
           limits   = { memory = "1Gi" }

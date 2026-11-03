@@ -124,6 +124,7 @@ else
       "select concat(@@hostname, ' ', if(variable_value <> '', 'TLS', 'plain')) from performance_schema.session_status where variable_name = 'Ssl_cipher'"
     match "Reader endpoint $MY-haproxy-replicas answers" "^$MY-pxc-[0-9]+$" my_sql "$MY-haproxy-replicas" REQUIRED "select @@hostname"
     expect "require_secure_transport" "1" my_sql "$MY-haproxy" REQUIRED "select @@require_secure_transport"
+    expect "Binlogs kept 7 days (binlog_expire_logs_seconds)" "604800" my_sql "$MY-haproxy" REQUIRED "select @@binlog_expire_logs_seconds"
     refused "Unencrypted connection rejected" 'ERROR 3159|insecure transport are prohibited' my_sql "$MY-haproxy" DISABLED "select 1"
     expect "Application user app with database appdb" "1 1" my_sql "$MY-haproxy" REQUIRED \
       "select concat((select count(*) from mysql.user where user = 'app'), ' ', (select count(*) from information_schema.schemata where schema_name = 'appdb'))"

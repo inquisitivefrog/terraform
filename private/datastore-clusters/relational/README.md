@@ -42,6 +42,7 @@ quorum 4 of 6).
 | `environments/dev/app/` | The orders app for both engines, its k6 script and the Orders load dashboard (source, tests and the load: [app/README.md](app/README.md)) |
 | `scripts/check_resources.sh` | Read-only PASS/FAIL, including SQL through each endpoint and refused plaintext; the app once deployed |
 | `scripts/backup_secrets.sh` | Each engine's key to the backup store as a Secret (`pg-backup-s3`, `mysql-backup-s3`), from the key file, never through Terraform; run before the clusters root, and after a key rotation |
+| `scripts/backup_now.sh pg\|mysql` | One full backup by hand: waits for it, prints time taken, location and size, logs the run ([docs/BACKUPS.md](../docs/BACKUPS.md)) |
 | `scripts/build_app.sh [--test]` | Build the orders image and load it into the kind nodes |
 | `scripts/load_test.sh pg\|mysql seed\|run` | Run the k6 load as a Job; results in Grafana |
 | `scripts/runbook_1_alerts.sh pg\|mysql [rate] [duration]` | Runbook 1, repeatable: under k6 load, fires member down, replication lag, connections over 80% and the search latency SLO on purpose, checks each reaches Alertmanager and clears, and undoes every trigger (also on failure) |

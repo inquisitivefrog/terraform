@@ -30,7 +30,66 @@ Written, validated, **not applied** (backups, docs/BACKUPS.md):
 - Until those applies the relational check is 52/62: the 10 backup checks
   fail by design.
 
-Resume here (2026-10-31):
+2026-11-02: restarted with `docker_restart.sh` (pods ready in 214 s;
+Galera 3 Synced, pg 2 streaming); disk 30 GiB free. cert-manager v1.21.2
+applied by the user (1 added; controller, webhook, cainjector 1/1);
+platform check 26/26, relational 52/62 (the 10 backup checks, as expected).
+Then, by the user: the Barman Cloud plugin (operators, 1 added),
+`backup_secrets.sh` (both Secrets created), and the clusters root (pg:
+ObjectStore and ScheduledBackup added, Cluster changed; mysql: Cluster
+changed, then "Provider produced inconsistent result": the operator wrote
+`spec.backup.runningDeadlineSeconds: 1200`). Nothing tainted; the change
+was on the server. pg rolled its instances with the sidecar in 121 s
+(pg-3, pg-2, then pg-1, primary pg-1); WAL in `s3://pg-backups/pg/wals/` a
+minute later. Relational check 61/62: the binlog collector `mysql-pitr` was
+OOMKilled (3 restarts) at its 256Mi limit: the operator makes its upload
+buffer 75% of the limit (192 MiB) and the first binlog to upload is the
+seed's 266 MB. Fixes: set `runningDeadlineSeconds = 1200`; collector
+128Mi request / 1Gi limit (Percona's example). docs/BACKUPS.md updated.
+Applied by the user (1 changed, nothing else). Relational check 62/62.
+The collector was OOMKilled twice more at 1Gi (a 768 MiB buffer leaves
+little room), but each restart resumed from the last GTID set it uploaded;
+it caught up within 2 minutes (binlog.000003 to .000011, 289 MB in
+`mysql-backups`) and has stayed up since. Only the seed's one big binlog
+does this. Found: the collector runs FLUSH BINARY LOGS every 60 s, so the
+server starts a new binlog every minute even when idle (241 bytes each;
+empty ones are not uploaded). With `binlog_expire_logs_seconds` 30 days
+that is up to 43,200 files on the node it reads from (pxc-0: 35, others
+7 and 9). Agreed: keep binlogs 7 days (`binlog_expire_logs_seconds=604800`
+in the PXC configuration; the check now has 63 checks, verifying it). To
+apply: clusters root, 1 change; the operator restarts the 3 nodes one at a
+time. New `relational/scripts/backup_now.sh pg|mysql`: one full backup by
+hand, waits for it, reports time, location and size, logs to
+`relational/logs/backup-<engine>-*.txt` (docs/BACKUPS.md "Take one by hand").
+Not run yet.
+Applied by the user (1 changed). The rolling restart did not finish: by
+21:00 all three MySQL nodes were down and the operator was running its
+full-cluster crash recovery on pxc-2 (the first attempt was killed by a 5 s
+liveness timeout). The first `backup_now.sh pg` (20:38) failed after 22
+minutes (`rpc error ... exit status 1`, from pg-2). Cause: CPU starvation,
+not the change: HandBrake and ffmpeg on the Mac were using about 2.8 cores,
+the Docker VM got about 2.4 of its 8 CPUs, CPU pressure inside the nodes
+was 98%, and load average was 75-85. Probes timed out, so the control
+plane, operators, HAProxy and apps restarted in a loop.
+2026-11-03: the user rebooted. The backup store stayed stopped (clean exit
+at 23:52, not restarted by Docker despite `unless-stopped`);
+`docker_restart.sh` started it: platform 26/26, relational 63/63, MySQL
+recovered by itself (3 Synced, binlogs kept 7 days), PostgreSQL primary
+now pg-2. `backup_now.sh pg` passed: 51 s, from pg-1, 185 MiB (2 objects) in
+`s3://pg-backups/pg/base/20261103T184539/`. The failed Backup
+pg-manual-20261102-203829 was still listed (deleted below). `backup_now.sh mysql` passed
+too (run at 18:47 with HandBrake still busy; the cluster stayed ready 3/3):
+71 s, 775 MiB in 351 objects (uncompressed, one per file chunk) in
+`s3://mysql-backups/mysql-2026-11-03-18:47:12-full/`. How it works, seen in
+the logs: the Job joins Galera as an arbitrator (garbd) and asks for an
+SST; donor mysql-pxc-2 (not the writer pxc-0) ran its own bundled
+XtraBackup 8.0.35-36 (in the PXC 8.0.46 image, so Percona pairs them),
+desynced 32 s at 41-48 MiB/s; the Job only uploads (xbcloud). Docs and
+comments corrected (they said the Job runs XtraBackup). Store now: pg 189
+MiB, mysql 1,059 MiB.
+Failed Backup pg-manual-20261102-203829 deleted (it wrote nothing).
+
+Resume here (from 2026-10-31):
 1. `docker_restart.sh`; expect platform 24/24 (cert-manager skipped) and
    relational 52/62.
 2. Apply platform services (expect 1 to add: cert-manager), then relational

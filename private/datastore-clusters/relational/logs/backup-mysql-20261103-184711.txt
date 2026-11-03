@@ -1,0 +1,13 @@
+# backup_now.sh mysql (2026-11-03T18:47:11Z, kind cluster datastore-dev)
+Store before: mysql-backups holds 26 objects, 283.5 MiB
+Backup mysql-manual-20261103-184711 of cluster mysql (XtraBackup Job)
+perconaxtradbclusterbackup.pxc.percona.com/mysql-manual-20261103-184711 created
+  18:47:22 Running
+  18:48:23 Succeeded
+  to s3://mysql-backups/mysql-2026-11-03-18:47:12-full
+  completed 2026-11-03T18:48:10Z
+  
+Took 71 s (from creating it to the status above)
+In the store: s3://mysql-backups/mysql-2026-11-03-18:47:12-full/: 351 objects, 775.0 MiB
+Store after: mysql-backups holds 381 objects, 1058.6 MiB
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/backup-mysql-20261103-184711.txt

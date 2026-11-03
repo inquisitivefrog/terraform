@@ -1,0 +1,13 @@
+# backup_now.sh pg (2026-11-03T18:45:39Z, kind cluster datastore-dev)
+Store before: pg-backups holds 14 objects, 3.9 MiB
+Backup pg-manual-20261103-184539 of cluster pg (plugin, from a replica)
+backup.postgresql.cnpg.io/pg-manual-20261103-184539 created
+  18:45:39 started
+  18:46:30 completed
+  from pg-1, id 20261103T184539, WAL 0000000E0000000000000076 to 0000000E0000000000000077
+  started 2026-11-03T18:45:39Z, stopped 2026-11-03T18:46:27Z
+  
+Took 51 s (from creating it to the status above)
+In the store: s3://pg-backups/pg/base/20261103T184539/: 2 objects, 185.2 MiB
+Store after: pg-backups holds 16 objects, 189.0 MiB
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/backup-pg-20261103-184539.txt

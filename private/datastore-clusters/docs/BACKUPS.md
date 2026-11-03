@@ -38,7 +38,7 @@ place, for example to move data across major versions (runbook 14).
       CloudNativePG operator ── mTLS ──►      │ adds a sidecar to each pg pod
       relational namespace:                   ▼
         pg-1..3   postgres + plugin-barman-cloud sidecar ── WAL, base backups ──┘
-        mysql-pxc-0..2 ── XtraBackup Job (on demand / weekly) ── full backups ──┘
+        mysql-pxc-0..2 ── backup Job (on demand / weekly) ────── full backups ──┘
         mysql-pitr (binlog collector) ─────── binlogs each minute ──────────────┘
         Secrets pg-backup-s3, mysql-backup-s3 (each engine's key)
 ```
@@ -111,8 +111,10 @@ place, for example to move data across major versions (runbook 14).
   the archiver, which ships it at once. `archive_timeout` (300 s) closes a
   segment every 5 minutes even if it isn't full, so a quiet database still
   has at most 5 minutes unarchived. An idle database writes almost nothing.
-- **Layout in the bucket** (to confirm): `s3://pg-backups/pg/base/<backup
-  id>/` and `s3://pg-backups/pg/wals/`. `pg` is the cluster's name (the
+- **Layout in the bucket:** `s3://pg-backups/pg/wals/` (seen 2026-11-02,
+  the first WAL a minute after the apply) and `s3://pg-backups/pg/base/<backup
+  id>/` (seen 2026-11-03: `20261103T184539/`, 2 objects, 185 MiB for the
+  ~1.4 GB database; taken from replica pg-1 in 51 s). `pg` is the cluster's name (the
   "server name").
 - **Applying it** restarts every instance (the new sidecar): replicas first,
   then a switchover, as for a patch (runbook 13).
@@ -124,12 +126,20 @@ place, for example to move data across major versions (runbook 14).
 
 - Built into the PXC operator: the `backup` section of the
   `PerconaXtraDBCluster` (`relational/modules/mysql/cluster/main.tf`).
-- **Full backups:** a Job runs **Percona XtraBackup** against one node. It
-  copies the InnoDB data files while the node keeps serving, plus the redo
-  log written meanwhile, so the copy is consistent; **xbcloud** streams it to
-  the bucket. The image must handle the server's version:
-  `percona-xtrabackup:8.0.35-36.1`, the last 8.0 build, for server 8.0.46.
-  It moves to 8.4 with the server (runbook 14).
+- **Full backups:** the backup Job joins the Galera cluster as an
+  arbitrator (`garbd`, no data) and asks for a full state transfer (SST),
+  as a new node would. A node that is not the writer becomes the **donor**:
+  it runs **Percona XtraBackup** (the copy bundled in its own PXC image),
+  which copies the InnoDB data files while the node keeps serving, plus the
+  redo log written meanwhile, so the copy is consistent. The Job receives
+  the stream and **xbcloud** uploads it to the bucket, one object per file
+  chunk, uncompressed. Seen 2026-11-03: donor mysql-pxc-2 (writer pxc-0),
+  desynced 32 s at 41-48 MiB/s; 71 s in all; 775 MiB in 351 objects under
+  `s3://mysql-backups/mysql-<date>-<time>-full/`.
+- **Versions:** the PXC 8.0.46 image bundles XtraBackup 8.0.35-36 (and
+  2.4 for 5.7), so Percona pairs them; the Job's image
+  (`percona-xtrabackup:8.0.35-36.1`, the last 8.0 build) only receives and
+  uploads. Both move to 8.4 with the server (runbook 14).
 - **Schedule and retention:** each Sunday 03:00 UTC (`0 3 * * 0`); the
   operator keeps the last 2 scheduled backups and deletes older ones from
   the store too. Backups made on demand (`PerconaXtraDBClusterBackup`) are
@@ -137,7 +147,26 @@ place, for example to move data across major versions (runbook 14).
 - **Point-in-time recovery:** the `mysql-pitr` Deployment, the binlog
   collector, uploads each binary log to the bucket, at least every 60 s.
   PITR needs GTIDs (`gtid_mode=ON`, which PXC sets) and row-based binlogs
-  (`ROW`): both checked on 2026-10-30.
+  (`ROW`): both checked on 2026-10-30. It reads the binlogs from one node
+  (as the `xtrabackup` user, through the `mysql-pxc` service) and keeps track
+  of the last GTID set it uploaded, so a restart resumes where it stopped.
+- **Its memory:** the operator gives the collector an upload buffer of 75%
+  of its memory limit (`BUFFER_SIZE`). At a 256 Mi limit it was OOMKilled
+  uploading a 266 MB binlog (the 3,000,000-row seed's, 2026-11-02); the
+  limit is now 1 Gi, Percona's example. It still died twice on that file
+  (a 768 MiB buffer leaves about 256 MiB for everything else) but resumed
+  each time and caught up in 2 minutes. Normal binlogs are a few MB.
+- **A new binlog every minute:** to upload the binlog the server is still
+  writing, the collector runs `FLUSH BINARY LOGS` every
+  `timeBetweenUploads` (60 s), which closes it and starts the next. When
+  nothing was written the new file is empty (241 bytes) and not uploaded,
+  but it stays on the node the collector reads from (mysql-pxc-0 on
+  2026-11-02: 35 binlogs, against 7 and 9 on the others) until
+  `binlog_expire_logs_seconds`. MySQL's default is 30 days (up to 43,200
+  small files); the cluster module sets 7 days (up to 10,080). Nothing is
+  lost: once uploaded, the store's copy is the one a restore uses, so the
+  node only needs its binlogs while the collector catches up. Otherwise a
+  binlog grows to `max_binlog_size` (1 GiB) before a new one starts.
 - **The S3 settings** for an S3-compatible store: `endpointUrl`, a
   `region` (only used to sign requests), and `forcePathStyle: true`
   (`<endpoint>/<bucket>/…`, not `<bucket>.<endpoint>`).
@@ -148,8 +177,8 @@ place, for example to move data across major versions (runbook 14).
   should be well under that, plus the logs. The Mac had 16 GiB free on
   2026-10-30, hence weekly fulls and short retention.
 - **Memory:** cert-manager ~160 Mi requested, the plugin 64 Mi, a 128 Mi
-  sidecar per pg instance, the binlog collector 64 Mi; an XtraBackup Job
-  256 Mi while it runs.
+  sidecar per pg instance, the binlog collector 128 Mi (up to 1 Gi while it
+  uploads a large binlog); a backup Job 256 Mi while it runs.
 
 ## Bring it up
 
@@ -193,6 +222,33 @@ kubectl -n cnpg-system logs deploy/plugin-barman-cloud                    # the 
 The bucket itself, from the laptop, with the key printed nowhere: the
 relational `check_resources.sh` counts WAL files in `s3://pg-backups/pg/wals/`
 (its `store_count` helper reads the key file and hands curl the key on stdin).
+
+## Take one by hand
+
+One full backup now, outside the weekly schedule (before a risky change, or
+to see how long one takes):
+
+```sh
+private/datastore-clusters/relational/scripts/backup_now.sh pg      # PostgreSQL
+private/datastore-clusters/relational/scripts/backup_now.sh mysql   # MySQL
+```
+
+Each creates a backup resource, waits for it, and prints how long it took,
+where it is in the store and its size; the run is logged in
+`relational/logs/backup-<engine>-<time>.txt`. The resources it creates,
+should you write them yourself:
+
+| | PostgreSQL | MySQL |
+|---|---|---|
+| Resource | `Backup` (`postgresql.cnpg.io/v1`) | `PerconaXtraDBClusterBackup` (`pxc.percona.com/v1`) |
+| Spec | `cluster.name: pg`, `method: plugin`, `pluginConfiguration.name: barman-cloud.cloudnative-pg.io`, `target: prefer-standby` | `pxcCluster: mysql`, `storageName: s3` |
+| Done when | `status.phase: completed` | `status.state: Succeeded` |
+| Where | `s3://pg-backups/pg/base/<status.backupId>/` | `status.destination` |
+| List them | `kubectl -n relational get backups` | `kubectl -n relational get pxc-backup` |
+
+Backups taken by hand stay until deleted: MySQL's "keep 2" counts only
+scheduled ones. Deleting a MySQL backup resource deletes it from the store
+too (the `percona.com/delete-backup` finalizer the script sets).
 
 ## Restore (runbooks 8 and 9, to script)
 
