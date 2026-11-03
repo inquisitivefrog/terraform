@@ -45,6 +45,7 @@ quorum 4 of 6).
 | `scripts/backup_now.sh pg\|mysql` | One full backup by hand: waits for it, prints time taken, location and size, logs the run ([docs/BACKUPS.md](../docs/BACKUPS.md)) |
 | `scripts/runbook_8_restore.sh pg\|mysql [--keep]` | Runbook 8: a fresh backup restored into a temporary `<engine>-restore` cluster, compared row by row with the source, then deleted ([test plan](../test_plans/runbook-08-restore.md)) |
 | `scripts/runbook_9_pitr.sh pg\|mysql [--keep]` | Runbook 9: a bad DELETE recovered to just before it into a temporary `<engine>-recovered`, the rows copied back ([test plan](../test_plans/runbook-09-pitr.md)) |
+| `scripts/runbook_12_store.sh` | Runbook 12, read-only: the backup store's space, retention, WAL and binlog continuity, the binlog collector's restarts and memory, orphans ([test plan](../test_plans/runbook-12-store.md)) |
 | `scripts/build_app.sh [--test]` | Build the orders image and load it into the kind nodes |
 | `scripts/load_test.sh pg\|mysql seed\|run` | Run the k6 load as a Job; results in Grafana |
 | `scripts/runbook_1_alerts.sh pg\|mysql [rate] [duration]` | Runbook 1, repeatable: under k6 load, fires member down, replication lag, connections over 80% and the search latency SLO on purpose, checks each reaches Alertmanager and clears, and undoes every trigger (also on failure) |

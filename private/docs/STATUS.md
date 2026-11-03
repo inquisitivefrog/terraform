@@ -164,6 +164,40 @@ Recorded as a known issue in BACKUPS.md. Collector at 20 min: 0 restarts.
 Store: mysql 1,836 MiB (2 full by hand: 19:26, 21:24), pg 577 MiB (base
 backups 18:45, 19:12, 21:31).
 MySQL backup 19:26 deleted (files removed; mysql-backups 1,061 MiB: the 21:24 full plus binlogs).
+Runbook 12 (storage check) scripted: `relational/scripts/runbook_12_store.sh`,
+read-only, both engines, test plan `test_plans/runbook-12-store.md`. 22:06,
+during the user's 15-minute MySQL load (`load_test.sh mysql run 20 15m`,
+21:59): PASSED, 13 checks, 4 warnings (no versioning/object lock on either
+bucket; the failed 11-02 pg backup's backup.info left at
+`pg/base/20261102T203907/`; 14 WAL files numbered before the oldest base
+backup). Store 1,786 MiB, Mac 17 GiB free. pg WAL 76 to 7D continuous.
+Binlogs one GTID interval 1-33553, 33 files, 287 MiB. Collector 0 restarts
+since 21:14, but cgroup peak 1,159 of 1,536 MiB (75%): two 528 MiB buffers
+alive at once under load, as predicted; a third would OOM it.
+First run's fixes: "archived in the last 10 min" failed on idle pg (last
+switch 2 hours earlier), now "every segment before the current one
+archived"; "binlogs current" now compares with gtid_executed at the start,
+since the load keeps adding.
+Still open: 6 WAL files in the store on timelines 1-6 (11-02 20:49 to 11-03
+19:58), same system identifier as `pg`; some times match the runbook 8/9
+temporary clusters, which have no archiving configured. Cause not found.
+Collector under 15-minute loads (`load_test.sh mysql run 20 15m`):
+- 21:59 (user): search 20% failed, every op ~5x slower; host load average
+  20: HandBrake likely overlapped. Not counted.
+- 22:32: two loads at once by mistake (the user's and mine, 13 s apart, so
+  40 req/s); the VM's 8 CPUs saturated (MySQL nodes 2.1-2.5 cores each vs
+  0.7-1.1 at 21:15). Not counted. Search alone on an idle node: 0.4-0.6 s
+  (full scan, the planted missing index), unchanged.
+- 22:58 (user), clean: 17,999 requests, 0 failed, 0 lost; create p95 11 ms,
+  read 3.5 ms, update 11 ms, delete 9.4 ms; search p95 1.08 s (its SLO
+  missed by design, the missing index).
+Runbook 12 at 23:15: 13 passed. Collector 0 restarts since 21:14 over
+three 15-minute loads; peak 1,165 of 1,536 MiB (unchanged since 22:06).
+Binlogs 1-56042, one interval, current in 3 s; 73 files, 297 MiB in the
+store; 287 MiB on each node. The 1.5Gi limit holds. The Mac's free disk
+fell from 17 to 13 GiB in the hour (Docker.raw 43 GiB; the store grew
+11 MiB): the user's yt-dlp downloads, being moved to a flash drive.
+Runbook 12 fails below 10 GiB.
 
 Resume here (from 2026-10-31):
 1. `docker_restart.sh`; expect platform 24/24 (cert-manager skipped) and

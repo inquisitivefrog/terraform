@@ -368,6 +368,15 @@ notes. Implementation status lives in the README of each category.
 - **Steps:** check free space and growth of the object store, object-lock
   settings, that expired backups are actually pruned, and that archived
   WAL/binlogs are continuous (no gaps).
+- **Lab (relational, 2026-11-03):** passes (13 checks, 4 warnings: no
+  versioning or object lock on either bucket; a failed pg backup's
+  leftovers; WAL numbered before the oldest base backup).
+  `relational/scripts/runbook_12_store.sh` is read-only and covers both
+  engines: free disk against the store's size, base backups complete and
+  within retention, WAL continuous from the oldest base backup, binlog GTID
+  sets continuous and current, the binlog collector's restarts and memory
+  peak, orphaned backup files. Test plan:
+  [../test_plans/runbook-12-store.md](../test_plans/runbook-12-store.md).
 
 ### Change
 
