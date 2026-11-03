@@ -13,6 +13,7 @@ themselves (goal, procedure, every engine) are in
 | [runbook-05-load.md](runbook-05-load.md) | 5. Load test | `load_test.sh` | no (adds rows) | 2026-10-29, pg |
 | [runbook-07-backup.md](runbook-07-backup.md) | 7. Back up (by hand) | `backup_now.sh` | no (adds a backup to the store) | 2026-11-03, both |
 | [runbook-08-restore.md](runbook-08-restore.md) | 8. Restore (into a new cluster) | `runbook_8_restore.sh` | no (temporary cluster, deleted; adds a backup) | 2026-11-03, both |
+| [runbook-09-pitr.md](runbook-09-pitr.md) | 9. Point-in-time recovery | `runbook_9_pitr.sh` | no (rows deleted, then copied back; temporary cluster deleted) | 2026-11-03, both |
 | [runbook-13-patch.md](runbook-13-patch.md) | 13. Security patch (minor version) | `runbook_13_patch.sh` | yes: new image, writer moves | 2026-10-30, both |
 | [runbook-17-index.md](runbook-17-index.md) | 17. Schema migration (online index) | `runbook_17_index.sh` | no (index dropped again) | 2026-10-28, both |
 | [runbook-23-switchover.md](runbook-23-switchover.md) | 23. Planned switchover | `runbook_23_switchover.sh` | no (writer moved back) | 2026-10-30, both |
@@ -20,8 +21,8 @@ themselves (goal, procedure, every engine) are in
 | [runbook-25-reader.md](runbook-25-reader.md) | 25. Reader failure | `runbook_25_reader.sh` | no | 2026-10-30, both |
 | [runbook-26-zone.md](runbook-26-zone.md) | 26. Zone outage | `runbook_26_zone.sh` | yes: writer usually moves | 2026-10-30, both (worst case) |
 
-The other runbooks in RUNBOOKS.md (point-in-time recovery, major upgrade,
-quorum loss, and the rest) are not scripted yet; they get a plan here when they are.
+The other runbooks in RUNBOOKS.md (major upgrade, quorum loss, and the
+rest) are not scripted yet; they get a plan here when they are.
 
 ## The lab
 

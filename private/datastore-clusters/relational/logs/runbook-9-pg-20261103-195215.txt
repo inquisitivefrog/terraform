@@ -1,0 +1,137 @@
+# runbook_9_pitr.sh pg (2026-11-03T19:52:15Z, kind cluster datastore-dev)
+
+== 19:52:15 0. Preconditions
+  backup to start from: pg-manual-20261103-191252
+  writer: pg-2; fingerprints from: pg-2; Docker VM memory free: 5094 MiB (need 3072)
+
+== 19:52:18 Load: 20 requests/s for 3m
+  k6 run pg-run-20261103-195218; 60 s to settle
+
+== 19:53:19 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: not judged here: this run is about the recovery
+  | Job k6-pg-run-20261103-195218: run against orders-pg at 20 req/s for 3m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261103-195218 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=4.61ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=2.94ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=1.57ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=62.53ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=3.33ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 3601    20.003881/s
+  |     checks_succeeded...: 100.00% 3601 out of 3601
+  |     checks_failed......: 0.00%   0 out of 3601
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 751    4.171873/s
+  |     orders_deleted.................: 197    1.094353/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=11.97ms min=429.54µs med=1.81ms   max=449.38ms p(90)=52.33ms p(95)=54.83ms
+  |       { expected_response:true }...: avg=11.97ms min=429.54µs med=1.81ms   max=449.38ms p(90)=52.33ms p(95)=54.83ms
+  |       { op:create }................: avg=3.44ms  min=1.51ms   med=2.64ms   max=119.58ms p(90)=3.94ms  p(95)=4.61ms 
+  |       { op:delete }................: avg=1.75ms  min=1.05ms   med=1.59ms   max=3.82ms   p(90)=2.45ms  p(95)=2.94ms 
+  |       { op:read }..................: avg=1.02ms  min=429.54µs med=962.16µs max=8.98ms   p(90)=1.37ms  p(95)=1.57ms 
+  |       { op:search }................: avg=54.69ms min=45.45ms  med=52.5ms   max=449.38ms p(90)=58.69ms p(95)=62.53ms
+  |       { op:update }................: avg=2.23ms  min=1.3ms    med=2.06ms   max=10.56ms  p(90)=2.75ms  p(95)=3.33ms 
+  |     http_req_failed................: 0.00%  0 out of 3602
+  |       { op:create }................: 0.00%  0 out of 751
+  |       { op:delete }................: 0.00%  0 out of 197
+  |       { op:read }..................: 0.00%  0 out of 1608
+  |       { op:search }................: 0.00%  0 out of 690
+  |       { op:update }................: 0.00%  0 out of 355
+  |     http_reqs......................: 3602   20.009437/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=12.12ms min=497.79µs med=1.95ms   max=451.52ms p(90)=52.47ms p(95)=55.04ms
+  |     iterations.....................: 3601   20.003881/s
+  |     vus............................: 1      min=0         max=2 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 4.1 MB 23 kB/s
+  |     data_sent......................: 631 kB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261103-195218: passed.
+
+== 19:55:32 2. The good state (idle)
+  good: customers 10000 10000 -106264749353
+  good: orders 3012584 3016439 -241888344268
+  orders written by run pg-run-20261103-195218 (left after its own deletes): 554
+
+== 19:55:43 3. The mistake: DELETE the run's orders on pg-2
+  T (recover to): 2026-11-03 19:55:44.019218+00 UTC
+  deleted: 554 rows
+  now:  customers 10000 10000 -106264749353
+  now:  orders 3012030 3015661 -273404524346
+
+== 19:55:48 4. The logs past T are in the store
+  switched WAL; waiting for 0000000E000000000000007C to be archived
+  after 10 s
+
+== 19:55:59 5. Recover to 2026-11-03 19:55:44.019218+00 into pg-pitr (one instance)
+cluster.postgresql.cnpg.io/pg-pitr created
+  after 71 s
+  Recovery time (create to ready, the RTO for this size): 71 s
+
+== 19:57:10 6. pg-pitr is consistent and holds the good state
+  amcheck: 5 B-tree indexes checked against their tables, no errors
+  recovered: customers 10000 10000 -106264749353
+  recovered: orders 3012584 3016439 -241888344268
+  match: the 554 deleted orders are there, the DELETE is not
+
+== 19:57:13 7. Copy the run's orders from pg-pitr back into the live cluster
+  copied back: 554 rows
+  live: customers 10000 10000 -106264749353
+  live: orders 3012584 3016439 -241888344268
+  the live cluster is back to the good state
+
+== 19:57:16 8. Delete pg-pitr
+  after 10 s
+  nothing of pg-pitr left
+
+== 19:57:26 Verify: relational check_resources.sh
+  
+  == Summary: 63 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+PASS: recovered to 2026-11-03 19:55:44.019218+00 in 71 s from pg-manual-20261103-191252 plus the logs; 554 deleted orders recovered and copied back; the live cluster is back to the good state.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-9-pg-20261103-195215.txt

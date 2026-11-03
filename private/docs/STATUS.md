@@ -108,6 +108,62 @@ Store: pg 374 MiB (2 base backups by hand), mysql 2,609 MiB (3 full by
 hand). The two older MySQL ones (18:47, 19:19) deleted with kubectl (the
 finalizer removed them from the store: mysql-backups now 1,059 MiB, the
 19:26 backup runbook 8 restored plus binlogs).
+Runbook 9 scripted, not run: `relational/scripts/runbook_9_pitr.sh
+pg|mysql [--keep]`. The temporary-cluster code moved from runbook 8 into
+`runbook_lib.sh` (restore_pg, restore_my with an optional time / date,
+restore_consistent, restore_app_queries, restore_delete, fingerprint), so
+runbook 8 needs one rerun to confirm. Dry runs pass for the point-in-time
+manifests; the binlog coverage check works against the store (GTIDs up to
+26854 uploaded, none missing; no pitr-not-ready marker); the pg copy-back
+pipeline ran with zero rows. The mysql copy-back is untested until the run.
+Runbook 9 pg PASSED (19:52): k6 3m at 20 req/s (554 orders left), DELETE
+of them at T 19:55:44.019218, WAL archived in 10 s, recovery to T 71 s,
+amcheck clean, recovered = good state, 554 copied back, live = good state,
+cleanup 10 s, 63/63. Runbook 8's restore took 303 s for a similar backup:
+to look at with its rerun.
+Runbook 9 mysql (20:19): steps 0-7 PASSED (589 orders deleted at T
+20:23:16, binlogs in the store in 22 s, recovery 439 s with "Point-in-time
+recovering" 112 s, CHECK TABLE OK, recovered = good state, 589 copied back,
+live = good state), then FAILED the cleanup check: the target name
+mysql-pitr clashed with the live binlog collector Deployment mysql-pitr
+(the check matched pod names). Nothing was left. Fixed: target
+<engine>-recovered, cleanup checked by label. To rerun mysql.
+Found: the collector was OOMKilled again at its 1Gi limit (20:23:34, 18
+restarts), on a small binlog: its upload buffer is 75% of the limit, so
+two buffers before garbage collection exceed it; a bigger limit can't help.
+No gap (it resumes from the last uploaded GTID). To investigate.
+Investigated (v1.20.0 source): that guess was wrong. BUFFER_SIZE is set but
+never read. The collector streams to minio-go v7.2.0 with size -1 and no
+PartSize, so each upload allocates a 528 MiB part buffer (5 TiB / 10,000
+parts, rounded to 16 MiB). Fits both OOMs: 266 MB written into it at 256Mi;
+two buffers (~1,056 MiB) at 1Gi. Upstream issue #2560 (open, 2026-10-14,
+1.1 GB on an idle cluster, no cause, no reply seen). Proposed: collector
+limit 1.5Gi; upstream fix: set PartSize. Docs corrected. Agreed: collector
+request 640Mi, limit 1536Mi (to apply: clusters root, 1 change, restarts
+only mysql-pitr; after the runbook 9 run in progress).
+Runbook 9 mysql rerun PASSED (21:01, HandBrake running again: k6 create
+p95 132 ms, VM 3.5 GiB free): 556 orders deleted at T 21:05:36, binlogs
+covered in 2 s, recovery 400 s, CHECK TABLE OK, recovered = good state,
+556 copied back, cleanup 20 s (by label), 63/63. Runbook 9 passes on both.
+The collector limit was not applied yet: OOMKilled again at 1Gi ~21:06
+(19 restarts), after the upload this run needed.
+Collector limit applied by the user (1 changed): new mysql-pitr pod
+(request 640Mi, limit 1536Mi), database nodes untouched, uploading; cgroup
+peak 113 MiB after its first upload. To watch: restarts stay 0 and the
+peak stays under 1.5 GiB over later uploads.
+Runbook 9 mysql third run PASSED (21:15, new collector): 577 orders,
+recovery 243 s (400-439 s while HandBrake encoded), copied back, 63/63.
+Collector during it: 0 restarts, cgroup peak 660 MiB (one 528 MiB buffer
+plus the process), 66 MiB idle. Pass log runbook-9-mysql-20261103-211514
+replaces the 21:01 one.
+Runbook 8 rerun on the shared code PASSED on both (21:24 mysql restore
+213 s; 21:31 pg restore 71 s, so the 303 s at 19:12 was a one-off). The
+mysql backup's first Job pod failed: garbd aborted (exit 134) while
+shutting down after a complete transfer; the Job's retry succeeded (175 s).
+Recorded as a known issue in BACKUPS.md. Collector at 20 min: 0 restarts.
+Store: mysql 1,836 MiB (2 full by hand: 19:26, 21:24), pg 577 MiB (base
+backups 18:45, 19:12, 21:31).
+MySQL backup 19:26 deleted (files removed; mysql-backups 1,061 MiB: the 21:24 full plus binlogs).
 
 Resume here (from 2026-10-31):
 1. `docker_restart.sh`; expect platform 24/24 (cert-manager skipped) and

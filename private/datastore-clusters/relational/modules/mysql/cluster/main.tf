@@ -125,12 +125,18 @@ locals {
       storageName        = "s3"
       timeBetweenUploads = 60
       timeoutSeconds     = 60
-      # The operator sizes the collector's upload buffer at 75% of this limit
-      # (BUFFER_SIZE). At 256Mi (a 192 MiB buffer) it was OOMKilled uploading
-      # the seed's 266 MB binlog (2026-11-02); 1Gi is Percona's example.
+      # Each binlog upload holds a 528 MiB buffer: the collector streams to
+      # minio-go v7.2.0 with an unknown length and no part size, so it plans
+      # parts for a 5 TiB object (operator 1.20.0; BUFFER_SIZE, 75% of this
+      # limit, is set but never read). OOMKilled at 256Mi on the seed's
+      # 266 MB binlog (2026-11-02), and at 1Gi on small ones (2026-11-03),
+      # likely two buffers alive before garbage collection. Upstream:
+      # percona-xtradb-cluster-operator issue #2560 (memory, no cause yet).
+      # 1.5Gi: room for two buffers plus the process; the request is what it
+      # holds between uploads (about one buffer).
       resources = {
-        requests = { cpu = "20m", memory = "128Mi" }
-        limits   = { memory = "1Gi" }
+        requests = { cpu = "20m", memory = "640Mi" }
+        limits   = { memory = "1536Mi" }
       }
     }
     storages = {

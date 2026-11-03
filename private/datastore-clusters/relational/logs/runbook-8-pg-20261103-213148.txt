@@ -1,0 +1,51 @@
+# runbook_8_restore.sh pg (2026-11-03T21:31:48Z, kind cluster datastore-dev)
+
+== 21:31:48 0. Preconditions
+  source: pg-2; Docker VM memory free: 3859 MiB (need 3072)
+
+== 21:31:50 1. Fingerprint the source, back it up, fingerprint again
+  before: customers 10000 10000 -106264749353
+  before: orders 3012584 3016439 -241888344268
+  | Store before: pg-backups holds 28 objects, 392.1 MiB
+  | Backup pg-manual-20261103-213151 of cluster pg (plugin, from a replica)
+  | backup.postgresql.cnpg.io/pg-manual-20261103-213151 created
+  |   21:32:02 started
+  |   21:32:22 completed
+  |   from pg-1, id 20261103T213153, WAL 0000000E000000000000007D to 0000000E000000000000007E
+  |   started 2026-11-03T21:31:53Z, stopped 2026-11-03T21:32:18Z
+  |   
+  | Took 30 s (from creating it to the status above)
+  | In the store: s3://pg-backups/pg/base/20261103T213153/: 2 objects, 185.2 MiB
+  | Store after: pg-backups holds 30 objects, 577.3 MiB
+  after:  customers 10000 10000 -106264749353
+  after:  orders 3012584 3016439 -241888344268
+  backup to restore: pg-manual-20261103-213151
+
+== 21:32:23 2. Restore into pg-restore (one instance)
+cluster.postgresql.cnpg.io/pg-restore created
+  after 71 s
+  Restore time (create to ready, the RTO for this size): 71 s
+
+== 21:33:34 3. Consistency checks on pg-restore-1
+  amcheck: 5 B-tree indexes checked against their tables, no errors
+
+== 21:33:50 4. The restored data equals the source's
+  restored: customers 10000 10000 -106264749353
+  restored: orders 3012584 3016439 -241888344268
+  match: 3022584 rows
+
+== 21:33:52 5. Application queries as app, over TLS, through pg-restore's endpoint
+  329
+  write ok
+
+== 21:33:52 6. Delete pg-restore
+  after 11 s
+  nothing of pg-restore left
+
+== 21:34:03 Verify: relational check_resources.sh
+  
+  == Summary: 63 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+PASS: pg-manual-20261103-213151 restored into pg-restore in 71 s; data identical (3022584 rows), consistent, usable by the app.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-8-pg-20261103-213148.txt

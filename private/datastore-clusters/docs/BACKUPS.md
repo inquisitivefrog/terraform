@@ -150,12 +150,21 @@ place, for example to move data across major versions (runbook 14).
   (`ROW`): both checked on 2026-10-30. It reads the binlogs from one node
   (as the `xtrabackup` user, through the `mysql-pxc` service) and keeps track
   of the last GTID set it uploaded, so a restart resumes where it stopped.
-- **Its memory:** the operator gives the collector an upload buffer of 75%
-  of its memory limit (`BUFFER_SIZE`). At a 256 Mi limit it was OOMKilled
-  uploading a 266 MB binlog (the 3,000,000-row seed's, 2026-11-02); the
-  limit is now 1 Gi, Percona's example. It still died twice on that file
-  (a 768 MiB buffer leaves about 256 MiB for everything else) but resumed
-  each time and caught up in 2 minutes. Normal binlogs are a few MB.
+- **Its memory:** each upload holds a **528 MiB** buffer, whatever the
+  binlog's size. The collector streams each binlog to its S3 client
+  (minio-go v7.2.0) with an unknown length and no part size, so the client
+  plans parts for a 5 TiB object (5 TiB / 10,000 parts, rounded up to 16 MiB)
+  and allocates one part's buffer per upload. Read in the v1.20.0 source,
+  2026-11-03. The operator also sets `BUFFER_SIZE` to 75% of the memory
+  limit, but nothing reads it. Seen: OOMKilled at a 256 Mi limit uploading
+  the seed's 266 MB binlog (2026-11-02), and at 1 Gi on small binlogs
+  (2026-11-03, 18 restarts), likely two buffers alive before garbage
+  collection. It resumes from the last uploaded GTID set, so no binlog is
+  lost, but uploads stall while it restarts. Reported upstream as high
+  memory on an idle cluster, no cause given:
+  [issue #2560](https://github.com/percona/percona-xtradb-cluster-operator/issues/2560).
+  The real fix is a part size on the upload (one line in the operator).
+  Until then the limit is 1.5 Gi (request 640 Mi): room for two buffers.
 - **A new binlog every minute:** to upload the binlog the server is still
   writing, the collector runs `FLUSH BINARY LOGS` every
   `timeBetweenUploads` (60 s), which closes it and starts the next. When
@@ -177,8 +186,8 @@ place, for example to move data across major versions (runbook 14).
   should be well under that, plus the logs. The Mac had 16 GiB free on
   2026-10-30, hence weekly fulls and short retention.
 - **Memory:** cert-manager ~160 Mi requested, the plugin 64 Mi, a 128 Mi
-  sidecar per pg instance, the binlog collector 128 Mi (up to 1 Gi while it
-  uploads a large binlog); a backup Job 256 Mi while it runs.
+  sidecar per pg instance, the binlog collector 640 Mi (up to 1.5 Gi:
+  a 528 MiB buffer per upload, see above); a backup Job 256 Mi while it runs.
 
 ## Bring it up
 
@@ -250,7 +259,7 @@ Backups taken by hand stay until deleted: MySQL's "keep 2" counts only
 scheduled ones. Deleting a MySQL backup resource deletes it from the store
 too (the `percona.com/delete-backup` finalizer the script sets).
 
-## Restore (runbook 8 scripted; runbook 9 to script)
+## Restore (runbooks 8 and 9)
 
 - **PostgreSQL:** a **new** Cluster that bootstraps from the store:
   `bootstrap.recovery.source` names an `externalClusters` entry using the
@@ -278,8 +287,26 @@ too (the `percona.com/delete-backup` finalizer the script sets).
   cluster. It compares a fingerprint of every row with the source, checks
   the indexes and tables, runs the app's queries against it, then deletes it.
   Test plan: [../test_plans/runbook-08-restore.md](../test_plans/runbook-08-restore.md).
-- Runbook 9 (point in time) will check the result against k6's tagged rows:
-  every order acknowledged before the target is there, nothing after it.
+- **Runbook 9** (`relational/scripts/runbook_9_pitr.sh pg|mysql`): k6
+  writes orders, a `DELETE` removes them, a recovery to just before it into
+  `<engine>-recovered` must hold exactly the state before; the rows are copied
+  back. MySQL's point-in-time restore uses the binlogs at the bucket's root
+  (`binlog_<time>_<n>_<hash>`, each with a `-gtid-set` object listing its
+  transactions); the operator refuses it if the collector marked a gap
+  (`pitr-not-ready`) unless forced (`percona.com/unsafe-pitr`). Test plan:
+  [../test_plans/runbook-09-pitr.md](../test_plans/runbook-09-pitr.md).
+
+## Known issues seen
+
+- **The binlog collector's memory:** see "Its memory" above (fixed in the lab
+  with a 1.5 Gi limit; upstream issue #2560).
+- **`garbd` aborting after a backup:** once in five MySQL backups
+  (2026-11-03), the backup Job's Galera arbitrator aborted while shutting
+  down (exit 134), after the transfer had completed and every chunk was in
+  the store. The script then marks the attempt failed and the Job runs
+  again; the second attempt succeeded (175 s instead of ~60 s). The
+  failed attempt's chunks are under the same destination, overwritten by
+  the retry. Not found reported.
 
 ## Known gaps
 

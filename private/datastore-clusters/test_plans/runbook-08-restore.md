@@ -62,7 +62,19 @@ or when a step fails). Each run adds a backup to the store (step 1).
 | App read / write | 329 orders found; insert ok (rolled back) | 317 orders found; insert ok (rolled back) |
 | Clean up | 10 s, nothing left | 20 s, nothing left |
 
-Logs: `runbook-8-pg-20261103-191249.txt`, `runbook-8-mysql-20261103-192625.txt`.
+Logs: see the rerun below (the first passes' logs were replaced).
+
+**Rerun after moving the restore code into `runbook_lib.sh` (21:24-21:34,
+HandBrake encoding on the Mac):** both pass. pg: backup 30 s, restore
+**71 s** (so the first run's 303 s was a one-off, cause not found), 5
+indexes clean, 3,022,584 rows identical. mysql: restore **213 s** (empty
+cluster 51 s, operator 162 s), 3,022,290 rows identical. The mysql backup
+took 175 s because its first Job pod failed: the transfer completed and
+every chunk was uploaded, then `garbd` aborted while shutting down
+("gcomm: terminating thread", exit 134, SIGABRT); the Job's retry
+succeeded. Not found reported; seen once in five MySQL backups. Logs:
+`runbook-8-pg-20261103-213148.txt`, `runbook-8-mysql-20261103-212410.txt`
+(they replace the 19:12 and 19:26 ones).
 
 **MySQL, first run (failed, fixed):** the restore with `backupSource`
 `storageName: s3` failed at once: "nil s3 backup status storage". The CRD

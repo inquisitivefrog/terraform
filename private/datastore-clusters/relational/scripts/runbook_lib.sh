@@ -18,6 +18,22 @@
 #                                 which share the instance label)
 #   app_restarts                  restarts of the app's pods, summed
 #   verify_check                  relational check_resources.sh passes
+# Temporary clusters restored beside the live one (runbooks 8 and 9):
+#   vm_free_mib                   the Docker VM's memory not used by containers
+#   wait_for <seconds> <cmd...>   retry every 10 s; prints how long it took
+#   fingerprint <pod>             per table "table rows max_id checksum"
+#   my_nonwriter                  a node HAProxy is not sending writes to
+#   restore_absent <target>       stop if <target> is left from an earlier run
+#   restore_hint <target>         the commands that delete it by hand
+#   restore_pg <target> [time]    a new Cluster from the store (to a time);
+#                                 sets TARGET_POD
+#   restore_my <target> <destination> [date]   a new one-node PXC cluster,
+#                                 then a restore of the backup (to a date);
+#                                 sets TARGET_POD, RESTORE
+#   restore_consistent <pod>      amcheck (pg) / CHECK TABLE (mysql)
+#   restore_app_queries <target> <pod>   a read and a rolled-back write as
+#                                 the app user, over TLS, via its endpoint
+#   restore_delete <target>       delete it; report anything left
 
 set -uo pipefail
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -149,4 +165,212 @@ verify_check() {
   rc=$?
   tail -3 <<<"$out" | sed 's/^/  /'
   [[ "$rc" -eq 0 ]] || die "check_resources.sh failed: $(grep -i fail <<<"$out" | head -5)"
+}
+
+# --- temporary restore clusters (runbooks 8 and 9) ---
+RESTORE_LIMIT=1800 # seconds for a restore to finish
+
+vm_free_mib() {
+  local total used
+  total="$(docker info --format '{{.MemTotal}}')"
+  used="$(docker stats --no-stream --format '{{.MemUsage}}' | awk '{
+    v = $1; u = v; sub(/[0-9.]+/, "", u); sub(/[A-Za-z]+$/, "", v)
+    m = (u == "GiB") ? 1024 : (u == "MiB") ? 1 : (u == "KiB") ? 1 / 1024 : 1 / 1048576
+    s += v * m } END { printf "%d", s }')"
+  echo $((total / 1048576 - used))
+}
+
+wait_for() {
+  local limit="$1" start=$SECONDS
+  shift
+  until "$@" >/dev/null 2>&1; do
+    ((SECONDS - start >= limit)) && return 1
+    sleep 10
+  done
+  echo "  after $((SECONDS - start)) s"
+}
+
+# The checksum is the sum of a hash of every row (pg hashtext, mysql CRC32),
+# so it is the same whatever order the rows are stored in.
+PG_FP="SELECT 'customers', count(*), coalesce(max(id), 0),
+         coalesce(sum(hashtext(concat_ws('|', id, name, email, created_at))), 0) FROM customers
+       UNION ALL
+       SELECT 'orders', count(*), coalesce(max(id), 0),
+         coalesce(sum(hashtext(concat_ws('|', id, request_id, run_id, customer_id, status, total_cents, created_at, updated_at))), 0) FROM orders"
+MY_FP="SELECT 'customers', COUNT(*), COALESCE(MAX(id), 0),
+         COALESCE(SUM(CRC32(CONCAT_WS('|', id, name, email, created_at))), 0) FROM appdb.customers
+       UNION ALL
+       SELECT 'orders', COUNT(*), COALESCE(MAX(id), 0),
+         COALESCE(SUM(CRC32(CONCAT_WS('|', id, request_id, run_id, customer_id, status, total_cents, created_at, updated_at))), 0) FROM appdb.orders"
+# pg_sql <pod> <sql>: as postgres in appdb over the local socket
+pg_sql() { k -n "$NS" exec "$1" -c postgres -- psql -XAtq -F ' ' -v ON_ERROR_STOP=1 -d appdb -c "$2"; }
+fingerprint() {
+  if [[ "$ENGINE" == pg ]]; then pg_sql "$1" "$PG_FP"; else my_sql "$1" "$MY_FP" | tr '\t' ' '; fi
+}
+
+my_nonwriter() {
+  local writer pod
+  writer="$(my_writer)" || return 1
+  for pod in mysql-pxc-0 mysql-pxc-1 mysql-pxc-2; do
+    [[ "$pod" != "$writer" ]] && echo "$pod" && return 0
+  done
+}
+
+# restore_hint <target>: the commands that delete it by hand
+restore_hint() {
+  if [[ "$ENGINE" == pg ]]; then
+    echo "  kubectl -n $NS delete clusters.postgresql.cnpg.io $1"
+  else
+    echo "  kubectl -n $NS delete pxc-restore -l app.kubernetes.io/instance=$1"
+    echo "  kubectl -n $NS delete pxc $1 && kubectl -n $NS delete secret $1-secrets internal-$1"
+  fi
+}
+restore_absent() {
+  local kind=clusters.postgresql.cnpg.io
+  [[ "$ENGINE" == mysql ]] && kind=perconaxtradbclusters.pxc.percona.com
+  if k -n "$NS" get "$kind" "$1" >/dev/null 2>&1; then
+    echo "  $1 exists from an earlier run; delete it with:"
+    restore_hint "$1"
+    die "$1 left over"
+  fi
+}
+
+# Same image, resources and size as pg; the newest base backup before the
+# target (or the newest), then the archived WAL up to the target (or all of
+# it). No plugins section: it must not archive into the source's path.
+restore_pg() {
+  local target="$1" time="${2:-}"
+  k -n "$NS" get clusters.postgresql.cnpg.io pg -o json | jq --arg name "$target" --arg time "$time" '{
+    apiVersion, kind,
+    metadata: {name: $name, namespace: .metadata.namespace, labels: {"app.kubernetes.io/part-of": "runbooks"}},
+    spec: {
+      instances: 1,
+      imageName: .spec.imageName,
+      resources: .spec.resources,
+      storage: {size: .spec.storage.size},
+      enableSuperuserAccess: false,
+      bootstrap: {recovery: ({source: "origin", database: "appdb", owner: "app"}
+        + (if $time == "" then {} else {recoveryTarget: {targetTime: $time}} end))},
+      externalClusters: [{name: "origin", plugin: {
+        name: "barman-cloud.cloudnative-pg.io",
+        parameters: {barmanObjectName: "pg-backups", serverName: "pg"}}}]
+    }}' | k apply -f - || die "could not create $target"
+  _pg_restored() { [[ "$(k -n "$NS" get clusters.postgresql.cnpg.io "$1" -o jsonpath='{.status.phase} {.status.readyInstances}')" == "Cluster in healthy state 1" ]]; }
+  wait_for "$RESTORE_LIMIT" _pg_restored "$target" ||
+    die "$target not healthy after ${RESTORE_LIMIT}s: $(k -n "$NS" get clusters.postgresql.cnpg.io "$target" -o jsonpath='{.status.phase}')"
+  TARGET_POD="$target-1"
+}
+
+# The backup's mysql.user holds the live cluster's system passwords, so the
+# new cluster gets a copy of them (never printed). Same images, resources,
+# configuration and storage as mysql; one node and one HAProxy (unsafeFlags:
+# Percona wants 3); backup storage without a schedule or binlog collector, so
+# it never writes to the store. The restore carries the store's S3 settings
+# inline: with only storageName, operator 1.20 fails "nil s3 backup status
+# storage" (2026-11-03), though the CRD accepts it. With a date, the binlogs
+# are replayed up to it (mysqlbinlog --stop-datetime, whole seconds, UTC).
+restore_my() {
+  local target="$1" dest="$2" date="${3:-}" state last=""
+  k -n "$NS" get secret mysql-secrets -o json | jq --arg name "$target-secrets" '{
+    apiVersion, kind, type, data,
+    metadata: {name: $name, namespace: .metadata.namespace, labels: {"app.kubernetes.io/part-of": "runbooks"}}}' |
+    k apply -f - >/dev/null || die "could not copy the system passwords"
+  k -n "$NS" get perconaxtradbclusters.pxc.percona.com mysql -o json | jq --arg name "$target" '{
+    apiVersion, kind,
+    metadata: {name: $name, namespace: .metadata.namespace, labels: {"app.kubernetes.io/part-of": "runbooks"},
+      finalizers: ["percona.com/delete-pxc-pods-in-order", "percona.com/delete-pxc-pvc", "percona.com/delete-ssl"]},
+    spec: {
+      crVersion: .spec.crVersion,
+      secretsName: ($name + "-secrets"),
+      unsafeFlags: {pxcSize: true, proxySize: true},
+      updateStrategy: .spec.updateStrategy,
+      upgradeOptions: {apply: "disabled"},
+      tls: {enabled: true},
+      pxc: {size: 1, image: .spec.pxc.image, autoRecovery: true, configuration: .spec.pxc.configuration,
+        resources: .spec.pxc.resources, volumeSpec: .spec.pxc.volumeSpec},
+      haproxy: {enabled: true, size: 1, image: .spec.haproxy.image, resources: .spec.haproxy.resources},
+      proxysql: {enabled: false}, logcollector: {enabled: false}, pmm: {enabled: false},
+      backup: {image: .spec.backup.image, storages: .spec.backup.storages}
+    }}' | k apply -f - || die "could not create $target"
+  _my_ready() { [[ "$(k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$1" -o jsonpath='{.status.state} {.status.pxc.ready}')" == "ready 1" ]]; }
+  printf '  empty cluster ready'
+  wait_for 900 _my_ready "$target" || die "$target not ready after 900 s"
+  RESTORE="$target-$(date -u +%Y%m%d-%H%M%S)"
+  k -n "$NS" get perconaxtradbclusters.pxc.percona.com mysql -o json |
+    jq --arg name "$RESTORE" --arg target "$target" --arg dest "$dest" --arg date "$date" '{
+    apiVersion, kind: "PerconaXtraDBClusterRestore",
+    metadata: {name: $name, namespace: .metadata.namespace,
+      labels: {"app.kubernetes.io/part-of": "runbooks", "app.kubernetes.io/instance": $target}},
+    spec: ({pxcCluster: $target, backupSource: {destination: $dest, s3: .spec.backup.storages.s3.s3}}
+      + (if $date == "" then {} else
+          {pitr: {type: "date", date: $date, backupSource: {s3: .spec.backup.storages.s3.s3}}} end))}' |
+    k apply -f - || die "could not create the restore"
+  local start=$SECONDS
+  while :; do
+    state="$(k -n "$NS" get perconaxtradbclusterrestores.pxc.percona.com "$RESTORE" -o jsonpath='{.status.state}')"
+    [[ "$state" != "$last" ]] && echo "  $(date -u +%H:%M:%S) ${state:-(no status yet)}" && last="$state"
+    [[ "$state" == Succeeded ]] && break
+    [[ "$state" == Failed || "$state" == Error ]] &&
+      die "the restore failed: $(k -n "$NS" get perconaxtradbclusterrestores.pxc.percona.com "$RESTORE" -o jsonpath='{.status.comments}')"
+    ((SECONDS - start >= RESTORE_LIMIT)) && die "the restore did not finish in ${RESTORE_LIMIT}s"
+    sleep 10
+  done
+  printf '  restored cluster ready'
+  wait_for 600 _my_ready "$target" || die "$target not ready after the restore"
+  TARGET_POD="$target-pxc-0"
+}
+
+restore_consistent() {
+  local n out
+  if [[ "$ENGINE" == pg ]]; then
+    n="$(pg_sql "$1" "CREATE EXTENSION IF NOT EXISTS amcheck;
+      SELECT sum(CASE WHEN bt_index_check(c.oid, true) IS NULL THEN 1 ELSE 1 END) FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_am a ON a.oid = c.relam
+        WHERE a.amname = 'btree' AND c.relnamespace = 'public'::regnamespace")" || die "amcheck found a problem"
+    echo "  amcheck: $n B-tree indexes checked against their tables, no errors"
+    ((n > 0)) || die "amcheck checked no indexes"
+  else
+    out="$(my_sql "$1" "CHECK TABLE appdb.customers, appdb.orders")" || die "CHECK TABLE failed to run"
+    sed 's/^/  /' <<<"$out"
+    [[ "$(awk -F'\t' '$3 == "status" && $4 == "OK"' <<<"$out" | wc -l | tr -d ' ')" == 2 ]] || die "CHECK TABLE did not report OK for both tables"
+  fi
+}
+
+restore_app_queries() {
+  local target="$1" pod="$2" pw out
+  local q_read="SELECT count(*) FROM orders WHERE customer_id = (SELECT min(id) FROM customers)"
+  if [[ "$ENGINE" == pg ]]; then
+    pw="$(k -n "$NS" get secret "$target-app" -o jsonpath='{.data.password}' | base64 -d)"
+    out="$(k -n "$NS" exec -i "$pod" -c postgres -- sh -c \
+      'read -r PGPASSWORD; export PGPASSWORD; exec psql -XAtq -v ON_ERROR_STOP=1 "host=$0 user=app dbname=appdb sslmode=require connect_timeout=5" -c "$1" -c BEGIN -c "$2" -c ROLLBACK' \
+      "$target-rw" "$q_read" "INSERT INTO customers (name, email) VALUES ('runbook', 'runbook@example.com') RETURNING 'write ok'" <<<"$pw")" ||
+      die "an application query failed: $out"
+  else
+    pw="$(k -n "$NS" get secret mysql-custom-user-secret -o jsonpath='{.data.app}' | base64 -d)"
+    out="$(k -n "$NS" exec -i "$pod" -c pxc -- sh -c \
+      'read -r MYSQL_PWD; export MYSQL_PWD; exec mysql -uapp -h "$0" --ssl-mode=REQUIRED --connect-timeout=5 -D appdb -NBe "$1; $2"' \
+      "$target-haproxy" "$q_read" "BEGIN; INSERT INTO customers (name, email) VALUES ('runbook', 'runbook@example.com'); SELECT 'write ok'; ROLLBACK" <<<"$pw")" ||
+      die "an application query failed: $out"
+  fi
+  sed 's/^/  /' <<<"$out"
+  [[ "$out" == *"write ok"* ]] || die "the write did not succeed"
+}
+
+restore_delete() {
+  local target="$1" left
+  if [[ "$ENGINE" == pg ]]; then
+    k -n "$NS" delete clusters.postgresql.cnpg.io "$target" --wait=true --timeout=300s >/dev/null || die "could not delete $target"
+  else
+    k -n "$NS" delete perconaxtradbclusterrestores.pxc.percona.com -l "app.kubernetes.io/instance=$target" >/dev/null
+    k -n "$NS" delete perconaxtradbclusters.pxc.percona.com "$target" --wait=true --timeout=300s >/dev/null || die "could not delete $target"
+    k -n "$NS" delete secret "$target-secrets" "internal-$target" --ignore-not-found >/dev/null
+  fi
+  # By label, not name: the live cluster's binlog collector is "mysql-pitr"
+  # (2026-11-03, a name clash with runbook 9's first target name)
+  local sel="app.kubernetes.io/instance=$target"
+  [[ "$ENGINE" == pg ]] && sel="cnpg.io/cluster=$target"
+  _restore_gone() { [[ -z "$(k -n "$NS" get pods,pvc -l "$1" -o name)" ]]; }
+  wait_for 300 _restore_gone "$sel" || die "pods or volumes of $target are still there: $(k -n "$NS" get pods,pvc -l "$sel" -o name | xargs)"
+  left="$(k -n "$NS" get secrets,certificates.cert-manager.io,issuers.cert-manager.io -o name 2>/dev/null | grep -- "$target" | xargs)"
+  if [[ -z "$left" ]]; then echo "  nothing of $target left"; else echo "  left over (harmless, delete by hand): $left"; fi
 }

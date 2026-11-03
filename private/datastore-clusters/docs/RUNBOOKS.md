@@ -333,6 +333,13 @@ notes. Implementation status lives in the README of each category.
   cluster; copy the lost rows back, or cut over to the recovered cluster.
 - **Verify:** the deleted rows are back; nothing after the recovery point is
   silently lost (reconcile or accept explicitly).
+- **Lab (relational, 2026-11-03):** passes on both engines: the deleted
+  orders recovered to just before the DELETE and copied back, pg in 71 s,
+  mysql in 243 s. `relational/scripts/runbook_9_pitr.sh pg|mysql` writes
+  orders under load, deletes them all, recovers to just before the DELETE into a one-instance
+  `<engine>-recovered`, checks it holds exactly the state before, copies the
+  rows back, and deletes it. Test plan:
+  [../test_plans/runbook-09-pitr.md](../test_plans/runbook-09-pitr.md).
 
 #### 10. Disaster recovery to a second site
 - **Goal:** survive losing the whole data center.
