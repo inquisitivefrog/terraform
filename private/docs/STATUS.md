@@ -288,24 +288,40 @@ Alert test, by the user (applies) and me (resolve run):
   in 10 s, `resolved` lines in alert-log.
 - Checks: relational 66/66, platform 28/28. Runbook 7 gaps left: object
   lock and encryption.
+Stray WAL files explained and removed (pushed f6f9c37 before this):
+- The 6 files on timelines 1-6 (01/51 ... 06/5B) were each the last, partly
+  written segment of an old timeline, cut exactly at its switch point
+  (0000000D.history: 1 ended 0/511FC680, 255 of 2048 pages written; 3 at
+  0/551D9ED0, 237; 6 at 0/5B1F4FE8, 251); same system id as pg. From the
+  10-26..10-30 switchover/failover tests, before archiving shipped anything;
+  uploaded late, one at a time (11-02 20:49 to 11-03 19:58), each seconds
+  after a normal upload. The process that sent them isn't proven (operator
+  and plugin logs from then are gone). Now: no `.ready` file on any
+  instance (52 `.done` each), so nothing is left to send; timelines 7-C's
+  switch segments were marked done in the no-op era and never shipped.
+- No restore used them (before the oldest base backup, E/76). Deleted by
+  hand with the user's go-ahead: those 6 and the failed 11-02 backup's
+  `pg/base/20261102T203907/backup.info` (7 objects, HTTP 204 each). Every
+  `.history` kept.
+- Left for retention: 8 older files (D/6F..D/74.partial, E/74, E/75).
+  Check about 2026-11-10, when the 11-03 base backups leave the 7-day
+  window: retention should delete them and those backups.
+- Runbook 12 after: 15 passed, 4 warnings (versioning x2, those 8 files,
+  the collector's startup restarts); 8 complete base backups.
 
 Resume here (from 2026-11-04, stopped for low battery):
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
-   the store too); expect platform 26/26, relational 63/63; then
-   `relational/scripts/runbook_12_store.sh` (13 passed; check the Mac's free
-   disk after the user moved the yt-dlp files off).
+   the store too); expect platform 28/28, relational 66/66; then
+   `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
+   startup restarts are a warning).
 2. No load or backup while HandBrake, ffmpeg or yt-dlp runs.
-3. Runbook 7 gaps (pick next; the user hasn't chosen):
-   - the schedule has never fired: a short test schedule (every 15 min
-     for an hour, then weekly again) to see keep 2 (mysql) delete one;
-   - a backup under a 15-minute load (`backup_now.sh` during `load_test.sh`);
-   - the "last good backup older than schedule" alert, plus an
-     Alertmanager receiver (still null);
-   - object lock (needs bucket versioning) and encryption (backups in
-     plain form, http to the store): document, maybe out of scope here.
-4. Open: 6 WAL files on timelines 1-6 in `s3://pg-backups/pg/wals/`
-   (cause not found); the failed 11-02 pg backup's backup.info at
-   `pg/base/20261102T203907/` (delete by hand?).
+3. Runbook 7: the schedule, keep 2 and the backup alerts pass (f6f9c37).
+   Gaps left: a backup under a 15-minute load (`backup_now.sh` during
+   `load_test.sh`); object lock (needs bucket versioning) and encryption
+   (backups in plain form, http to the store): document, maybe out of
+   scope here.
+4. About 2026-11-10: runbook 12 should show pg retention working (the
+   11-03 base backups and the 8 pre-backup WAL files gone).
 5. Later: runbook 14 (MySQL 8.0 end of life), runbook 17 onto
    runbook_lib.sh, an optional comment for upstream issue #2560 (for the
    user to post).
