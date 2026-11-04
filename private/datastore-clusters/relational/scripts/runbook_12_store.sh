@@ -21,8 +21,7 @@
 
 ENV="${1:-dev}"
 ENGINE=mysql # for my_sql and the restore helpers' engine switch; this runbook covers both
-source "$(dirname "$0")/runbook_lib.sh" # my_sql, wait_for; checks.sh: pass, fail, summary
-KEYS="$HOME/.config/datastore-dev/backup-store/s3.json"
+source "$(dirname "$0")/runbook_lib.sh" # my_sql, wait_for, s3, inventory; checks.sh: pass, fail, summary
 STORE=datastore-backups
 PG_WINDOW_DAYS=7  # the ObjectStore's retentionPolicy (7d)
 PG_CYCLE_DAYS=7   # base backups weekly: the oldest kept may be one cycle older
@@ -36,41 +35,6 @@ MY_ROOT_PW="$(k -n "$NS" get secret mysql-secrets -o jsonpath='{.data.root}' | b
 WARN=0
 warn() { echo "  WARN  $1: $2"; WARN=$((WARN + 1)); }
 
-# s3 <identity> <path>: a GET against the store with that identity's key
-# (handed to curl on stdin, never printed)
-s3() {
-  python3 - "$KEYS" "$@" <<'EOF'
-import json, subprocess, sys
-keys, identity, path = sys.argv[1:]
-c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
-r = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{path}"],
-                   input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True)
-sys.stdout.write(r.stdout)
-EOF
-}
-# inventory <identity> <bucket>: every object, "key<TAB>size<TAB>modified"
-inventory() {
-  python3 - "$KEYS" "$@" <<'EOF'
-import json, re, subprocess, sys, urllib.parse
-keys, identity, bucket = sys.argv[1:]
-c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
-token = ""
-while True:
-    q = "list-type=2" + (("&continuation-token=" + urllib.parse.quote(token)) if token else "")
-    page = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{bucket}?{q}"],
-                          input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
-    if "<ListBucketResult" not in page:
-        sys.exit("listing " + bucket + " failed: " + page[:80])
-    for it in re.findall(r"<Contents>(.*?)</Contents>", page, re.S):
-        print(re.search(r"<Key>([^<]+)", it).group(1), re.search(r"<Size>(\d+)", it).group(1),
-              re.search(r"<LastModified>([^<]+)", it).group(1), sep="\t")
-    m = re.search(r"<NextContinuationToken>([^<]+)</NextContinuationToken>", page)
-    if "<IsTruncated>true</IsTruncated>" not in page or not m:
-        break
-    token = m.group(1)
-EOF
-}
-mib() { awk -v b="$1" 'BEGIN { printf "%.0f MiB", b / 1048576 }'; }
 
 echo "== Runbook 12: backup and archive storage ($(date -u +%Y-%m-%dT%H:%M:%SZ)) =="
 

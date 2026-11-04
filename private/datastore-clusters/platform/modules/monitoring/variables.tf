@@ -8,3 +8,9 @@ variable "retention" {
   type        = string
   default     = "3d"
 }
+
+variable "alert_log_image" {
+  description = "Image for alert-log, Alertmanager's webhook receiver (Python standard library only)"
+  type        = string
+  default     = "python:3.13.9-alpine3.22"
+}

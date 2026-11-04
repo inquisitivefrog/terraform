@@ -305,7 +305,10 @@ notes. Implementation status lives in the README of each category.
   cluster; PostgreSQL through the Barman Cloud plugin (needs cert-manager),
   PXC through its operator (backup Job, binlog collector). Full backups
   weekly, not daily (the laptop is short of disk; the runbooks take them on
-  demand); no object lock or backup alert yet. What each piece is, and the
+  demand); no object lock yet. The schedule and keep 2 tested
+  (`runbook_7_schedule.sh`, 4 fires each, 2 deletions with their files); the
+  "last good backup too old" alerts fire, reach the receiver (alert-log) and
+  resolve on both engines (`runbook_7_alerts.sh`). What each piece is, and the
   gaps: [BACKUPS.md](BACKUPS.md); test plan:
   [../test_plans/runbook-07-backup.md](../test_plans/runbook-07-backup.md).
 

@@ -1,0 +1,54 @@
+# runbook_7_schedule.sh  (2026-11-04T18:28:48Z, kind cluster datastore-dev)
+== Runbook 7: scheduled backups and retention (2026-11-04T18:28:48Z) ==
+  schedules: pg '0 */15 * * * *', mysql '*/15 * * * *'
+  store now: pg-backups 762 MiB, mysql-backups 1072 MiB
+  scheduled backups before this run (not judged): pg 1, mysql 0
+  watching for 4 fires each (up to 85 min); polls every 30 s
+
+  18:30:19 pg    pg-scheduled-20261104183000: started from pg-1
+  18:30:49 pg    pg-scheduled-20261104183000: completed from pg-1
+  PASS  pg pg-scheduled-20261104183000 completed from a replica, in the store: pg-1, 24 s, 185 MiB
+  18:31:19 mysql cron-mysql-s3-2026114183058-2t92l: Running
+  18:31:49 mysql cron-mysql-s3-2026114183058-2t92l: Starting
+  18:32:19 mysql cron-mysql-s3-2026114183058-2t92l: Succeeded
+  PASS  mysql cron-mysql-s3-2026114183058-2t92l succeeded, in the store: 50 s, 351 objects, 775 MiB
+  18:45:28 pg    pg-scheduled-20261104184500: started from pg-1
+  18:45:59 mysql cron-mysql-s3-2026114184552-2t92l: Starting
+  18:46:29 pg    pg-scheduled-20261104184500: completed from pg-1
+  PASS  pg pg-scheduled-20261104184500 completed from a replica, in the store: pg-1, 63 s, 185 MiB
+  18:46:29 mysql cron-mysql-s3-2026114184552-2t92l: Running
+  18:47:31 mysql cron-mysql-s3-2026114184552-2t92l: Succeeded
+  PASS  mysql cron-mysql-s3-2026114184552-2t92l succeeded, in the store: 69 s, 351 objects, 775 MiB
+  19:00:06 pg    pg-scheduled-20261104190000: started from pg-1
+  19:00:36 pg    pg-scheduled-20261104190000: completed from pg-1
+  PASS  pg pg-scheduled-20261104190000 completed from a replica, in the store: pg-1, 24 s, 185 MiB
+  19:01:06 mysql cron-mysql-s3-202611419052-2t92l: Starting
+  19:02:37 mysql cron-mysql-s3-202611419052-2t92l: Running
+  19:03:08 mysql cron-mysql-s3-202611419052-2t92l: Succeeded
+  PASS  mysql cron-mysql-s3-202611419052-2t92l succeeded, in the store: 113 s, 351 objects, 775 MiB
+  19:03:08 mysql cron-mysql-s3-2026114183058-2t92l: deleted by retention; its files:
+  after 0 s
+  PASS  mysql cron-mysql-s3-2026114183058-2t92l deleted with its files: s3://mysql-backups/mysql-2026-11-04-18:30:58-full/ empty
+  19:15:12 pg    pg-scheduled-20261104191500: started from pg-1
+  19:15:42 pg    pg-scheduled-20261104191500: completed from pg-1
+  PASS  pg pg-scheduled-20261104191500 completed from a replica, in the store: pg-1, 24 s, 185 MiB
+  19:16:12 mysql cron-mysql-s3-2026114191552-2t92l: Running
+  19:16:42 mysql cron-mysql-s3-2026114191552-2t92l: Succeeded
+  PASS  mysql cron-mysql-s3-2026114191552-2t92l succeeded, in the store: 32 s, 351 objects, 775 MiB
+  19:16:42 mysql cron-mysql-s3-2026114184552-2t92l: deleted by retention; its files:
+  after 0 s
+  PASS  mysql cron-mysql-s3-2026114184552-2t92l deleted with its files: s3://mysql-backups/mysql-2026-11-04-18:45:52-full/ empty
+
+-- after 47 min --
+  PASS  pg: 4 scheduled backups completed: 4
+  PASS  mysql: 4 scheduled backups succeeded: 4
+  PASS  mysql: the oldest beyond keep 2 deleted: 2
+  PASS  mysql: exactly keep 2 scheduled backups left: cron-mysql-s3-202611419052-2t92l cron-mysql-s3-2026114191552-2t92l 
+  PASS  mysql: more than keep for at most 3 min (the newest succeeds, then the oldest goes): 0 s at most
+  store: pg-backups 762 MiB to 1503 MiB (kept 7 days); mysql-backups 1072 MiB to 2622 MiB
+
+  Now back to weekly (relational clusters root): terraform apply
+
+== Summary: 15 passed, 0 failed ==
+All checked scheduled backup checks present and configured.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-7-schedule-20261104-182848.txt

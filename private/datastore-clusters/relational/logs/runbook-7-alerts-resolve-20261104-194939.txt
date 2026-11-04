@@ -1,0 +1,16 @@
+# runbook_7_alerts.sh resolve (2026-11-04T19:49:39Z, kind cluster datastore-dev)
+== Runbook 7: backup alerts, resolve (2026-11-04T19:49:39Z) ==
+  the real threshold loaded:  after 1 s
+  threshold in the loaded rules: 691200 s
+  newest backups: pg 2056 s old, mysql 1996 s old
+  both cleared in Prometheus:  after 10 s
+  PASS  PostgreSQLBackupTooOld no longer firing: inactive
+  PostgreSQLBackupTooOld resolved in alert-log:  after 20 s
+  PASS  PostgreSQLBackupTooOld resolved (alert-log): resolved PostgreSQLBackupTooOld warning relational/pg since 2026-11-04T19:44:43.557Z - PostgreSQL relational/pg: no base backup in the store newer than 0.1 h
+  PASS  MySQLBackupTooOld no longer firing: inactive
+  MySQLBackupTooOld resolved in alert-log:  after 0 s
+  PASS  MySQLBackupTooOld resolved (alert-log): resolved MySQLBackupTooOld warning relational/mysql since 2026-11-04T19:44:35.539Z - MySQL relational/mysql: no successful full backup newer than 0.1 h
+
+== Summary: 4 passed, 0 failed ==
+All checked backup alert checks present and configured.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-7-alerts-resolve-20261104-194939.txt

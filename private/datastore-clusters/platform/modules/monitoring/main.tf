@@ -14,6 +14,14 @@
 # - Every component has a memory request and limit. Without them a pod is
 #   BestEffort: unbounded on a node it shares with a database, invisible to
 #   the scheduler's arithmetic, and the first evicted.
+# - kube-state-metrics also reads Percona PXC backup resources, so their
+#   completion times are metrics (no exporter has them): the relational
+#   "backup too old" alert. CloudNativePG's plugin exports its own.
+# - Alertmanager sends every alert (except the always-firing Watchdog) to
+#   alert-log, a small webhook receiver in this namespace that prints each
+#   notification: `kubectl -n monitoring logs deploy/alert-log`. A laptop
+#   has nowhere better to page; on a real platform this is the pager or
+#   chat receiver, and the rest stays the same.
 resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
@@ -47,6 +55,46 @@ resource "helm_release" "kube_prometheus_stack" {
       resources = {
         requests = { cpu = "20m", memory = "64Mi" }
         limits   = { memory = "256Mi" }
+      }
+      rbac = {
+        extraRules = [{
+          apiGroups = ["pxc.percona.com"]
+          resources = ["perconaxtradbclusterbackups"]
+          verbs     = ["list", "watch"]
+        }]
+      }
+      # pxc_backup_{completed,created}_timestamp_seconds{namespace, cluster,
+      # name, state}: RFC 3339 times in the status become Unix seconds
+      # (tested with kube-state-metrics v2.20.0, 2026-11-04)
+      customResourceState = {
+        enabled = true
+        config = {
+          kind = "CustomResourceStateMetrics"
+          spec = {
+            resources = [{
+              groupVersionKind = { group = "pxc.percona.com", version = "v1", kind = "PerconaXtraDBClusterBackup" }
+              metricNamePrefix = "pxc_backup"
+              labelsFromPath = {
+                name      = ["metadata", "name"]
+                namespace = ["metadata", "namespace"]
+                cluster   = ["spec", "pxcCluster"]
+                state     = ["status", "state"]
+              }
+              metrics = [
+                {
+                  name = "completed_timestamp_seconds"
+                  help = "When the backup completed"
+                  each = { type = "Gauge", gauge = { path = ["status", "completed"] } }
+                },
+                {
+                  name = "created_timestamp_seconds"
+                  help = "When the backup was created"
+                  each = { type = "Gauge", gauge = { path = ["metadata", "creationTimestamp"] } }
+                },
+              ]
+            }]
+          }
+        }
       }
     }
     prometheus-node-exporter = {
@@ -102,6 +150,94 @@ resource "helm_release" "kube_prometheus_stack" {
           limits   = { memory = "128Mi" }
         }
       }
+      # Merged into the chart's default config (its inhibit rules stay);
+      # these lists replace the chart's.
+      config = {
+        route = {
+          receiver = "alert-log"
+          routes = [
+            { receiver = "null", matchers = ["alertname = \"Watchdog\""] },
+            # kind artefacts, still visible in Prometheus: its nodes have no
+            # time sync of their own, and its network plugin (kindnet) has a
+            # CPU limit (our pods have none) and is throttled (2026-11-04)
+            { receiver = "null", matchers = ["alertname = \"NodeClockNotSynchronising\""] },
+            { receiver = "null", matchers = ["alertname = \"CPUThrottlingHigh\"", "namespace = \"kube-system\"", "container = \"kindnet-cni\""] },
+          ]
+        }
+        receivers = [
+          { name = "null" },
+          {
+            name            = "alert-log"
+            webhook_configs = [{ url = "http://alert-log.monitoring.svc:8080/", send_resolved = true }]
+          },
+        ]
+      }
     }
+
+    extraManifests = local.alert_log
   })]
+}
+
+# The webhook receiver: one line per alert in each notification Alertmanager
+# sends (firing or resolved), on stdout. Python's standard library only.
+locals {
+  alert_log_labels = { "app.kubernetes.io/name" = "alert-log" }
+  alert_log_script = <<-EOT
+    import http.server, json
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            for a in body.get("alerts", []):
+                l = a.get("labels", {})
+                print(a.get("status"), l.get("alertname"), l.get("severity"),
+                      l.get("namespace", "-") + "/" + l.get("cluster", "-"), "since", a.get("startsAt"),
+                      "-", a.get("annotations", {}).get("summary", ""), flush=True)
+            self.send_response(200)
+            self.end_headers()
+        def log_message(self, *args):
+            pass
+    print("alert-log listening on 8080", flush=True)
+    http.server.HTTPServer(("", 8080), H).serve_forever()
+  EOT
+  alert_log = [
+    {
+      apiVersion = "apps/v1"
+      kind       = "Deployment"
+      metadata   = { name = "alert-log", namespace = "monitoring", labels = local.alert_log_labels }
+      spec = {
+        replicas = 1
+        selector = { matchLabels = local.alert_log_labels }
+        template = {
+          metadata = { labels = local.alert_log_labels }
+          spec = {
+            securityContext = { runAsNonRoot = true, runAsUser = 65534, seccompProfile = { type = "RuntimeDefault" } }
+            containers = [{
+              name    = "alert-log"
+              image   = var.alert_log_image
+              command = ["python3", "-u", "-c", local.alert_log_script]
+              ports   = [{ name = "http", containerPort = 8080 }]
+              resources = {
+                requests = { cpu = "5m", memory = "32Mi" }
+                limits   = { memory = "64Mi" }
+              }
+              securityContext = {
+                allowPrivilegeEscalation = false
+                readOnlyRootFilesystem   = true
+                capabilities             = { drop = ["ALL"] }
+              }
+            }]
+          }
+        }
+      }
+    },
+    {
+      apiVersion = "v1"
+      kind       = "Service"
+      metadata   = { name = "alert-log", namespace = "monitoring", labels = local.alert_log_labels }
+      spec = {
+        selector = local.alert_log_labels
+        ports    = [{ name = "http", port = 8080, targetPort = "http" }]
+      }
+    },
+  ]
 }

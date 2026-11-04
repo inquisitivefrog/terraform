@@ -209,6 +209,86 @@ killed for memory (OOMKilled); other restarts a WARN. Rerun 18:01: 13
 passed, 5 warnings; collector peak 109 MiB (reset by the restart); binlogs
 1-56042, current.
 
+Runbook 7 schedule test written (not run): clusters root variables
+`pg_backup_schedule` / `mysql_backup_schedule` (defaults weekly, as before;
+validate passes); `relational/scripts/runbook_7_schedule.sh [fires=4]`
+watches scheduled backups fire and MySQL keep 2 delete the oldest with its
+files. The store helpers (s3, inventory, mib) moved from runbook 12 into
+runbook_lib.sh (runbook 12 still passes, 18:15). To run: apply with
+`-var 'pg_backup_schedule=0 */15 * * * *' -var 'mysql_backup_schedule=*/15 * * * *'`,
+run the script (about an hour), apply again without the vars.
+
+18:17: the user applied the short schedule (pg `0 */15 * * * *`, mysql
+`*/15 * * * *`). CloudNativePG ran one backup at once for the missed slot
+(`pg-scheduled-20261102190000`, done 18:18:38), next 18:30: no catch-up of
+every slot. `runbook_7_schedule.sh` started 18:28:48 (by me, in the
+background; the user hadn't started it yet).
+Backup alerts written, validated, **not applied**:
+- Platform services root: kube-state-metrics reads PXC backup resources
+  (`pxc_backup_{completed,created}_timestamp_seconds`, tested with a
+  throwaway v2.20.0 container on the laptop, removed); Alertmanager's
+  default receiver `alert-log` (was "null"), a Python webhook receiver
+  Deployment + Service in `monitoring` (chart extraManifests,
+  python:3.13.9-alpine3.22).
+- Relational clusters root: 3 pg rules (BackupTooOld, BackupFailed,
+  WALArchiveFailing) and 4 mysql (BackupTooOld, BackupFailed,
+  BinlogCollectorDown, BinlogCollectorOOMKilled); `backup_alert_after_hours`
+  (default 192: weekly plus a day). Every expression evaluated in
+  Prometheus: all quiet except MySQLBackupTooOld (its metric doesn't exist
+  until the platform apply).
+- Checks: platform +2 (receiver alert-log, alert-log available: 28),
+  relational +3 (pxc_backup metrics, 7 rules loaded, none firing: 66).
+- Order: platform first, then clusters. Test: clusters with
+  `-var backup_alert_after_hours=0.1` after the schedule is weekly again;
+  both TooOld fire within ~16 min, alert-log prints them; apply without.
+  Docs: BACKUPS.md "Alerts", test_plans/runbook-07-backup.md.
+
+~18:37 the user applied the clusters root plainly: rules added, but the
+schedule went back to weekly after one fire each (pg 18:30 24 s from pg-1;
+mysql cron-mysql-s3-2026114183058 50 s). ~18:41 re-applied with the short
+schedule (2 changes); the watcher kept running. ~18:43 platform services
+applied (helm release revision 2, deployed 18:46): alert-log up and
+receiving; `pxc_backup_completed_timestamp_seconds` present for both mysql
+backups. Platform check 28/28; relational 64/66 (the 2 schedule checks, as
+expected during the test; 7 backup rules loaded, none firing).
+MySQLBackupTooOld was pending (absent metric) until the platform apply,
+then cleared.
+alert-log now shows the chart's existing alerts too: KubeJobFailed for the
+7 k6 Jobs that ended with a crossed threshold (11-03; pods in Error),
+NodeClockNotSynchronising (kind nodes), CPUThrottlingHigh. Noise to decide
+on. Cleaned up (user agreed): the 8 finished k6 Jobs deleted (7 Failed,
+1 Complete; results already in relational/logs); `load_test.sh` Jobs now
+removed 10 min after they end (was a day; KubeJobFailed waits 15 min).
+CPUThrottlingHigh is kindnet-cni in kube-system (kind's CNI, the only
+CPU-limited container). Monitoring module: NodeClockNotSynchronising and
+kindnet's CPUThrottlingHigh routed to "null" (still in Prometheus).
+Applied by the user (1 change); routes verified in Alertmanager.
+Runbook 7 schedule test PASSED (19:16, 15 passed): 4 fires each; pg 24-63 s
+from pg-1; mysql 32-113 s; keep 2 deleted the 18:30 and 18:45 backups with
+their files as the 19:00 and 19:15 ones succeeded; 2 left. Store pg 1,503
+MiB, mysql 2,622 MiB. Next: clusters root with
+`-var backup_alert_after_hours=0.1` (back to weekly too), then
+`relational/scripts/runbook_7_alerts.sh fire`, apply plainly, `... resolve`.
+Alert test, by the user (applies) and me (resolve run):
+- 19:18 clusters with `-var backup_alert_after_hours=0.1` (4 changes: weekly
+  schedule again, thresholds 360 s).
+- 19:32 both TooOld firing, but alert-log printed `-/pg`: `max()` drops
+  every label, so no namespace; the script (matching namespace) saw nothing.
+  Fixed: backup rules carry `namespace` (applied 19:34, 2 changes; new
+  series, so 10 min pending again); script matches cluster and namespace
+  and requires `relational/<cluster>` in alert-log. One run at 19:34 passed
+  on the old unlabelled alerts before Prometheus reloaded: log deleted, not
+  counted.
+- 19:38 `fire` PASSED 7/7: firing 19:44:43 (pg) and 19:44:35 (mysql), held by
+  Alertmanager, alert-log `relational/pg` / `relational/mysql`; no other
+  backup alert firing.
+- 19:48 clusters applied plainly (thresholds 691200 s); `resolve` started
+  0 s later still saw 360 s (rule reload delay): script now waits up to
+  2 min for the expected threshold. 19:49 `resolve` PASSED 4/4: cleared
+  in 10 s, `resolved` lines in alert-log.
+- Checks: relational 66/66, platform 28/28. Runbook 7 gaps left: object
+  lock and encryption.
+
 Resume here (from 2026-11-04, stopped for low battery):
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
    the store too); expect platform 26/26, relational 63/63; then

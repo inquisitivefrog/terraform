@@ -175,6 +175,14 @@ else
     expect "Prometheus sees 3 nodes in the Primary Component" "3" prom_value "sum(mysql_global_status_wsrep_cluster_status{namespace=\"$NS\"})"
     expect "Dashboards for Grafana's sidecar (CloudNativePG, MySQL / Galera)" "cnpg-grafana-dashboard $MY-grafana-dashboard" sh -c \
       "kubectl --context $CTX get configmap -A -l grafana_dashboard=1 -o jsonpath='{range .items[*]}{.metadata.name}{\"\\n\"}{end}' | grep -E '^(cnpg|$MY)-grafana-dashboard$' | sort | xargs"
+    # Backup alerts (RUNBOOKS.md 7): MySQL's come from kube-state-metrics
+    # reading the PXC backup resources (platform monitoring module).
+    match "$MY: backups as metrics (kube-state-metrics, pxc_backup_*)" '^[1-9][0-9]*$' prom_count \
+      "pxc_backup_completed_timestamp_seconds{namespace=\"$NS\",cluster=\"$MY\",state=\"Succeeded\"}"
+    expect "Backup alert rules loaded (3 pg, 4 mysql)" "7" sh -c \
+      "kubectl --context $CTX get --raw /api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy/api/v1/rules | jq '[.data.groups[] | select(.name == \"postgresql-$PG\" or .name == \"mysql-$MY\") | .rules[] | select(.name | test(\"Backup|WALArchive|BinlogCollector\"))] | length'"
+    expect "No backup alert firing" "0" prom_value \
+      "count(ALERTS{alertstate=\"firing\",namespace=\"$NS\",alertname=~\".*(Backup|WALArchive|BinlogCollector).*\"})"
   fi
 
   # The orders example app (environments/dev/app), once per engine.

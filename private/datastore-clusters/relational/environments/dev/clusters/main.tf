@@ -43,11 +43,12 @@ module "postgres" {
   # runbooks take more on demand); 7 days restorable. Short: the laptop has
   # little disk. docs/BACKUPS.md.
   backup = {
-    endpoint  = local.store.endpoint_in_cluster
-    bucket    = local.store.buckets.pg
-    secret    = "pg-backup-s3" # from scripts/backup_secrets.sh
-    retention = "7d"
-    schedule  = "0 0 3 * * 0"
+    endpoint          = local.store.endpoint_in_cluster
+    bucket            = local.store.buckets.pg
+    secret            = "pg-backup-s3" # from scripts/backup_secrets.sh
+    retention         = "7d"
+    schedule          = var.pg_backup_schedule
+    alert_after_hours = var.backup_alert_after_hours
   }
 }
 
@@ -76,12 +77,13 @@ module "mysql" {
   # runbooks take more on demand); the last 2 scheduled ones kept.
   # docs/BACKUPS.md.
   backup = {
-    endpoint = local.store.endpoint_in_cluster
-    bucket   = local.store.buckets.mysql
-    secret   = "mysql-backup-s3" # from scripts/backup_secrets.sh
-    schedule = "0 3 * * 0"
-    keep     = 2
-    image    = var.xtrabackup_image
+    endpoint          = local.store.endpoint_in_cluster
+    bucket            = local.store.buckets.mysql
+    secret            = "mysql-backup-s3" # from scripts/backup_secrets.sh
+    schedule          = var.mysql_backup_schedule
+    keep              = 2
+    image             = var.xtrabackup_image
+    alert_after_hours = var.backup_alert_after_hours
   }
 }
 

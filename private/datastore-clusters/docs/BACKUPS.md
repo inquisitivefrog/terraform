@@ -296,6 +296,41 @@ too (the `percona.com/delete-backup` finalizer the script sets).
   (`pitr-not-ready`) unless forced (`percona.com/unsafe-pitr`). Test plan:
   [../test_plans/runbook-09-pitr.md](../test_plans/runbook-09-pitr.md).
 
+## Alerts
+
+A backup nobody checks is a backup nobody has. Prometheus rules beside each
+cluster's other alerts (`relational/modules/*/cluster/alerts.tf`), present
+only when the cluster has backups:
+
+| Alert | Fires when | From |
+|---|---|---|
+| PostgreSQLBackupTooOld | no base backup in the store newer than 192 h (weekly plus a day), for 10 min | the plugin's `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp` |
+| PostgreSQLBackupFailed | the newest attempt failed after the newest success | `..._last_failed_backup_timestamp` |
+| PostgreSQLWALArchiveFailing (critical) | the primary's last archive attempt failed, for 5 min | `cnpg_pg_stat_archiver_*` |
+| MySQLBackupTooOld | no successful full backup (scheduled or by hand) newer than 192 h, for 10 min | `pxc_backup_completed_timestamp_seconds` |
+| MySQLBackupFailed | a backup failed after the newest success | `pxc_backup_created_timestamp_seconds` |
+| MySQLBinlogCollectorDown (critical) | no collector pod available, for 5 min (it exits until MySQL is up after a restart) | kube-state-metrics, the `<cluster>-pitr` Deployment |
+| MySQLBinlogCollectorOOMKilled | it restarted in the last 30 min and its last exit was OOMKilled | kube-state-metrics, the `pitr` container |
+
+- **MySQL has no backup metric of its own,** so kube-state-metrics reads the
+  `PerconaXtraDBClusterBackup` resources and turns `status.completed` and
+  the creation time into Unix seconds, labelled with the cluster, the
+  backup's name and its state (`customResourceState` in the platform's
+  monitoring module). A backup deleted from Kubernetes leaves no metric, so
+  deleting every backup also fires MySQLBackupTooOld, as it should.
+- **Where they go:** Alertmanager sends every alert but Watchdog to
+  `alert-log`, a small webhook receiver in `monitoring` that prints each
+  notification, firing and resolved. `kubectl -n monitoring logs
+  deploy/alert-log` is the pager here; a real platform swaps the receiver
+  for a pager or chat and keeps the rest.
+- **Test them** by lowering the threshold (relational clusters root,
+  `-var backup_alert_after_hours=0.1`): both TooOld alerts fire about 16
+  minutes after the newest backups and show in alert-log; apply again
+  without it and they resolve (`relational/scripts/runbook_7_alerts.sh
+  fire|resolve` checks each step). Test plan: runbook 7.
+- Only the age of the newest backup is checked, not that it restores:
+  runbook 8 does that.
+
 ## Known issues seen
 
 - **The binlog collector's memory:** see "Its memory" above (fixed in the lab
@@ -314,8 +349,7 @@ too (the `percona.com/delete-backup` finalizer the script sets).
   On a cloud the store would be in another account and region.
 - No object lock (immutable backups) and no encryption at rest yet.
 - The plugin Deployment is a single copy (above).
-- No "last good backup is too old" alert yet (runbook 7's check).
-- No restore has been tested yet: until then these are untested backups.
+- Restores are tested by hand (runbooks 8 and 9), not on a schedule.
 
 ## Glossary
 

@@ -34,6 +34,10 @@
 #   restore_app_queries <target> <pod>   a read and a rolled-back write as
 #                                 the app user, over TLS, via its endpoint
 #   restore_delete <target>       delete it; report anything left
+# The backup store (runbooks 7 and 12), with an engine's own key:
+#   s3 <identity> <path>          a GET (pg or mysql)
+#   inventory <identity> <bucket> every object: key, size, modified (tabs)
+#   mib <bytes>                   "<n> MiB"
 
 set -uo pipefail
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -374,3 +378,41 @@ restore_delete() {
   left="$(k -n "$NS" get secrets,certificates.cert-manager.io,issuers.cert-manager.io -o name 2>/dev/null | grep -- "$target" | xargs)"
   if [[ -z "$left" ]]; then echo "  nothing of $target left"; else echo "  left over (harmless, delete by hand): $left"; fi
 }
+
+# --- the backup store ---
+KEYS="$HOME/.config/datastore-dev/backup-store/s3.json"
+# s3 <identity> <path>: a GET against the store with that identity's key
+# (handed to curl on stdin, never printed)
+s3() {
+  python3 - "$KEYS" "$@" <<'EOF'
+import json, subprocess, sys
+keys, identity, path = sys.argv[1:]
+c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
+r = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{path}"],
+                   input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True)
+sys.stdout.write(r.stdout)
+EOF
+}
+# inventory <identity> <bucket>: every object, "key<TAB>size<TAB>modified"
+inventory() {
+  python3 - "$KEYS" "$@" <<'EOF'
+import json, re, subprocess, sys, urllib.parse
+keys, identity, bucket = sys.argv[1:]
+c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
+token = ""
+while True:
+    q = "list-type=2" + (("&continuation-token=" + urllib.parse.quote(token)) if token else "")
+    page = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{bucket}?{q}"],
+                          input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
+    if "<ListBucketResult" not in page:
+        sys.exit("listing " + bucket + " failed: " + page[:80])
+    for it in re.findall(r"<Contents>(.*?)</Contents>", page, re.S):
+        print(re.search(r"<Key>([^<]+)", it).group(1), re.search(r"<Size>(\d+)", it).group(1),
+              re.search(r"<LastModified>([^<]+)", it).group(1), sep="\t")
+    m = re.search(r"<NextContinuationToken>([^<]+)</NextContinuationToken>", page)
+    if "<IsTruncated>true</IsTruncated>" not in page or not m:
+        break
+    token = m.group(1)
+EOF
+}
+mib() { awk -v b="$1" 'BEGIN { printf "%.0f MiB", b / 1048576 }'; }

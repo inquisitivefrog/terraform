@@ -10,7 +10,7 @@ cluster is deleted (kept with `--keep`, or when a step fails).
 
 ## Preconditions
 
-- Cluster whole; `check_resources.sh` passes (63/63).
+- Cluster whole; `check_resources.sh` passes (66/66).
 - A full backup in the store (`backup_now.sh`); for mysql the binlog
   collector ready.
 - No `<engine>-recovered` cluster left over; no other k6 load; 3 GiB of the

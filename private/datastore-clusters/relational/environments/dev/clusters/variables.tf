@@ -50,3 +50,26 @@ variable "nodes" {
   type        = number
   default     = 3
 }
+
+# Full backups weekly. Override only to test the schedule and retention
+# (runbook 7, scripts/runbook_7_schedule.sh), then apply again without:
+#   terraform apply -var 'pg_backup_schedule=0 */15 * * * *' -var 'mysql_backup_schedule=*/15 * * * *'
+variable "pg_backup_schedule" {
+  description = "pg base backups: a 6-field cron (seconds first), UTC"
+  type        = string
+  default     = "0 0 3 * * 0" # Sunday 03:00
+}
+
+variable "mysql_backup_schedule" {
+  description = "mysql full backups: a 5-field cron, UTC"
+  type        = string
+  default     = "0 3 * * 0" # Sunday 03:00
+}
+
+# The backup alerts fire when the newest good full backup is older than
+# this: the weekly schedule plus a day. Lower only to test them (runbook 7).
+variable "backup_alert_after_hours" {
+  description = "Hours before PostgreSQLBackupTooOld / MySQLBackupTooOld"
+  type        = number
+  default     = 192
+}

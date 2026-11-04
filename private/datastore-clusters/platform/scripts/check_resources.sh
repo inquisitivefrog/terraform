@@ -46,6 +46,11 @@ else
   expect "Remote-write receiver on (k6 results)" "true" k -n monitoring get prometheus kube-prometheus-stack-prometheus -o jsonpath='{.spec.enableRemoteWriteReceiver}'
   match "Scrape targets" '^[1-9][0-9]* up, 0 down$' scrape_targets
   match "Dashboards loaded by Grafana's sidecar" '^[1-9][0-9]*$' sh -c "kubectl --context $CTX get configmap -A -l grafana_dashboard=1 --no-headers | wc -l | tr -d ' '"
+  # Every alert but Watchdog goes to alert-log, which prints each notification
+  # (kubectl -n monitoring logs deploy/alert-log); the chart's default is "null".
+  expect "Alertmanager sends alerts to alert-log" "alert-log" sh -c \
+    "kubectl --context $CTX get --raw /api/v1/namespaces/monitoring/services/kube-prometheus-stack-alertmanager:9093/proxy/api/v2/status | jq -r .config.original | sed -n 's/^  receiver: //p' | tr -d '\"'"
+  expect "alert-log receiver available" "1" k -n monitoring get deployment alert-log -o jsonpath='{.status.availableReplicas}'
   # A container without a memory limit is unbounded on a node it shares with a database.
   expect "Every monitoring container has a memory limit" "all" unlimited_containers monitoring
 fi

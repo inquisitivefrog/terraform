@@ -71,7 +71,11 @@ metadata:
   labels: {app.kubernetes.io/name: k6, app.kubernetes.io/instance: $APP}
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: 86400
+  # Gone 10 minutes after it ends: k6 exits 1 when a threshold is crossed,
+  # which marks the Job Failed, and the chart's KubeJobFailed (after 15
+  # minutes) would page for a test result (2026-11-04: 7 of them). The
+  # runbooks read its end time seconds after it ends (load_finish).
+  ttlSecondsAfterFinished: 600
   template:
     metadata:
       labels: {app.kubernetes.io/name: k6, app.kubernetes.io/instance: $APP}

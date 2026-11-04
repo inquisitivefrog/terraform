@@ -1,25 +1,25 @@
-# runbook_12_store.sh  (2026-11-04T18:01:29Z, kind cluster datastore-dev)
-== Runbook 12: backup and archive storage (2026-11-04T18:01:29Z) ==
+# runbook_12_store.sh  (2026-11-04T18:15:51Z, kind cluster datastore-dev)
+== Runbook 12: backup and archive storage (2026-11-04T18:15:51Z) ==
 
 -- the store (datastore-backups) --
   PASS  Running: true
   store total: 1797 MiB on disk; the Mac's free disk: 30 GiB
-  growth since 20261103-231530: 0 MiB
+  growth since 20261104-180129: 0 MiB
   PASS  Free disk for the store to grow (at least 10 GiB and twice its size): 30 GiB free
-  bucket pg-backups: 31 objects, 577 MiB
+  bucket pg-backups: 32 objects, 577 MiB
   WARN  pg-backups immutable copy: versioning off, so no object lock: a stolen key can delete backups (known gap, runbook 7)
   bucket mysql-backups: 503 objects, 1072 MiB
   WARN  mysql-backups immutable copy: versioning off, so no object lock: a stolen key can delete backups (known gap, runbook 7)
 
 -- PostgreSQL (s3://pg-backups/pg/) --
-  PASS  Archiving current (every segment before the one being written, no failure since): 0000000E000000000000007E archived 78 s ago, writing 0000000E000000000000007F
+  PASS  Archiving current (every segment before the one being written, no failure since): 0000000E000000000000007F archived 639 s ago, writing 0000000E000000000000007F
   WARN  Base backup 20261102T203907: status FAILED, 0 MiB of data: an incomplete or failed backup's leftovers (delete by hand, or retention will)
   base backup 20261103T184539: done, 185 MiB, first WAL 0000000E0000000000000076
   base backup 20261103T191253: done, 185 MiB, first WAL 0000000E0000000000000076
   base backup 20261103T213153: done, 185 MiB, first WAL 0000000E000000000000007D
   PASS  A complete base backup in the store: 3 (newest 20261103T213153)
   PASS  Retention: oldest base backup within 7 days plus a 7-day cycle: 20261103T184539, 0 days
-  PASS  WAL continuous from the oldest base backup (0000000E0000000000000076) to the last archived (0000000E000000000000007E): 9 segments, none missing
+  PASS  WAL continuous from the oldest base backup (0000000E0000000000000076) to the last archived (0000000E000000000000007F): 10 segments, none missing
   WARN  WAL older than the oldest base backup: 14 files numbered before it: no restore from these backups uses them
   restorable from (the plugin's first recoverability point): 2026-11-03T18:46:27Z
 
@@ -28,7 +28,7 @@
   WARN  Binlog collector restarts: 3 since 2026-11-03T21:14:38Z, the last Error exit 1 at 2026-11-04T17:56:53Z (after a Docker restart: it starts before MySQL; kubectl -n relational logs mysql-pitr-5b445f479d-hkkjq --previous)
   PASS  Binlog collector memory peak under 90% of its limit (a 528 MiB buffer per upload): 109 of 1536 MiB
   PASS  No gap marker (pitr-not-ready): absent
-  binlogs uploaded up to what the cluster had executed (the collector uploads every 60 s):  after 3 s
+  binlogs uploaded up to what the cluster had executed (the collector uploads every 60 s):  after 5 s
   PASS  Binlogs continuous (one GTID interval, 10372a26…): 1-56042
   PASS  Binlogs current (uploaded up to what was executed at the start): 56042, uploaded 56042
   PASS  Full backup mysql-manual-20261103-212415 in the store: 351 objects, 775 MiB
@@ -39,4 +39,4 @@
 
 == Summary: 13 passed, 0 failed ==
 All checked backup storage checks present and configured.
-Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-12-20261104-180129.txt
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-12-20261104-181551.txt
