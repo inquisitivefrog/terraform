@@ -94,7 +94,7 @@ upgrade last.
 | `platform/environments/dev/backup-store/` | Store `datastore-backups`: buckets `pg-backups` and `mysql-backups`, one key each limited to its bucket; laptop `https://localhost:8333`, pods `https://host.docker.internal:8333`. Its own root, so backups outlive a cluster rebuild |
 | `platform/scripts/backup_store_keys.sh` | Writes the store's S3 keys (`s3.json`) and encryption key (`security.toml`) to `~/.config/datastore-dev/backup-store/` (mode 600, outside the repo, never in state); `--rotate` replaces the S3 keys, never the encryption key. Where every key is: [docs/BACKUPS.md](docs/BACKUPS.md), "Where the keys are" |
 | `platform/scripts/backup_store_tls.sh` | Our CA (`~/.config/datastore-dev/backup-store-ca/`, never mounted) and the store's TLS certificate; `--renew` issues a new certificate |
-| `platform/scripts/backup_store_buckets.sh` | Turns on default encryption (SSE-S3, AES-256) on every bucket, with the admin key; rerun on a new data volume |
+| `platform/scripts/backup_store_buckets.sh [--lock-days N]` | Every bucket: default encryption (SSE-S3, AES-256), object lock COMPLIANCE for N days (default 7; irreversible), the lifecycle rule for old versions; with the admin key; rerun on a new data volume |
 | `platform/scripts/check_resources.sh` | Nodes, zones, taints, localhost-only API, storage class; monitoring; the backup store (running, localhost only, TLS only, certificate valid, each key only its own bucket, no anonymous access, buckets encrypted, encryption key from security.toml) |
 | `platform/scripts/kube_use.sh` | Nodes, Helm releases, and every datastore pod with its zone |
 

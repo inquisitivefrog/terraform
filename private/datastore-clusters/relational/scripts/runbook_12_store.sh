@@ -5,7 +5,7 @@
 # nothing. Weekly, and before relying on a backup.
 #   the store       running; its data and the Mac's free disk (the Docker VM's
 #                   disk image grows into it), growth since the last run;
-#                   immutability (versioning / object lock)
+#                   immutability (object lock, COMPLIANCE)
 #   PostgreSQL      archiving current (pg_stat_archiver); every base backup in
 #                   the store complete; retention (none older than the 7-day
 #                   window plus a weekly cycle); WAL continuous from the oldest
@@ -58,9 +58,11 @@ fi
 for e in pg mysql; do
   read -r n b < <(inventory "$e" "$e-backups" | awk -F'\t' '{n++; s += $2} END {print n + 0, s + 0}')
   echo "  bucket $e-backups: $n objects, $(mib "$b")"
-  v="$(s3 "$e" "$e-backups?versioning" | grep -oE '<Status>[A-Za-z]+</Status>' | sed 's/<[^>]*>//g')"
-  if [[ "$v" == Enabled ]]; then pass "$e-backups versioning (needed for object lock)" "$v"; else
-    warn "$e-backups immutable copy" "versioning ${v:-off}, so no object lock: a stolen key can delete backups (known gap, runbook 7)"; fi
+  # Object lock (platform/scripts/backup_store_buckets.sh), read with the
+  # admin key: COMPLIANCE, so no key can delete a backup before its date
+  lock="$(s3 admin "$e-backups?object-lock" | python3 -c 'import re, sys; x = sys.stdin.read(); print(" ".join((re.search("<" + e + ">([^<]*)<", x) or [0, "-"])[1] for e in ("ObjectLockEnabled", "Mode", "Days")))')"
+  if [[ "$lock" =~ ^Enabled\ COMPLIANCE\ [0-9]+$ ]]; then pass "$e-backups immutable (object lock)" "${lock#Enabled } days"; else
+    warn "$e-backups immutable copy" "object lock ${lock}: a stolen key can delete backups (backup_store_buckets.sh, runbook 7)"; fi
 done
 
 # --- PostgreSQL ---

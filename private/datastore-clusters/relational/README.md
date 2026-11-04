@@ -45,6 +45,7 @@ quorum 4 of 6).
 | `scripts/backup_now.sh pg\|mysql` | One full backup by hand: waits for it, prints time taken, location and size, logs the run ([docs/BACKUPS.md](../docs/BACKUPS.md)) |
 | `scripts/runbook_7_schedule.sh [fires]` | Runbook 7: watches a temporary short schedule fire on both engines and MySQL's keep 2 delete the oldest with its files ([test plan](../test_plans/runbook-07-backup.md)) |
 | `scripts/runbook_7_alerts.sh fire\|resolve` | Runbook 7: the "last good backup too old" alerts fire, reach alert-log and resolve, with the threshold lowered for the test |
+| `scripts/runbook_7_lock.sh [check\|expire]` | Runbook 7: object lock. `check`: the newest backups are locked; a canary per bucket can't be deleted or changed (engine or admin key), only hidden, and comes back. `expire`, after the lock days: the lock lets go and the lifecycle rule removes old versions |
 | `scripts/runbook_8_restore.sh pg\|mysql [--keep]` | Runbook 8: a fresh backup restored into a temporary `<engine>-restore` cluster, compared row by row with the source, then deleted ([test plan](../test_plans/runbook-08-restore.md)) |
 | `scripts/runbook_9_pitr.sh pg\|mysql [--keep]` | Runbook 9: a bad DELETE recovered to just before it into a temporary `<engine>-recovered`, the rows copied back ([test plan](../test_plans/runbook-09-pitr.md)) |
 | `scripts/runbook_12_store.sh` | Runbook 12, read-only: the backup store's space, retention, WAL and binlog continuity, the binlog collector's restarts and memory, orphans ([test plan](../test_plans/runbook-12-store.md)) |

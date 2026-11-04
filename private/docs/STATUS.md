@@ -375,21 +375,52 @@ engines; 20:17 mysql and 20:06 pg backups `NONE`. My first HEAD check
 said mysql was plain: curl's signing fails on its colon names, so no
 header; xbcloud reproduced on throwaway stores (http and https, admin and
 bucket key, the operator's flags) was encrypted every time.
-To do (user): copy `security.toml` and `backup-store-ca/ca.key` to a
-password manager (BACKUPS.md, "Where the keys are").
+User copied `security.toml` and the CA key to a password manager.
+Pushed 3a279c4.
+Object lock (runbook 7's last gap), 22:00-23:00:
+- Throwaway store first (removed): lock can be turned on for an existing
+  bucket (`weed shell` `s3.bucket.lock -enable`, irreversible; versioning
+  with it), so no new buckets, no data move, no pod roll. xbcloud and boto3
+  upload into it as before, each object COMPLIANCE-locked. Engine key:
+  delete = delete marker, version delete 403; admin and governance bypass
+  403; suspend versioning / delete bucket 409; shell `s3.bucket.delete`
+  refused. Engine key CAN change the lifecycle rule (200): checked by
+  platform check_resources. Engine key can't change the lock (403).
+- MySQL object names need percent-encoded colons for curl's signing
+  (runbook_lib `s3` now encodes paths).
+- Written: `backup_store_buckets.sh [--lock-days N]` (encryption, lock
+  COMPLIANCE N days default 7, lifecycle `old-versions`: noncurrent 1 day,
+  expired markers); `relational/scripts/runbook_7_lock.sh check|expire`;
+  platform check +3 per bucket (42); runbook 12 checks the lock (was a
+  WARN). Docs: BACKUPS.md "Object lock", glossary; READMEs; test plan.
+- Cleanup (user agreed; restores use the newest backup, none depends on
+  old ones): deleted the 3 older manual MySQL backups. Two hung on the
+  finalizer: their records kept the http endpoint (`status.s3`), 400.
+  Patched `status.s3` to https + CA on those and on the 2 scheduled ones
+  (keep 2 would have hung on Sunday): deleted in seconds, files gone.
+  mysql-backups 4,175 -> 2,624 MiB. Kept mysql-manual-20261104-213154.
+- 22:55 `backup_store_buckets.sh --lock-days 1` (lock on, both buckets);
+  backups pg 31 s, mysql 41 s; `runbook_7_lock.sh check` PASSED 38/38
+  (canaries lock-canary/pg-20261104T225642, mysql-...225643, locked to
+  2026-11-05 22:56 UTC); platform 42/42, relational 68/68; collector fine.
+- Next: from 2026-11-05 23:00 UTC `runbook_7_lock.sh expire` (daily until
+  the canaries are gone: lifecycle removes the replaced version within a
+  day, then the current one deletes), then `backup_store_buckets.sh`
+  (7 days). Then runbooks 8 and 9 (restore, PITR from locked, encrypted
+  backups over TLS).
 
 Resume here (from 2026-11-04, stopped for low battery):
+0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
-   the store too); expect platform 36/36, relational 68/68; then
+   the store too); expect platform 42/42, relational 68/68; then
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
    startup restarts are a warning).
 2. No load or backup while HandBrake, ffmpeg or yt-dlp runs.
 3. Runbook 7: the schedule, keep 2 and the backup alerts pass (f6f9c37).
    Backup under load passes on both (11-04). TLS to the store and
-   encryption at rest applied and verified (11-04). Gap left: object lock
-   (needs buckets created with it). Worth a run: runbook 8 restore from
-   an encrypted backup over TLS.
-   Expected checks now: platform 36/36, relational 68/68.
+   encryption at rest applied and verified (11-04). Object lock on
+   (1 day while testing): `runbook_7_lock.sh expire` from 11-05 23:00 UTC,
+   then `backup_store_buckets.sh` for 7 days. Then runbooks 8 and 9.
 4. About 2026-11-10: runbook 12 should show pg retention working (the
    11-03 base backups and the 8 pre-backup WAL files gone).
 5. Later: runbook 14 (MySQL 8.0 end of life), runbook 17 onto

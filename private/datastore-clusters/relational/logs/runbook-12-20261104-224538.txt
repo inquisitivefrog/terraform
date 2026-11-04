@@ -1,0 +1,52 @@
+# runbook_12_store.sh  (2026-11-04T22:45:38Z, kind cluster datastore-dev)
+== Runbook 12: backup and archive storage (2026-11-04T22:45:38Z) ==
+
+-- the store (datastore-backups) --
+  PASS  Running: true
+  store total: 6995 MiB on disk; the Mac's free disk: 27 GiB
+  growth since 20261104-195732: 2720 MiB
+  PASS  Free disk for the store to grow (at least 10 GiB and twice its size): 27 GiB free
+  bucket pg-backups: 48 objects, 1879 MiB
+  WARN  pg-backups immutable copy: object lock - - -: a stolen key can delete backups (backup_store_buckets.sh, runbook 7)
+  bucket mysql-backups: 2300 objects, 4951 MiB
+  WARN  mysql-backups immutable copy: object lock - - -: a stolen key can delete backups (backup_store_buckets.sh, runbook 7)
+
+-- PostgreSQL (s3://pg-backups/pg/) --
+  PASS  Archiving current (every segment before the one being written, no failure since): 0000000F0000000000000086 archived 4846 s ago, writing 0000000F0000000000000086
+  base backup 20261103T184539: done, 185 MiB, first WAL 0000000E0000000000000076
+  base backup 20261103T191253: done, 185 MiB, first WAL 0000000E0000000000000076
+  base backup 20261103T213153: done, 185 MiB, first WAL 0000000E000000000000007D
+  base backup 20261104T181756: done, 185 MiB, first WAL 0000000E000000000000007E
+  base backup 20261104T183000: done, 185 MiB, first WAL 0000000E000000000000007E
+  base backup 20261104T184502: done, 185 MiB, first WAL 0000000E000000000000007E
+  base backup 20261104T190000: done, 185 MiB, first WAL 0000000E000000000000007E
+  base backup 20261104T191500: done, 185 MiB, first WAL 0000000E000000000000007E
+  base backup 20261104T200646: done, 185 MiB, first WAL 0000000E0000000000000080
+  base backup 20261104T212814: done, 185 MiB, first WAL 0000000F0000000000000085
+  PASS  A complete base backup in the store: 10 (newest 20261104T212814)
+  PASS  Retention: oldest base backup within 7 days plus a 7-day cycle: 20261103T184539, 1 days
+  PASS  WAL continuous from the oldest base backup (0000000E0000000000000076) to the last archived (0000000F0000000000000086): 17 segments, none missing
+  WARN  WAL older than the oldest base backup: 8 files numbered before it: no restore from these backups uses them
+  restorable from (the plugin's first recoverability point): 2026-11-03T18:46:27Z
+
+-- MySQL (s3://mysql-backups/) --
+  PASS  Binlog collector up, not killed for memory: mysql-pitr-c5686bbc-jwwnn, no restarts since 2026-11-04T21:11:10Z
+  PASS  Binlog collector memory peak under 90% of its limit (a 528 MiB buffer per upload): 109 of 1536 MiB
+  PASS  No gap marker (pitr-not-ready): absent
+  binlogs uploaded up to what the cluster had executed (the collector uploads every 60 s):  after 4 s
+  PASS  Binlogs continuous (one GTID interval, 10372a26…): 1-60312
+  PASS  Binlogs current (uploaded up to what was executed at the start): 60312, uploaded 60312
+  PASS  Full backup cron-mysql-s3-202611419052-2t92l in the store: 351 objects, 775 MiB
+  PASS  Full backup cron-mysql-s3-2026114191552-2t92l in the store: 351 objects, 775 MiB
+  PASS  Full backup mysql-manual-20261103-212415 in the store: 351 objects, 775 MiB
+  PASS  Full backup mysql-manual-20261104-201723 in the store: 351 objects, 776 MiB
+  PASS  Full backup mysql-manual-20261104-211303 in the store: 351 objects, 775 MiB
+  PASS  Full backup mysql-manual-20261104-213154 in the store: 351 objects, 775 MiB
+  PASS  Scheduled full backups within keep 2: 2 (manual ones are not counted)
+  binlogs in the store: 84 files, 298 MiB (the collector never deletes them)
+
+  3 warning(s)
+
+== Summary: 18 passed, 0 failed ==
+All checked backup storage checks present and configured.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-12-20261104-224538.txt

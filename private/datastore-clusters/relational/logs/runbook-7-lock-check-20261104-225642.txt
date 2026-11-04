@@ -1,0 +1,55 @@
+# runbook_7_lock.sh check (2026-11-04T22:56:42Z, kind cluster datastore-dev)
+== Runbook 7: object lock, check (2026-11-04T22:56:42Z) ==
+
+-- settings --
+  PASS  pg-backups object lock COMPLIANCE: Enabled COMPLIANCE 1
+  PASS  pg-backups versioning on: Enabled
+  PASS  mysql-backups object lock COMPLIANCE: Enabled COMPLIANCE 1
+  PASS  mysql-backups versioning on: Enabled
+  lock period: 1 days
+
+-- the newest backups are locked --
+  PASS  pg newest base backup locked: pg/base/20261104T225524/data.tar.bz2 until 2026-11-05T22:55:30Z
+  PASS  MySQL newest full backup locked: mysql-2026-11-04-22:55:54-full/appdb/customers.ibd.00000000000000000000 until 2026-11-05T22:56:17Z
+
+-- pg-backups: canary lock-canary/pg-20261104T225642, written with the pg key --
+  PASS  Write: 200
+  PASS  Locked as it was written: COMPLIANCE until 2026-11-05T22:56:42Z (1.0 days)
+  PASS  Delete with the pg key: accepted, as a delete marker: 204
+  PASS    ...and the object is hidden: 404
+  PASS    ...but its version is still there: version
+  PASS  Delete the version, pg key: refused: 403
+  PASS  Delete the version, admin key: refused: 403
+  PASS  Delete the version, admin key with the governance bypass: refused: 403
+  PASS  Shorten its lock (to an hour), admin key: refused: 403
+  PASS  The version reads back unchanged: original lock-canary/pg-20261104T225642
+  PASS  Recover: remove the delete marker: 204
+  PASS    ...and the object is back: original lock-canary/pg-20261104T225642
+  PASS  Overwrite with the pg key: accepted, as a new version: 200
+  PASS    ...current is the new one: overwritten
+  PASS    ...the original is kept: original lock-canary/pg-20261104T225642
+  PASS  Suspend versioning, admin key: refused: 409
+  canary pg-backups/lock-canary/pg-20261104T225642: 2 versions, locked until 2026-11-05T22:56:42Z; check after: relational/scripts/runbook_7_lock.sh expire
+
+-- mysql-backups: canary lock-canary/mysql-20261104T225643, written with the mysql key --
+  PASS  Write: 200
+  PASS  Locked as it was written: COMPLIANCE until 2026-11-05T22:56:43Z (1.0 days)
+  PASS  Delete with the mysql key: accepted, as a delete marker: 204
+  PASS    ...and the object is hidden: 404
+  PASS    ...but its version is still there: version
+  PASS  Delete the version, mysql key: refused: 403
+  PASS  Delete the version, admin key: refused: 403
+  PASS  Delete the version, admin key with the governance bypass: refused: 403
+  PASS  Shorten its lock (to an hour), admin key: refused: 403
+  PASS  The version reads back unchanged: original lock-canary/mysql-20261104T225643
+  PASS  Recover: remove the delete marker: 204
+  PASS    ...and the object is back: original lock-canary/mysql-20261104T225643
+  PASS  Overwrite with the mysql key: accepted, as a new version: 200
+  PASS    ...current is the new one: overwritten
+  PASS    ...the original is kept: original lock-canary/mysql-20261104T225643
+  PASS  Suspend versioning, admin key: refused: 409
+  canary mysql-backups/lock-canary/mysql-20261104T225643: 2 versions, locked until 2026-11-05T22:56:43Z; check after: relational/scripts/runbook_7_lock.sh expire
+
+== Summary: 38 passed, 0 failed ==
+All checked object lock checks present and configured.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-7-lock-check-20261104-225642.txt

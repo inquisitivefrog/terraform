@@ -163,6 +163,56 @@ read `security.toml`.
   hold encrypted tablespaces). For PostgreSQL, community PostgreSQL has no
   such feature. Not built here (see Known gaps).
 
+### Object lock (immutable backups)
+
+- **What:** a bucket setting (S3's "Object Lock", WORM: write once, read
+  many). Every object stored gets a retain-until date; until then its
+  stored version can't be deleted or changed by anyone. Versioning comes
+  with it: an overwrite adds a new version, a delete adds a "delete
+  marker" that hides the object; the locked version stays underneath.
+- **Why:** ransomware with a stolen key deletes or re-encrypts the backups
+  first, so the only way back is to pay. With the lock, the stolen engine
+  key or even the admin key can only hide or add versions; the originals
+  stay readable until their date, and a restore picks the versions written
+  before the attack (each has a write time).
+- **Modes:** COMPLIANCE (used here): nobody can delete early or shorten the
+  date, not the admin, not the store's own shell. GOVERNANCE: a user with a
+  special permission can override it (for a mistaken period, or an erasure
+  that must happen early); a stolen admin login may have that permission.
+- **Here:** both buckets, COMPLIANCE, 7 days by default (`backup_store_buckets.sh`;
+  `--lock-days` while testing), no longer than the shortest retention (pg's
+  7-day window), so the operators' own deletes still take effect soon. They
+  become delete markers; the lifecycle rule `old-versions` removes a hidden
+  or replaced version a day after its lock ends, and leftover markers.
+  Turning the lock on is **irreversible** for a bucket (done 2026-11-04 on
+  both, in place: SeaweedFS's shell `s3.bucket.lock -enable`, which also
+  turns versioning on; AWS S3 allows it on an existing versioned bucket
+  too). Objects stored before stay unlocked until retention removes them.
+- **Tested** (throwaway store, then `relational/scripts/runbook_7_lock.sh`
+  on the live one, 2026-11-04): xbcloud and boto3 (Barman) upload as
+  before, each object locked; with the engine key a delete only hides, a
+  version delete is refused (403), and so it is with the admin key, with
+  the governance bypass, and for shortening the date; suspending
+  versioning or deleting the bucket is refused (409), and so is the
+  shell's `s3.bucket.delete`. Removing the delete marker brings an object
+  back.
+- **What it doesn't cover:**
+  - an engine key **can change the lifecycle rule** (tested): it can't
+    delete locked versions, but could make old ones pile up or go sooner
+    once unlocked; platform `check_resources.sh` checks the rule;
+  - root on the store's machine (here, Docker on the laptop): the data
+    volume's files can be removed underneath S3. That is why, on a cloud,
+    the locked copy sits in a separate account;
+  - an attacker inside longer than the lock period: alerts (above, and
+    "Alerts") have to catch them first;
+  - copying data out: the lock keeps backups, it doesn't keep them secret.
+- **Disk:** hidden and replaced versions stay up to the lock period plus a
+  day. The MySQL binlog collector rewrites one small index object every
+  minute: about 1,440 small versions a day.
+- **Look:** `docker exec datastore-backups sh -c "echo 's3.bucket.lock -name pg-backups' | weed shell"`;
+  an object's lock: a HEAD request returns `x-amz-object-lock-mode` and
+  `x-amz-object-lock-retain-until-date`.
+
 ### cert-manager (`platform/environments/dev/services`)
 
 - **What:** the standard Kubernetes tool for issuing and renewing TLS
@@ -459,11 +509,21 @@ only when the cluster has backups:
     the store and the endpoints to https. Or build from scratch with TLS
     on, within a maintenance window, when the data fits it.
 
+- **Old MySQL backups kept the old endpoint (2026-11-04):** each
+  PerconaXtraDBClusterBackup records the storage settings it was taken
+  with (`status.s3`). After the switch to https, deleting a backup taken
+  before it hung on its finalizer (`failed to check if bucket exists: 400
+  Bad Request`, the http endpoint); keep 2 would have hung the same way on
+  Sunday. Fixed by patching each older record's `status.s3` to the https
+  endpoint and CA (`kubectl patch ... --subresource=status`); the deletes
+  then finished within seconds.
+
 ## Known gaps
 
 - The store is on the same laptop as the cluster: a lost laptop loses both.
   On a cloud the store would be in another account and region.
-- No object lock (immutable backups) yet.
+- No copy in another account or site: object lock keeps backups from
+  being deleted over S3, not from someone with root on the laptop.
 - Encryption at rest is the store's (SSE-S3): anyone with an S3 key reads
   plain data. No client-side encryption (above, "Encryption").
 - The encryption key and CA are on the same laptop as the store; on a cloud
@@ -490,3 +550,6 @@ only when the cluster has backups:
 | CA | certificate authority: signs certificates; a client trusts a server whose certificate its CA signed |
 | SSE-S3 | server-side encryption with keys the store manages: it encrypts on write, decrypts on read |
 | KEK | key-encryption key: encrypts each object's own data key, so one key protects all |
+| object lock, WORM | a retain-until date per object; until then it can't be deleted or changed (write once, read many) |
+| delete marker | in a versioned bucket, what a delete adds: it hides the object; earlier versions stay |
+| 3-2-1 | 3 copies of the data, on 2 kinds of storage, 1 off-site; 3-2-1-1-0 adds 1 offline or immutable and 0 errors in restore tests |

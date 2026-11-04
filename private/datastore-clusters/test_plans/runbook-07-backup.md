@@ -12,7 +12,7 @@ the store each time (it stays until deleted; see the script's header).
 ## Preconditions
 
 - The backup store is running (`platform/scripts/check_resources.sh`: the
-  backup store section passes, 36/36); `check_resources.sh` passes (68/68).
+  backup store section passes, 42/42); `check_resources.sh` passes (68/68).
 - **CPU to spare.** On 2026-11-02 the Mac was encoding video (HandBrake,
   ffmpeg), the Docker VM got about 2.4 of its 8 CPUs, and the first pg
   backup failed after 22 minutes while MySQL collapsed (see STATUS.md).
@@ -155,3 +155,25 @@ Expected (lab, 2026-11-04): all four. pg 30 s, 185 MiB; mysql 41 s and
 40 s, 775 MiB. The binlog collector resumed from its last upload. Two
 clients stuck during the switch (BACKUPS.md, "Turning TLS on in a running
 lab"): the collector and the old pg primary, each fixed by recreating it.
+
+## Object lock (`runbook_7_lock.sh`)
+
+After `backup_store_buckets.sh` (lock on; `--lock-days 1` while testing)
+and a backup of each engine:
+
+1. `runbook_7_lock.sh check`: both buckets COMPLIANCE with versioning; the
+   newest pg base backup and MySQL full backup locked; per bucket, a canary
+   written with the engine key is locked as written; a delete only hides it
+   (204, then 404) and its version stays; deleting the version is refused
+   with the engine key, the admin key and the governance bypass (403);
+   shortening the lock is refused (403); the version reads back unchanged;
+   removing the delete marker brings it back; an overwrite adds a version
+   and keeps the original; suspending versioning is refused (409).
+2. After the lock days, daily: `runbook_7_lock.sh expire`: the replaced
+   version is gone by itself within a day of its lock (the lifecycle rule;
+   fails at 2 days); then the current one is deletable (204).
+3. Then `backup_store_buckets.sh` without `--lock-days`: back to 7 days.
+
+Expected (lab, 2026-11-04, 1 day): check 38/38; backups pg 31 s, mysql
+41 s, both locked until the next day; platform 42/42, relational 68/68.
+Expire: to run from 2026-11-05 23:00 UTC.

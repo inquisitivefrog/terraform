@@ -89,14 +89,22 @@ c = next(i for i in json.load(open(sys.argv[1]))["identities"] if i["name"] == s
 print("user = \"" + c["accessKey"] + ":" + c["secretKey"] + "\"")' "$STORE_KEYS" "$1" |
     curl -s -o /dev/null -w '%{http_code}' --cacert "$STORE_CA" --aws-sigv4 "aws:amz:us-east-1:s3" -K - "$url"
 }
-# bucket_encryption <bucket>: its default encryption, read with the admin key
-bucket_encryption() {
+# bucket_field <bucket> <setting> <element>...: those elements of a bucket
+# setting (encryption, versioning, object-lock, lifecycle), read with the
+# admin key; "none" if unset
+bucket_field() {
+  local b="$1" sub="$2"
+  shift 2
   python3 -c '
 import json, sys
 c = next(i for i in json.load(open(sys.argv[1]))["identities"] if i["name"] == "admin")["credentials"][0]
 print("user = \"" + c["accessKey"] + ":" + c["secretKey"] + "\"")' "$STORE_KEYS" |
-    curl -s --cacert "$STORE_CA" --aws-sigv4 "aws:amz:us-east-1:s3" -K - "https://localhost:${STORE_PORT:-8333}/$1?encryption" |
-    sed -n 's:.*<SSEAlgorithm>\([^<]*\)</SSEAlgorithm>.*:\1:p' | grep . || echo none
+    curl -s --cacert "$STORE_CA" --aws-sigv4 "aws:amz:us-east-1:s3" -K - "https://localhost:${STORE_PORT:-8333}/$b?$sub" |
+    python3 -c '
+import re, sys
+x = sys.stdin.read()
+v = [m.group(1) for e in sys.argv[1:] for m in [re.search("<" + e + ">([^<]*)</" + e + ">", x)] if m]
+print(" ".join(v) if v else "none")' "$@"
 }
 # cert_days: whole days the store's certificate has left, from the store itself
 cert_days() {
@@ -130,8 +138,14 @@ else
   # data volume (/data/.mini_sse_kek; tested 2026-11-04)
   expect "Encryption key seen by the store (security.toml, not the data volume)" "kek" sh -c \
     "docker exec $STORE sed -n 's/^kek *=.*/kek/p' /etc/seaweedfs/security.toml"
+  # Object lock (backup_store_buckets.sh; the days can differ while testing)
   for b in pg-backups mysql-backups; do
-    expect "$b encrypted by default" "AES256" bucket_encryption "$b"
+    expect "$b encrypted by default" "AES256" bucket_field "$b" encryption SSEAlgorithm
+    expect "$b versioning on" "Enabled" bucket_field "$b" versioning Status
+    match "$b object lock COMPLIANCE, 1-7 days" '^Enabled COMPLIANCE [1-7]$' bucket_field "$b" object-lock ObjectLockEnabled Mode Days
+    # An engine key can change this rule (tested 2026-11-04): watch it
+    expect "$b lifecycle removes old versions a day after their lock" "old-versions Enabled 1 true" \
+      bucket_field "$b" lifecycle ID Status NoncurrentDays ExpiredObjectDeleteMarker
   done
   expect "No usage reports to telemetry.seaweedfs.com" "-master.telemetry=false" sh -c \
     "docker inspect -f '{{range .Args}}{{println .}}{{end}}' $STORE | grep -x -- -master.telemetry=false"

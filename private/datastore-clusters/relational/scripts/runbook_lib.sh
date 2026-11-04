@@ -382,12 +382,15 @@ restore_delete() {
 # --- the backup store ---
 KEYS="$HOME/.config/datastore-dev/backup-store/s3.json"
 # s3 <identity> <path>: a GET against the store with that identity's key
-# (handed to curl on stdin, never printed)
+# (handed to curl on stdin, never printed). The path is percent-encoded:
+# curl's signing fails on a raw colon (MySQL's backup names have them).
 s3() {
   python3 - "$KEYS" "$@" <<'EOF'
-import json, os, subprocess, sys
+import json, os, subprocess, sys, urllib.parse
 keys, identity, path = sys.argv[1:]
 c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
+p, q = (path.split("?", 1) + [""])[:2]
+path = urllib.parse.quote(p) + ("?" + q if q else "")
 r = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"https://localhost:8333/{path}"],
                    input=f'user = "{c["accessKey"]}:{c["secretKey"]}"\ncacert = "{os.path.dirname(keys)}/ca.crt"', capture_output=True, text=True)
 sys.stdout.write(r.stdout)
