@@ -37,7 +37,10 @@ PostgreSQL (`s3://pg-backups/pg/`):
 8. Prints the plugin's first recoverability point.
 
 MySQL (`s3://mysql-backups/`):
-9. The binlog collector (`mysql-pitr`) is ready with 0 restarts.
+9. The binlog collector (`mysql-pitr`) is ready and its last exit was not
+   `OOMKilled`. Other restarts are a **WARN**: after a Docker restart it
+   starts before MySQL is up, exits 1 ("can't find host") and is restarted
+   until it connects (3 times on 2026-11-04).
 10. Its memory peak (the pod cgroup's `memory.peak`, since the pod started)
     is under 90% of its limit. Each upload holds a 528 MiB buffer
     (docs/BACKUPS.md, "Its memory").
@@ -72,8 +75,11 @@ MySQL (`s3://mysql-backups/`):
 
 ## Caveats
 
-- The collector's peak is since the pod started, not since the last run. A
-  peak near the limit means the next upload can be OOMKilled (it was, at
+- The collector's peak is since its container last started, so a restart
+  resets it (109 MiB after the 2026-11-04 restart).
+- Only the last exit is kept: an OOM kill followed by a startup exit would
+  show as the startup exit. Check `kubectl describe` when restarts rise.
+- A peak near the limit means the next upload can be OOMKilled (it was, at
   1Gi, on 2026-11-03): raise the limit or check upstream issue #2560.
 - The collector never deletes binlogs from the store, and the operator only
   deletes full backups. Binlog growth is unbounded until cleaned by hand

@@ -173,9 +173,22 @@ echo; echo "-- MySQL (s3://mysql-backups/) --"
 PITR_POD="$(k -n "$NS" get pods -l app.kubernetes.io/component=pitr -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
 [[ -n "$PITR_POD" ]] || PITR_POD="$(k -n "$NS" get pods -o name | sed -n 's|^pod/\(mysql-pitr-.*\)|\1|p' | head -1)"
 read -r READY RESTARTS STARTED NODE PUID <<<"$(k -n "$NS" get pod "$PITR_POD" -o jsonpath='{.status.containerStatuses[0].ready} {.status.containerStatuses[0].restartCount} {.status.startTime} {.spec.nodeName} {.metadata.uid}')"
+read -r LAST_REASON LAST_EXIT LAST_END RUNNING_SINCE <<<"$(k -n "$NS" get pod "$PITR_POD" -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason} {.status.containerStatuses[0].lastState.terminated.exitCode} {.status.containerStatuses[0].lastState.terminated.finishedAt} {.status.containerStatuses[0].state.running.startedAt}')"
 LIMIT_MIB="$(k -n "$NS" get pod "$PITR_POD" -o jsonpath='{.spec.containers[0].resources.limits.memory}' | awk '/Gi$/ {print $1 * 1024; next} /Mi$/ {print $1 + 0}')"
-if [[ "$READY $RESTARTS" == "true 0" ]]; then pass "Binlog collector up, no restarts" "$PITR_POD since $STARTED"; else
-  fail "Binlog collector up, no restarts" "ready $READY, $RESTARTS restarts since $STARTED (kubectl -n $NS describe pod $PITR_POD)"; fi
+# Restarts alone are not a failure: after the Docker VM restarts, the
+# collector starts before MySQL is up, exits 1 ("get first PXC host: can't
+# find host") and is restarted until it connects (2026-11-04: 3 times).
+# Running out of memory is (the 528 MiB buffer, docs/BACKUPS.md).
+if [[ "$READY" != true ]]; then
+  fail "Binlog collector up, not killed for memory" "not ready, $RESTARTS restarts (kubectl -n $NS describe pod $PITR_POD)"
+elif [[ "$LAST_REASON" == OOMKilled ]]; then
+  fail "Binlog collector up, not killed for memory" "OOMKilled at $LAST_END ($RESTARTS restarts): raise its limit"
+elif ((RESTARTS == 0)); then
+  pass "Binlog collector up, not killed for memory" "$PITR_POD, no restarts since $STARTED"
+else
+  pass "Binlog collector up, not killed for memory" "$PITR_POD running since $RUNNING_SINCE"
+  warn "Binlog collector restarts" "$RESTARTS since $STARTED, the last $LAST_REASON exit $LAST_EXIT at $LAST_END (after a Docker restart: it starts before MySQL; kubectl -n $NS logs $PITR_POD --previous)"
+fi
 PEAK_MIB="$(docker exec "$NODE" sh -c "cat \$(find /sys/fs/cgroup -maxdepth 4 -type d -name '*pod${PUID//-/_}*' | head -1)/memory.peak" 2>/dev/null | awk '{printf "%d", $1 / 1048576}')"
 if [[ -n "$PEAK_MIB" && -n "$LIMIT_MIB" ]] && ((PEAK_MIB * 10 < LIMIT_MIB * 9)); then
   pass "Binlog collector memory peak under 90% of its limit (a 528 MiB buffer per upload)" "$PEAK_MIB of $LIMIT_MIB MiB"

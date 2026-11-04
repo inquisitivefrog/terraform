@@ -198,6 +198,37 @@ store; 287 MiB on each node. The 1.5Gi limit holds. The Mac's free disk
 fell from 17 to 13 GiB in the hour (Docker.raw 43 GiB; the store grew
 11 MiB): the user's yt-dlp downloads, being moved to a flash drive.
 Runbook 12 fails below 10 GiB.
+Runbook 12 pushed (204c0bd).
+
+2026-11-04 18:00: restarted by the user (`docker_restart.sh`: pods ready
+in 267 s; platform 26/26, relational 63/63); Mac 29 GiB free (the yt-dlp
+files moved off). Runbook 12 failed 12/13: the collector had 3 restarts,
+all on startup before MySQL was up (exit 1, "get first PXC host: can't find
+host"), not memory. Fixed the check: FAIL only when not ready or last
+killed for memory (OOMKilled); other restarts a WARN. Rerun 18:01: 13
+passed, 5 warnings; collector peak 109 MiB (reset by the restart); binlogs
+1-56042, current.
+
+Resume here (from 2026-11-04, stopped for low battery):
+1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
+   the store too); expect platform 26/26, relational 63/63; then
+   `relational/scripts/runbook_12_store.sh` (13 passed; check the Mac's free
+   disk after the user moved the yt-dlp files off).
+2. No load or backup while HandBrake, ffmpeg or yt-dlp runs.
+3. Runbook 7 gaps (pick next; the user hasn't chosen):
+   - the schedule has never fired: a short test schedule (every 15 min
+     for an hour, then weekly again) to see keep 2 (mysql) delete one;
+   - a backup under a 15-minute load (`backup_now.sh` during `load_test.sh`);
+   - the "last good backup older than schedule" alert, plus an
+     Alertmanager receiver (still null);
+   - object lock (needs bucket versioning) and encryption (backups in
+     plain form, http to the store): document, maybe out of scope here.
+4. Open: 6 WAL files on timelines 1-6 in `s3://pg-backups/pg/wals/`
+   (cause not found); the failed 11-02 pg backup's backup.info at
+   `pg/base/20261102T203907/` (delete by hand?).
+5. Later: runbook 14 (MySQL 8.0 end of life), runbook 17 onto
+   runbook_lib.sh, an optional comment for upstream issue #2560 (for the
+   user to post).
 
 Resume here (from 2026-10-31):
 1. `docker_restart.sh`; expect platform 24/24 (cert-manager skipped) and
