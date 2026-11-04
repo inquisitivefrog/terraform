@@ -51,6 +51,23 @@ or when a step fails). Each run adds a backup to the store (step 1).
 - The live cluster is untouched; nothing of the restore cluster is left.
 - Record: restore time (RTO for ~3,000,000 orders).
 
+## Expected (lab, 2026-11-04: over TLS, from encrypted, locked backups)
+
+| | pg | mysql |
+|---|---|---|
+| Backup (step 1) | 30 s | 45 s |
+| Restore time (create to ready) | **141 s** | **203 s** (empty cluster 51 s) |
+| Consistency | amcheck: 5 B-tree indexes, no errors | CHECK TABLE: OK |
+| Rows compared | 3,024,462, identical | 3,035,102, identical |
+| App read / write | 329 orders found; insert ok (rolled back) | 324 orders found; insert ok (rolled back) |
+| After | relational check 68/68 | same |
+
+Logs: `runbook-8-pg-20261104-230303.txt`, `runbook-8-mysql-20261104-230634.txt`.
+The restores read through the store's TLS endpoint with the CA (pg via the
+ObjectStore's `endpointCA`, mysql via `backupSource.s3.caBundle`, copied
+from the live storage) and the store decrypted the SSE-S3 objects; the
+lock makes no difference to reads.
+
 ## Expected (lab, 2026-11-03)
 
 | | pg | mysql |

@@ -1,0 +1,146 @@
+# runbook_9_pitr.sh mysql (2026-11-04T23:34:05Z, kind cluster datastore-dev)
+
+== 23:34:05 0. Preconditions
+  backup to start from: mysql-manual-20261104-230639 (s3://mysql-backups/mysql-2026-11-04-23:06:39-full)
+  writer: mysql-pxc-0; fingerprints from: mysql-pxc-1; Docker VM memory free: 3365 MiB (need 3072)
+
+== 23:34:07 Load: 20 requests/s for 3m
+  k6 run mysql-run-20261104-233408; 60 s to settle
+
+== 23:35:08 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: not judged here: this run is about the recovery
+  | Job k6-mysql-run-20261104-233408: run against orders-mysql at 20 req/s for 3m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261104-233408 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=7.06ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=5.41ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2.24ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=731.28ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=6.27ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 3601    19.945778/s
+  |     checks_succeeded...: 100.00% 3601 out of 3601
+  |     checks_failed......: 0.00%   0 out of 3601
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 717    3.971431/s
+  |     orders_deleted.................: 212    1.174259/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=121.48ms min=562.12µs med=2.74ms   max=904.65ms p(90)=590.83ms p(95)=636.7ms 
+  |       { expected_response:true }...: avg=121.48ms min=562.12µs med=2.74ms   max=904.65ms p(90)=590.83ms p(95)=636.7ms 
+  |       { op:create }................: avg=4.22ms   min=2.21ms   med=3.86ms   max=30.96ms  p(90)=6.04ms   p(95)=7.06ms  
+  |       { op:delete }................: avg=3.05ms   min=1.6ms    med=2.76ms   max=11.83ms  p(90)=4.26ms   p(95)=5.41ms  
+  |       { op:read }..................: avg=1.41ms   min=562.12µs med=1.17ms   max=147.14ms p(90)=1.87ms   p(95)=2.24ms  
+  |       { op:search }................: avg=601.75ms min=482.19ms med=592.13ms max=904.65ms p(90)=688.04ms p(95)=731.28ms
+  |       { op:update }................: avg=3.81ms   min=2.06ms   med=3.49ms   max=24.56ms  p(90)=5.12ms   p(95)=6.27ms  
+  |     http_req_failed................: 0.00%  0 out of 3602
+  |       { op:create }................: 0.00%  0 out of 717
+  |       { op:delete }................: 0.00%  0 out of 212
+  |       { op:read }..................: 0.00%  0 out of 1585
+  |       { op:search }................: 0.00%  0 out of 715
+  |       { op:update }................: 0.00%  0 out of 372
+  |     http_reqs......................: 3602   19.951317/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=121.69ms min=648.58µs med=2.92ms   max=904.82ms p(90)=591ms    p(95)=637.09ms
+  |     iterations.....................: 3601   19.945778/s
+  |     vus............................: 4      min=0         max=8 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 4.3 MB 24 kB/s
+  |     data_sent......................: 643 kB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-11-04T23:37:09Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261104-233408: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+
+== 23:37:22 2. The good state (idle)
+  good: customers 10000 29998 21375010239903
+  good: orders 3025607 9098782 6499738398389696
+  orders written by run mysql-run-20261104-233408 (left after its own deletes): 505
+
+== 23:37:37 3. The mistake: DELETE the run's orders on mysql-pxc-0
+  T (recover to): 2026-11-04 23:37:38 UTC; GTIDs executed by then: 10372a26-d492-11f1-9e2e-675c9f563290:1-61613
+  deleted: 505 rows
+  now:  customers 10000 29998 21375010239903
+  now:  orders 3025102 9096631 6498675385406544
+
+== 23:37:45 4. The logs past T are in the store
+  waiting for an uploaded binlog to cover 10372a26-d492-11f1-9e2e-675c9f563290:1-61613 (the collector uploads every 60 s)
+  after 21 s
+
+== 23:38:06 5. Recover to 2026-11-04 23:37:38 into mysql-recovered (one instance)
+perconaxtradbcluster.pxc.percona.com/mysql-recovered created
+  empty cluster ready  after 50 s
+perconaxtradbclusterrestore.pxc.percona.com/mysql-recovered-20261104-233857 created
+  23:39:07 Stopping Cluster
+  23:39:18 Restoring
+  23:39:38 Preparing Cluster
+  23:41:29 Point-in-time recovering
+  23:41:39 Succeeded
+  restored cluster ready  after 31 s
+  Recovery time (create to ready, the RTO for this size): 244 s
+
+== 23:42:10 6. mysql-recovered is consistent and holds the good state
+  appdb.customers	check	status	OK
+  appdb.orders	check	status	OK
+  recovered: customers 10000 29998 21375010239903
+  recovered: orders 3025607 9098782 6499738398389696
+  match: the 505 deleted orders are there, the DELETE is not
+
+== 23:42:16 7. Copy the run's orders from mysql-recovered back into the live cluster
+  copied back: 505 rows
+  live: customers 10000 29998 21375010239903
+  live: orders 3025607 9098782 6499738398389696
+  the live cluster is back to the good state
+
+== 23:42:23 8. Delete mysql-recovered
+  after 20 s
+  nothing of mysql-recovered left
+
+== 23:42:46 Verify: relational check_resources.sh
+  
+  == Summary: 68 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+PASS: recovered to 2026-11-04 23:37:38 in 244 s from mysql-manual-20261104-230639 plus the logs; 505 deleted orders recovered and copied back; the live cluster is back to the good state.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-9-mysql-20261104-233405.txt

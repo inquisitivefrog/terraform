@@ -66,6 +66,21 @@ cluster is deleted (kept with `--keep`, or when a step fails).
   `percona.com/unsafe-pitr`; the script never sets it. None seen
   2026-11-03.
 
+## Expected (lab, 2026-11-04: over TLS, from encrypted, locked backups and logs)
+
+| | pg | mysql |
+|---|---|---|
+| Orders written by the load, then deleted | 572 (0 lost) | 505 (0 lost; k6 over the search SLO only: the runbook 17 index) |
+| Logs past T in the store | 10 s | 21 s |
+| Recovery time (create to ready) | **71 s**, to 23:32:05.538405 | **244 s** (empty cluster 50 s), to 23:37:38 |
+| Recovered | the 572 orders there, the DELETE not | the 505 there, the DELETE not |
+| Copied back | live equals the good state | same |
+| After | relational check 68/68 | same |
+
+Logs: `runbook-9-pg-20261104-232837.txt`, `runbook-9-mysql-20261104-233405.txt`.
+The WAL and binlogs replayed were uploaded minutes before, over TLS, into
+the locked buckets (SSE-S3); same times as on 11-03.
+
 ## Expected (lab, 2026-11-03)
 
 | | pg | mysql |

@@ -1,0 +1,60 @@
+# runbook_8_restore.sh mysql (2026-11-04T23:06:34Z, kind cluster datastore-dev)
+
+== 23:06:34 0. Preconditions
+  source: mysql-pxc-1; Docker VM memory free: 3334 MiB (need 3072)
+
+== 23:06:37 1. Fingerprint the source, back it up, fingerprint again
+  before: customers 10000 29998 21375010239903
+  before: orders 3025102 9096631 6498675385406544
+  | Store before: mysql-backups holds 1591 objects, 3399.0 MiB
+  | Backup mysql-manual-20261104-230639 of cluster mysql (backup Job, a non-writer node donates)
+  | perconaxtradbclusterbackup.pxc.percona.com/mysql-manual-20261104-230639 created
+  |   23:06:40 Starting
+  |   23:06:50 Running
+  |   23:07:20 Succeeded
+  |   to s3://mysql-backups/mysql-2026-11-04-23:06:39-full
+  |   completed 2026-11-04T23:07:12Z
+  |   
+  | Took 41 s (from creating it to the status above)
+  | In the store: s3://mysql-backups/mysql-2026-11-04-23:06:39-full/: 351 objects, 775.1 MiB
+  | Store after: mysql-backups holds 1946 objects, 4174.2 MiB
+  after:  customers 10000 29998 21375010239903
+  after:  orders 3025102 9096631 6498675385406544
+  backup to restore: mysql-manual-20261104-230639 (s3://mysql-backups/mysql-2026-11-04-23:06:39-full)
+
+== 23:07:22 2. Restore into mysql-restore (one instance)
+perconaxtradbcluster.pxc.percona.com/mysql-restore created
+  empty cluster ready  after 51 s
+perconaxtradbclusterrestore.pxc.percona.com/mysql-restore-20261104-230813 created
+  23:08:13 Stopping Cluster
+  23:08:33 Restoring
+  23:08:53 Preparing Cluster
+  23:10:04 Starting Cluster
+  23:10:45 Succeeded
+  restored cluster ready  after 0 s
+  Restore time (create to ready, the RTO for this size): 203 s
+
+== 23:10:45 3. Consistency checks on mysql-restore-pxc-0
+  appdb.customers	check	status	OK
+  appdb.orders	check	status	OK
+
+== 23:10:49 4. The restored data equals the source's
+  restored: customers 10000 29998 21375010239903
+  restored: orders 3025102 9096631 6498675385406544
+  match: 3035102 rows
+
+== 23:10:51 5. Application queries as app, over TLS, through mysql-restore's endpoint
+  324
+  write ok
+
+== 23:10:51 6. Delete mysql-restore
+  after 20 s
+  nothing of mysql-restore left
+
+== 23:11:15 Verify: relational check_resources.sh
+  
+  == Summary: 68 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+PASS: mysql-manual-20261104-230639 restored into mysql-restore in 203 s; data identical (3035102 rows), consistent, usable by the app.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-8-mysql-20261104-230634.txt

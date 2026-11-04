@@ -12,8 +12,8 @@ themselves (goal, procedure, every engine) are in
 | [runbook-01-alerts.md](runbook-01-alerts.md) | 1. Monitor | `runbook_1_alerts.sh` | no (every trigger undone) | 2026-10-30, both |
 | [runbook-05-load.md](runbook-05-load.md) | 5. Load test | `load_test.sh` | no (adds rows) | 2026-10-29, pg |
 | [runbook-07-backup.md](runbook-07-backup.md) | 7. Back up: by hand, the schedule, the alerts, under load, over TLS and encrypted, locked | `backup_now.sh`, `runbook_7_schedule.sh`, `runbook_7_alerts.sh`, `runbook_7_lock.sh` | no (adds backups; the schedule and alert tests need a temporary apply) | 2026-11-04, both |
-| [runbook-08-restore.md](runbook-08-restore.md) | 8. Restore (into a new cluster) | `runbook_8_restore.sh` | no (temporary cluster, deleted; adds a backup) | 2026-11-03, both |
-| [runbook-09-pitr.md](runbook-09-pitr.md) | 9. Point-in-time recovery | `runbook_9_pitr.sh` | no (rows deleted, then copied back; temporary cluster deleted) | 2026-11-03, both |
+| [runbook-08-restore.md](runbook-08-restore.md) | 8. Restore (into a new cluster) | `runbook_8_restore.sh` | no (temporary cluster, deleted; adds a backup) | 2026-11-04, both |
+| [runbook-09-pitr.md](runbook-09-pitr.md) | 9. Point-in-time recovery | `runbook_9_pitr.sh` | no (rows deleted, then copied back; temporary cluster deleted) | 2026-11-04, both |
 | [runbook-12-store.md](runbook-12-store.md) | 12. Backup and archive storage check | `runbook_12_store.sh` | no (read-only) | 2026-11-03 (both engines in one run) |
 | [runbook-13-patch.md](runbook-13-patch.md) | 13. Security patch (minor version) | `runbook_13_patch.sh` | yes: new image, writer moves | 2026-10-30, both |
 | [runbook-17-index.md](runbook-17-index.md) | 17. Schema migration (online index) | `runbook_17_index.sh` | no (index dropped again) | 2026-10-28, both |

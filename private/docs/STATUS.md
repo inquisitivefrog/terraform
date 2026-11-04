@@ -408,9 +408,22 @@ Object lock (runbook 7's last gap), 22:00-23:00:
   day, then the current one deletes), then `backup_store_buckets.sh`
   (7 days). Then runbooks 8 and 9 (restore, PITR from locked, encrypted
   backups over TLS).
+Pushed caab648. Runbook 8 (restore) over TLS from encrypted, locked
+backups, both PASS: pg 23:03 restore 141 s, 3,024,462 rows identical,
+amcheck clean; mysql 23:06 restore 203 s, 3,035,102 rows identical; app
+read + write ok; relational 68/68 after each. Each run leaves its backup
+(manual MySQL backups now 213154, 225554, 230639: 775 MiB each, locked a
+day, not trimmed by keep 2; mysql-backups 4,174 MiB).
+Runbook 9 (point-in-time recovery) over TLS from locked, encrypted
+backups and logs, both PASS: pg 23:28, 572 orders deleted at
+23:32:05.538405, recovered in 71 s, copied back; mysql 23:34, 505 orders,
+recovered to 23:37:38 in 244 s, copied back (k6 over the search SLO only,
+0 lost); relational 68/68 after each. Runbook 9 takes no backup of its
+own (it starts from the newest, runbook 8's).
 
 Resume here (from 2026-11-04, stopped for low battery):
 0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).
+0b. **Same day, after their lock ends (2026-11-05 ~23:10 UTC): delete the older manual MySQL backups** (agreed with the user): `kubectl -n relational delete perconaxtradbclusterbackups.pxc.percona.com mysql-manual-20261104-213154 mysql-manual-20261104-225554` and any older runbook 8/9 ones, keeping the newest; check their files are gone (`inventory mysql mysql-backups`). They are locked until then: a delete now only adds a marker and the operator's finalizer may fail.
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
    the store too); expect platform 42/42, relational 68/68; then
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
