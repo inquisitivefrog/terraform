@@ -1,0 +1,84 @@
+# load_test.sh pg run 20 10m (2026-11-04T20:04:45Z, kind cluster datastore-dev)
+Job k6-pg-run-20261104-200445: run against orders-pg at 20 req/s for 10m
+Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261104-200445 (port-forward: platform/scripts/grafana_restart.sh)
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{op:create}
+    ✓ 'p(95)<200' p(95)=3.67ms
+
+    http_req_duration{op:delete}
+    ✓ 'p(95)<200' p(95)=2.46ms
+
+    http_req_duration{op:read}
+    ✓ 'p(95)<100' p(95)=1.26ms
+
+    http_req_duration{op:search}
+    ✓ 'p(95)<300' p(95)=58.17ms
+
+    http_req_duration{op:update}
+    ✓ 'p(95)<200' p(95)=3ms
+
+    http_req_failed{op:create}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:delete}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:read}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:search}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{op:update}
+    ✓ 'rate<0.01' rate=0.00%
+
+    orders_lost
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 12000   19.999321/s
+    checks_succeeded...: 100.00% 12000 out of 12000
+    checks_failed......: 0.00%   0 out of 12000
+
+
+    CUSTOM
+    orders_created.................: 2463   4.104861/s
+    orders_deleted.................: 585    0.974967/s
+    orders_lost....................: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=11.2ms   min=384.58µs med=1.65ms   max=261.26ms p(90)=50.67ms p(95)=53.18ms
+      { expected_response:true }...: avg=11.2ms   min=384.58µs med=1.65ms   max=261.26ms p(90)=50.67ms p(95)=53.18ms
+      { op:create }................: avg=2.61ms   min=1.32ms   med=2.41ms   max=53.04ms  p(90)=3.3ms   p(95)=3.67ms 
+      { op:delete }................: avg=1.7ms    min=992.95µs med=1.54ms   max=30.67ms  p(90)=2.13ms  p(95)=2.46ms 
+      { op:read }..................: avg=857.13µs min=384.58µs med=802.97µs max=9.46ms   p(90)=1.12ms  p(95)=1.26ms 
+      { op:search }................: avg=51.13ms  min=41.92ms  med=50.79ms  max=261.26ms p(90)=55.68ms p(95)=58.17ms
+      { op:update }................: avg=2.12ms   min=1.24ms   med=1.93ms   max=35.85ms  p(90)=2.6ms   p(95)=3ms    
+    http_req_failed................: 0.00%  0 out of 12001
+      { op:create }................: 0.00%  0 out of 2463
+      { op:delete }................: 0.00%  0 out of 585
+      { op:read }..................: 0.00%  0 out of 5370
+      { op:search }................: 0.00%  0 out of 2343
+      { op:update }................: 0.00%  0 out of 1239
+    http_reqs......................: 12001  20.000988/s
+
+    EXECUTION
+    iteration_duration.............: avg=11.35ms  min=487.58µs med=1.79ms   max=261.59ms p(90)=50.81ms p(95)=53.34ms
+    iterations.....................: 12000  19.999321/s
+    vus............................: 0      min=0          max=2 
+    vus_max........................: 20     min=20         max=20
+
+    NETWORK
+    data_received..................: 14 MB  23 kB/s
+    data_sent......................: 2.1 MB 3.5 kB/s
+
+
+
+
+Run pg-run-20261104-200445: passed.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-5-pg-20261104-200445.txt

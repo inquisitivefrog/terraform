@@ -308,7 +308,10 @@ notes. Implementation status lives in the README of each category.
   demand); no object lock yet. The schedule and keep 2 tested
   (`runbook_7_schedule.sh`, 4 fires each, 2 deletions with their files); the
   "last good backup too old" alerts fire, reach the receiver (alert-log) and
-  resolve on both engines (`runbook_7_alerts.sh`). What each piece is, and the
+  resolve on both engines (`runbook_7_alerts.sh`). A backup under load
+  passes on both (0 orders lost). Since 2026-11-04 backups go to the store
+  over TLS and are encrypted at rest (SSE-S3, key outside the data volume).
+  What each piece is, and the
   gaps: [BACKUPS.md](BACKUPS.md); test plan:
   [../test_plans/runbook-07-backup.md](../test_plans/runbook-07-backup.md).
 

@@ -61,12 +61,12 @@ KEYS="$HOME/.config/datastore-dev/backup-store/s3.json"
 # stdin, never printed)
 my_binlogs_cover() {
   python3 - "$KEYS" "$1" <<'EOF'
-import json, re, subprocess, sys
+import json, os, re, subprocess, sys
 keys, want = sys.argv[1:]
 c = next(i for i in json.load(open(keys))["identities"] if i["name"] == "mysql")["credentials"][0]
 def get(path):
-    return subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/mysql-backups{path}"],
-                          input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
+    return subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"https://localhost:8333/mysql-backups{path}"],
+                          input=f'user = "{c["accessKey"]}:{c["secretKey"]}"\ncacert = "{os.path.dirname(keys)}/ca.crt"', capture_output=True, text=True).stdout
 def last(gtids):  # {uuid: highest transaction number}
     out = {}
     for part in gtids.replace("\n", "").split(","):

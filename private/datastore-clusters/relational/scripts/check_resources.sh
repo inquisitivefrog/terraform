@@ -32,13 +32,13 @@ zones() {
 # (from the key file; never printed)
 store_count() {
   python3 - "$HOME/.config/datastore-dev/backup-store/s3.json" "$@" <<'EOF'
-import json, sys, subprocess, re
+import json, os, sys, subprocess, re
 keys, identity, bucket, prefix = sys.argv[1:]
 c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
 # The key goes to curl as a config file on stdin, not on its command line.
 out = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-",
-                      f"http://localhost:8333/{bucket}?list-type=2&prefix={prefix}"],
-                     input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
+                      f"https://localhost:8333/{bucket}?list-type=2&prefix={prefix}"],
+                     input=f'user = "{c["accessKey"]}:{c["secretKey"]}"\ncacert = "{os.path.dirname(keys)}/ca.crt"', capture_output=True, text=True).stdout
 m = re.search(r"<KeyCount>(\d+)</KeyCount>", out)
 print(m.group(1) if m else "error: " + out[:80])
 EOF
@@ -135,12 +135,14 @@ else
   # and shipping. Taking and restoring a backup is a runbook's job.
   echo
   echo "-- backups --"
-  STORE_URL="http://host.docker.internal:8333"
+  STORE_URL="https://host.docker.internal:8333"
   expect "Barman Cloud plugin available" "1" k -n cnpg-system get deploy plugin-barman-cloud -o jsonpath='{.status.availableReplicas}'
   expect "Key Secrets (scripts/backup_secrets.sh)" "mysql-backup-s3 pg-backup-s3" sh -c \
     "kubectl --context $CTX -n $NS get secret mysql-backup-s3 pg-backup-s3 -o name | sed 's:.*/::' | sort | xargs"
   expect "$PG: ObjectStore $PG-backups at the store" "$STORE_URL s3://pg-backups/" k -n "$NS" get objectstores.barmancloud.cnpg.io "$PG-backups" \
     -o jsonpath='{.spec.configuration.endpointURL} {.spec.configuration.destinationPath}'
+  expect "$PG: store certificate checked against its CA" "$PG-backup-ca ca.crt" k -n "$NS" get objectstores.barmancloud.cnpg.io "$PG-backups" \
+    -o jsonpath='{.spec.configuration.endpointCA.name} {.spec.configuration.endpointCA.key}'
   expect "$PG: plugin sidecar on every instance" "3" sh -c "kubectl --context $CTX -n $NS get pods -l cnpg.io/cluster=$PG,cnpg.io/podRole=instance \
     -o jsonpath='{range .items[*]}{.spec.initContainers[*].name} {.spec.containers[*].name}{\"\\n\"}{end}' | grep -c plugin-barman-cloud"
   expect "$PG: WAL archiving working (cluster condition)" "True" k -n "$NS" get clusters.postgresql.cnpg.io "$PG" \
@@ -154,6 +156,8 @@ else
     -o jsonpath='{.spec.schedule} {.spec.method}'
   expect "$MY: backup storage at the store" "$STORE_URL mysql-backups true" k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \
     -o jsonpath='{.spec.backup.storages.s3.s3.endpointUrl} {.spec.backup.storages.s3.s3.bucket} {.spec.backup.storages.s3.s3.forcePathStyle}'
+  expect "$MY: store certificate checked against its CA" "$MY-backup-ca ca.crt" k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \
+    -o jsonpath='{.spec.backup.storages.s3.s3.caBundle.name} {.spec.backup.storages.s3.s3.caBundle.key}'
   match "$MY: XtraBackup 8.0 image (matches the 8.0 server)" '^percona/percona-xtrabackup:8\.0\.' k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \
     -o jsonpath='{.spec.backup.image}'
   expect "$MY: full backup scheduled (Sunday 03:00 UTC, keep 2)" "0 3 * * 0 2" k -n "$NS" get perconaxtradbclusters.pxc.percona.com "$MY" \

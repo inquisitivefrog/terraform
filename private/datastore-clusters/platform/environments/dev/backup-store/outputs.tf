@@ -13,3 +13,11 @@ output "buckets" {
 output "keys_file" {
   value = module.backup_store.keys_file
 }
+
+output "ca_file" {
+  value = module.backup_store.ca_file
+}
+
+output "ca_pem" {
+  value = module.backup_store.ca_pem
+}

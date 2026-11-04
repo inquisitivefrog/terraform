@@ -82,9 +82,10 @@ variable "wait_timeout" {
 }
 
 variable "backup" {
-  description = "Backups to an S3-compatible store (backup.tf); null for none. schedule is a 6-field cron (seconds first); retention a recovery window such as 7d; alert_after_hours how old the newest base backup may get before PostgreSQLBackupTooOld (alerts.tf)."
+  description = "Backups to an S3-compatible store over https (ca: its CA certificate, PEM) (backup.tf); null for none. schedule is a 6-field cron (seconds first); retention a recovery window such as 7d; alert_after_hours how old the newest base backup may get before PostgreSQLBackupTooOld (alerts.tf)."
   type = object({
     endpoint          = string
+    ca                = string
     bucket            = string
     secret            = string
     retention         = string

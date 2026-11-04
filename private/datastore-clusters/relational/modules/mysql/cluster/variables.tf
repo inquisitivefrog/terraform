@@ -79,9 +79,10 @@ variable "wait_timeout" {
 }
 
 variable "backup" {
-  description = "Backups to an S3-compatible store (local.backup in main.tf); null for none. schedule is a 5-field cron; keep the scheduled backups to keep; image the XtraBackup image matching the server; alert_after_hours how old the newest successful full backup may get before MySQLBackupTooOld (alerts.tf)."
+  description = "Backups to an S3-compatible store over https (ca: its CA certificate, PEM) (local.backup in main.tf); null for none. schedule is a 5-field cron; keep the scheduled backups to keep; image the XtraBackup image matching the server; alert_after_hours how old the newest successful full backup may get before MySQLBackupTooOld (alerts.tf)."
   type = object({
     endpoint          = string
+    ca                = string
     bucket            = string
     secret            = string
     schedule          = string

@@ -12,7 +12,7 @@ the store each time (it stays until deleted; see the script's header).
 ## Preconditions
 
 - The backup store is running (`platform/scripts/check_resources.sh`: the
-  backup store section passes); `check_resources.sh` passes (66/66).
+  backup store section passes, 36/36); `check_resources.sh` passes (68/68).
 - **CPU to spare.** On 2026-11-02 the Mac was encoding video (HandBrake,
   ffmpeg), the Docker VM got about 2.4 of its 8 CPUs, and the first pg
   backup failed after 22 minutes while MySQL collapsed (see STATUS.md).
@@ -121,3 +121,37 @@ Found on the way:
 - Prometheus loads changed rules up to a minute after an apply; the script
   waits up to 2 minutes for the threshold it expects.
 
+
+## Under load
+
+A 10-minute load at 20 requests/s (`load_test.sh <engine> run 20 10m`),
+with `backup_now.sh <engine>` started 2 minutes in. Passes when the backup
+completes and k6 loses no order, with write and read latency as without a
+backup.
+
+Expected (lab, 2026-11-04):
+
+| | pg | mysql |
+|---|---|---|
+| backup | 31 s, 185 MiB, from replica pg-1 | 51 s, 776 MiB |
+| k6 | passed; 0 of 12,001 failed; p95 create 3.7 ms, read 1.3, update 3.0, delete 2.5, search 58 ms | search over its SLO only (p95 1.07 s: the runbook 17 missing index, 0.8-1.1 s in every MySQL load), 1 search failed of 11,995; p95 create 10.9 ms, read 3.4, update 10.1, delete 10.5 |
+| orders lost | 0 | 0 |
+
+## Over TLS, encrypted at rest
+
+After `backup_store_tls.sh`, `backup_store_buckets.sh` and the applies
+(docs/BACKUPS.md, "Encryption"):
+
+1. Platform `check_resources.sh`: the store refuses plain http, its
+   certificate checks against our CA, both buckets encrypt by default, the
+   encryption key comes from `security.toml` (36/36).
+2. Relational `check_resources.sh`: both clients point at https with the
+   CA Secret (68/68).
+3. `backup_now.sh pg` and `backup_now.sh mysql` pass.
+4. The new objects are `SSE_S3` in the store's metadata (`fs.meta.cat`,
+   BACKUPS.md), on both engines; objects from before stay plain.
+
+Expected (lab, 2026-11-04): all four. pg 30 s, 185 MiB; mysql 41 s and
+40 s, 775 MiB. The binlog collector resumed from its last upload. Two
+clients stuck during the switch (BACKUPS.md, "Turning TLS on in a running
+lab"): the collector and the old pg primary, each fixed by recreating it.

@@ -44,6 +44,7 @@ module "postgres" {
   # little disk. docs/BACKUPS.md.
   backup = {
     endpoint          = local.store.endpoint_in_cluster
+    ca                = local.store.ca_pem
     bucket            = local.store.buckets.pg
     secret            = "pg-backup-s3" # from scripts/backup_secrets.sh
     retention         = "7d"
@@ -78,6 +79,7 @@ module "mysql" {
   # docs/BACKUPS.md.
   backup = {
     endpoint          = local.store.endpoint_in_cluster
+    ca                = local.store.ca_pem
     bucket            = local.store.buckets.mysql
     secret            = "mysql-backup-s3" # from scripts/backup_secrets.sh
     schedule          = var.mysql_backup_schedule

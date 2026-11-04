@@ -149,8 +149,9 @@ locals {
         }
         s3 = {
           bucket            = var.backup.bucket
-          credentialsSecret = var.backup.secret # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-          endpointUrl       = var.backup.endpoint
+          credentialsSecret = var.backup.secret   # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+          endpointUrl       = var.backup.endpoint # https: the store's certificate is checked
+          caBundle          = { name = kubernetes_secret_v1.backup_ca[0].metadata[0].name, key = "ca.crt" }
           region            = "us-east-1" # signing only; the store has no regions
           forcePathStyle    = true        # <endpoint>/<bucket>/..., not <bucket>.<endpoint>
         }
@@ -165,4 +166,17 @@ locals {
       retention = { type = "count", count = var.backup.keep, deleteFromStorage = true }
     }]
   }
+}
+
+# The store's CA certificate (public: no key), which the backup Jobs, the
+# binlog collector and restores trust for the endpoint
+resource "kubernetes_secret_v1" "backup_ca" {
+  count = var.backup == null ? 0 : 1
+
+  metadata {
+    name      = "${var.name}-backup-ca"
+    namespace = var.namespace
+    labels    = { "app.kubernetes.io/part-of" = "backups" }
+  }
+  data = { "ca.crt" = var.backup.ca }
 }

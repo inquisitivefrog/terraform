@@ -33,15 +33,15 @@ LIMIT=1800 # seconds; the PXC Job's own deadline is 1200 (runningDeadlineSeconds
 # handed to curl on stdin, never printed)
 store_size() {
   python3 - "$KEYS" "$@" <<'EOF'
-import json, re, subprocess, sys, urllib.parse
+import json, os, re, subprocess, sys, urllib.parse
 keys, identity, bucket, prefix = sys.argv[1:]
 c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
 count = size = 0
 token = ""
 while True:
     q = "list-type=2&prefix=" + urllib.parse.quote(prefix) + (("&continuation-token=" + urllib.parse.quote(token)) if token else "")
-    out = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{bucket}?{q}"],
-                         input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
+    out = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"https://localhost:8333/{bucket}?{q}"],
+                         input=f'user = "{c["accessKey"]}:{c["secretKey"]}"\ncacert = "{os.path.dirname(keys)}/ca.crt"', capture_output=True, text=True).stdout
     if "<ListBucketResult" not in out:
         sys.exit("store listing failed: " + out[:80])
     sizes = re.findall(r"<Size>(\d+)</Size>", out)

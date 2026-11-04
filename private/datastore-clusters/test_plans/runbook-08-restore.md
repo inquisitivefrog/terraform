@@ -10,7 +10,7 @@ or when a step fails). Each run adds a backup to the store (step 1).
 
 ## Preconditions
 
-- Cluster whole; `check_resources.sh` passes (66/66).
+- Cluster whole; `check_resources.sh` passes (68/68).
 - No `<engine>-restore` cluster left from an earlier run.
 - **Idle source:** no k6 load. The data is fingerprinted before and after
   the backup and the two must match.

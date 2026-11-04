@@ -5,7 +5,7 @@ variable "seaweedfs_image" {
 }
 
 variable "keys_dir" {
-  description = "Folder of s3.json, the store's keys (platform/scripts/backup_store_keys.sh writes it)"
+  description = "Folder of the store's keys and certificate (platform/scripts/backup_store_keys.sh and backup_store_tls.sh write them); outside the repo"
   type        = string
   default     = "~/.config/datastore-dev/backup-store"
 }

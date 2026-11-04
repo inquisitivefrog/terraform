@@ -308,18 +308,88 @@ Stray WAL files explained and removed (pushed f6f9c37 before this):
   window: retention should delete them and those backups.
 - Runbook 12 after: 15 passed, 4 warnings (versioning x2, those 8 files,
   the collector's startup restarts); 8 complete base backups.
+Runbook 7, backup under load (by me; HandBrake finished 20:04):
+- pg 20:04: `load_test.sh pg run 20 10m`, `backup_now.sh pg` 2 min in:
+  31 s from pg-1, 185 MiB. k6 passed: 0 of 12,001 failed, 0 lost; p95
+  create 3.7 ms, read 1.3, update 3.0, delete 2.5, search 58 ms.
+- mysql 20:15: same, backup 51 s, 776 MiB. k6 FAILED on search only (p95
+  1.07 s; the runbook 17 planted missing index, 0.8-1.1 s in every MySQL
+  load since 10-30), 1 search failed of 11,995; 0 lost; p95 create 10.9 ms,
+  read 3.4, update 10.1, delete 10.5 (as on 10-30). Backups under load:
+  pass on both.
+Backup encryption, items 1 and 2 of the security list (TLS to the store,
+encryption at rest). Tested first on throwaway SeaweedFS 4.48 containers
+(all removed):
+- With `-s3.cert.file/-s3.key.file`, port 8333 is https only (http: 400).
+- Bucket default encryption (`PUT ?encryption`, AES256) encrypts uploads
+  that send no header (as xbcloud); survives a restart; engine keys get 403
+  setting or reading it, an `Admin` identity 200.
+- `weed mini` makes its own key file, `/data/.mini_sse_kek`, on the data
+  volume. A `[s3.sse] kek` in `/etc/seaweedfs/security.toml` wins over it
+  (objects made under one key unreadable under the other); without the
+  file it falls back silently.
+- It reports usage to telemetry.seaweedfs.com at 10 GiB: `-master.telemetry=false`.
+Written, fmt + validate pass:
+- `platform/scripts/backup_store_keys.sh`: adds an `admin` identity to
+  s3.json (engine keys kept) and writes `security.toml` (KEK, never
+  replaced). New `backup_store_tls.sh` (CA in
+  `~/.config/datastore-dev/backup-store-ca/`, never mounted; certificate
+  for host.docker.internal, localhost, 127.0.0.1, 397 days) and
+  `backup_store_buckets.sh` (default encryption on both buckets).
+- Backup-store module: TLS flags, telemetry off, preconditions, https
+  endpoints, outputs `ca_file`, `ca_pem`.
+- Both cluster modules: Secret `<name>-backup-ca`; pg ObjectStore
+  `endpointCA`, PXC storage `caBundle` (restores copy the storage, so they
+  get it too).
+- Laptop scripts (runbook_lib, backup_now, runbook_9, relational check):
+  https, curl's `cacert` beside the key on stdin. Checks: platform +7 (http
+  refused, CA, cert 30+ days, security.toml mode and seen by the store,
+  both buckets AES256, telemetry off), relational +2 (CA on both clients).
+- Docs: BACKUPS.md "Where the keys are" and "Encryption"; README.
+20:26 I ran `backup_store_keys.sh` (admin added, security.toml written)
+and `backup_store_tls.sh` (CA, certificate to 2027-12-06); the store
+restarted twice, still http (no apply yet), KEK from security.toml.
+~21:00 applied by the user: backup-store (container replaced, https; the
+volume kept), then the clusters root (2 CA Secrets added; ObjectStore and
+PXC cluster changed). Two clients got stuck between http and https:
+- MySQL: the binlog collector Deployment kept the http endpoint and
+  crashed (400); the operator execs into it before updating it, failed
+  ("container not found"), state `error`, the apply waited for `ready`.
+  21:10:55 deleted `mysql-pitr` (user agreed): new one ready in 21 s,
+  https and a `ca-bundle` volume; resumed from binlog.000761. Apply ended.
+- pg: the ObjectStore CA changed the pods (`barman-certificates` volume):
+  CloudNativePG recreated pg-3 21:13:01 and pg-1 21:13:31, switched the
+  primary to pg-1 (~21:15). Old primary pg-2, on its old pod, had to
+  archive segment E/84 first and couldn't ("SSL validation failed ... No
+  such file or directory": no CA file): 1/2 for 12 min. 21:27:48 deleted
+  pod pg-2 (user agreed; PVC kept): healthy in 21 s, E/84 archived, pg-2
+  and pg-3 streaming from pg-1. The 21:12 manual pg backup had hit pg-1 as
+  it was recreated: FAILED (log not committed).
+- Lesson in BACKUPS.md: add the CA first while http still works, then
+  switch to https; or rebuild with TLS on in a maintenance window.
+Then (me): `backup_store_buckets.sh` (both AES256); platform check 36/36,
+relational 68/68. Backups over TLS: mysql 21:13 41 s and 21:31 40 s (775
+MiB), pg 21:28 30 s (185 MiB). Encryption checked in the store's metadata
+(`fs.meta.cat`): every object since default encryption is `SSE_S3` on both
+engines; 20:17 mysql and 20:06 pg backups `NONE`. My first HEAD check
+said mysql was plain: curl's signing fails on its colon names, so no
+header; xbcloud reproduced on throwaway stores (http and https, admin and
+bucket key, the operator's flags) was encrypted every time.
+To do (user): copy `security.toml` and `backup-store-ca/ca.key` to a
+password manager (BACKUPS.md, "Where the keys are").
 
 Resume here (from 2026-11-04, stopped for low battery):
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
-   the store too); expect platform 28/28, relational 66/66; then
+   the store too); expect platform 36/36, relational 68/68; then
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
    startup restarts are a warning).
 2. No load or backup while HandBrake, ffmpeg or yt-dlp runs.
 3. Runbook 7: the schedule, keep 2 and the backup alerts pass (f6f9c37).
-   Gaps left: a backup under a 15-minute load (`backup_now.sh` during
-   `load_test.sh`); object lock (needs bucket versioning) and encryption
-   (backups in plain form, http to the store): document, maybe out of
-   scope here.
+   Backup under load passes on both (11-04). TLS to the store and
+   encryption at rest applied and verified (11-04). Gap left: object lock
+   (needs buckets created with it). Worth a run: runbook 8 restore from
+   an encrypted backup over TLS.
+   Expected checks now: platform 36/36, relational 68/68.
 4. About 2026-11-10: runbook 12 should show pg retention working (the
    11-03 base backups and the 8 pre-backup WAL files gone).
 5. Later: runbook 14 (MySQL 8.0 end of life), runbook 17 onto

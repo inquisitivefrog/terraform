@@ -31,8 +31,8 @@ place, for example to move data across major versions (runbook 14).
  laptop (Docker Desktop)
  ├─ container datastore-backups ─ SeaweedFS, S3 on 127.0.0.1:8333
  │    volume datastore-backups-data      buckets pg-backups, mysql-backups
- │    keys: ~/.config/datastore-dev/backup-store/s3.json (mounted read-only)
- │                ▲ S3 over http://host.docker.internal:8333
+ │    keys, certificate: ~/.config/datastore-dev/backup-store/ (read-only)
+ │                ▲ S3 over https://host.docker.internal:8333 (TLS)
  └─ kind cluster datastore-dev           │
       cert-manager ── certificates ──► plugin-barman-cloud (cnpg-system)
       CloudNativePG operator ── mTLS ──►      │ adds a sidecar to each pg pod
@@ -41,6 +41,7 @@ place, for example to move data across major versions (runbook 14).
         mysql-pxc-0..2 ── backup Job (on demand / weekly) ────── full backups ──┘
         mysql-pitr (binlog collector) ─────── binlogs each minute ──────────────┘
         Secrets pg-backup-s3, mysql-backup-s3 (each engine's key)
+        Secrets pg-backup-ca, mysql-backup-ca (the store's CA certificate)
 ```
 
 ### The store: SeaweedFS (`platform/environments/dev/backup-store`)
@@ -52,10 +53,20 @@ place, for example to move data across major versions (runbook 14).
 - **Why outside the cluster:** the cluster is destroyed and rebuilt often.
   The store plays S3 in another account: backups outlive the cluster, so a
   restore into a brand-new cluster (runbooks 8 and 10) is real.
-- **Reached at:** `http://localhost:8333` from the laptop and
-  `http://host.docker.internal:8333` from pods (Docker Desktop's name for
+- **Reached at:** `https://localhost:8333` from the laptop and
+  `https://host.docker.internal:8333` from pods (Docker Desktop's name for
   the laptop; pods can't resolve container names). Published on 127.0.0.1
-  only: nothing off the laptop can reach it.
+  only: nothing off the laptop can reach it. TLS only: plain http gets 400.
+- **How it's built, in brief:** files go to "volumes" (large append-only
+  files on disk, `/data/*.dat`, with an index `*.idx`); a "filer" keeps the
+  names, folders and bucket settings (`/data/filerldb2`); the S3 gateway
+  turns S3 requests into both. `weed mini` runs all three, plus a "master"
+  that tracks the volumes, in one process. So a stored object is not a file
+  you can find by name on the volume.
+- **Look inside it:** `docker logs datastore-backups` (start-up shows the
+  TLS port and which encryption key it loaded); `docker exec
+  datastore-backups ls -la /data`; a shell, `docker exec -it
+  datastore-backups weed shell` (`help`, then e.g. `fs.ls /buckets`).
 - **On a cloud:** S3, Cloud Storage or Blob Storage instead, with no store to
   run; only the endpoint and the keys change.
 
@@ -64,12 +75,93 @@ place, for example to move data across major versions (runbook 14).
 - `platform/scripts/backup_store_keys.sh` writes one S3 identity per engine
   to `~/.config/datastore-dev/backup-store/s3.json` (mode 600), each allowed
   only its own bucket: a leaked PostgreSQL key can't read or delete the
-  MySQL backups. No anonymous access.
-- The store mounts that file read-only. Terraform holds only its path: no
+  MySQL backups. No anonymous access. A third identity, `admin`, changes
+  the store's own settings (bucket encryption) and is used from the laptop
+  only; no cluster gets it.
+- The store mounts that folder read-only. Terraform holds only its path: no
   key is ever in Terraform state (the repo rule for passwords).
 - `relational/scripts/backup_secrets.sh` copies each engine's key into a
   Kubernetes Secret in `relational` (`pg-backup-s3`, `mysql-backup-s3`),
   through kubectl's stdin. Rerun it after `backup_store_keys.sh --rotate`.
+
+### Where the keys are
+
+All outside the repo, on the laptop only, under `~/.config/datastore-dev/`.
+Nothing here is in git or in Terraform state; the repo holds only the
+scripts that make them and the paths. `.gitignore` is not what keeps them
+out: they are never inside the repo folder at all.
+
+| File | What it is | Made by | Mounted in the store | If lost |
+|---|---|---|---|---|
+| `backup-store/s3.json` (600) | the S3 keys: `pg`, `mysql` (one bucket each), `admin` (settings) | `backup_store_keys.sh` | yes, read-only | make new ones (`--rotate`), then `backup_secrets.sh`; no data lost |
+| `backup-store/security.toml` (600) | **the encryption key** (`[s3.sse] kek`): it encrypts the key of every encrypted object | `backup_store_keys.sh`, once | yes, read-only | **every encrypted backup is unreadable**; back it up, never replace it |
+| `backup-store/tls.key` (600), `tls.crt` | the store's TLS private key and certificate | `backup_store_tls.sh` | yes, read-only | `backup_store_tls.sh --renew`; nothing else changes |
+| `backup-store/ca.crt` | our CA's certificate (public): what clients trust | `backup_store_tls.sh` | yes (unused there) | copied again from `backup-store-ca/` |
+| `backup-store-ca/ca.key` (600), `ca.crt` | our CA: signs the store's certificate | `backup_store_tls.sh`, once | **no** | a new CA: `--renew`, then apply backup-store and the relational clusters root (new CA Secrets) |
+
+Look at them without printing a key:
+
+```sh
+ls -la ~/.config/datastore-dev/backup-store ~/.config/datastore-dev/backup-store-ca
+python3 -c 'import json; print([i["name"] for i in json.load(open("'$HOME'/.config/datastore-dev/backup-store/s3.json"))["identities"]])'
+openssl x509 -in ~/.config/datastore-dev/backup-store/tls.crt -noout -subject -enddate -ext subjectAltName
+```
+
+Finder hides `~/.config` (its name starts with a dot). To see it:
+`open ~/.config/datastore-dev/backup-store` in Terminal, or in Finder
+Cmd+Shift+G and paste that path (Cmd+Shift+. shows hidden files anywhere).
+
+Back up `security.toml` (and `backup-store-ca/ca.key`) somewhere other
+than this laptop, such as a password manager (a file attachment or a
+secure note): a copy of the backups without it is noise. To copy it
+without showing it: `pbcopy < ~/.config/datastore-dev/backup-store/security.toml`,
+paste into the note, then clear the clipboard with `pbcopy < /dev/null`. On a cloud this is the job of a key service (AWS KMS, Cloud KMS, Key
+Vault), which keeps the key and never hands it out.
+
+The store has two more key files of its own on the data volume,
+`/data/.mini_sse_kek` and `/data/.mini_kek_passphrase`, made by `weed
+mini` at its first start. With `security.toml` mounted the store does not
+use `.mini_sse_kek` (tested 2026-11-04: objects written under one key were
+unreadable under the other); without it, it falls back to that file
+silently, which is why platform `check_resources.sh` checks the store can
+read `security.toml`.
+
+### Encryption
+
+- **In transit:** every client talks to the store over TLS, and checks its
+  certificate against our CA: the Barman Cloud plugin (`endpointCA`, Secret
+  `pg-backup-ca`), the PXC backup Jobs, binlog collector and restores
+  (`caBundle`, Secret `mysql-backup-ca`), and the laptop's scripts (curl's
+  `cacert`, beside the key on stdin). The certificate names
+  `host.docker.internal`, `localhost` and `127.0.0.1`; it lasts 397 days
+  (platform `check_resources.sh` fails under 30 days left), the CA 10 years.
+- **At rest:** each bucket encrypts every object it is given (SSE-S3,
+  AES-256; `platform/scripts/backup_store_buckets.sh` sets it, with the
+  admin key). That matters for MySQL: the PXC operator has no backup
+  encryption of its own, and xbcloud asks for none (tested: an upload with
+  no encryption header came back encrypted). Each object gets its own key,
+  itself encrypted with the key in `security.toml`.
+- **What that protects against:** the store's disk or volume leaking (a
+  copied `/data`, a discarded drive). Not against someone with an S3 key:
+  the store decrypts for any client it lets in. Objects stored before
+  encryption was turned on stay plain until retention replaces them.
+- **Check an object is encrypted:** ask the store for its metadata, which
+  says per chunk (`SSE_S3`, or nothing for plain):
+
+  ```sh
+  docker exec datastore-backups sh -c "echo 'fs.meta.cat /buckets/pg-backups/pg/base/<id>/data.tar.bz2' | weed shell" | grep sseType
+  ```
+
+  A HEAD request also returns `x-amz-server-side-encryption: AES256`, but
+  curl's request signing fails on MySQL's object names (they contain
+  colons, `mysql-2026-11-04-21:13:03-full/...`): the refused request has no
+  such header and looks plain. Tested 2026-11-04: every backup since
+  default encryption was on is `SSE_S3` on both engines, earlier ones not.
+- **What would protect against that:** encryption before upload, with a key
+  the store never sees. For MySQL, InnoDB data-at-rest encryption with the
+  key in HashiCorp Vault (the Percona operator supports it; backups then
+  hold encrypted tablespaces). For PostgreSQL, community PostgreSQL has no
+  such feature. Not built here (see Known gaps).
 
 ### cert-manager (`platform/environments/dev/services`)
 
@@ -195,9 +287,11 @@ From the repo root, after the platform cluster:
 
 ```sh
 # 1. the store (once; it survives cluster rebuilds)
-private/datastore-clusters/platform/scripts/backup_store_keys.sh
+private/datastore-clusters/platform/scripts/backup_store_keys.sh   # S3 keys, encryption key
+private/datastore-clusters/platform/scripts/backup_store_tls.sh    # CA, certificate
 cd private/datastore-clusters/platform/environments/dev/backup-store
 terraform init && terraform plan -out plan-backup-store && terraform apply plan-backup-store
+../../../scripts/backup_store_buckets.sh                           # default encryption on
 
 # 2. cert-manager
 cd ../services
@@ -343,11 +437,37 @@ only when the cluster has backups:
   failed attempt's chunks are under the same destination, overwritten by
   the retry. Not found reported.
 
+- **Turning TLS on in a running lab (2026-11-04):** the store went https
+  and the clients' settings changed in one step, and two clients were
+  caught between them, each in a loop:
+  - The PXC binlog collector (`mysql-pitr`) still had the http endpoint
+    and crashed on start (400); the operator, before updating it, runs a
+    command inside it, which failed, so it never wrote the new endpoint
+    (cluster state `error`, the apply waiting for `ready`). Fixed by
+    deleting the Deployment: the operator made a new one (21 s), which
+    resumed from the last uploaded binlog.
+  - Adding the CA to pg's ObjectStore changed the pods (a new
+    `barman-certificates` volume), so CloudNativePG rolled them and
+    switched the primary. The old primary, still on its old pod, had to
+    archive its last WAL segment before rejoining, and couldn't without
+    the CA file ("SSL validation failed ... No such file or directory").
+    Fixed by deleting the pod (its disk kept): back in 21 s, the segment
+    archived, both replicas streaming. A backup taken during the roll
+    failed; the retry passed.
+  - The order that avoids both: add the CA to the clients first while the
+    store still serves http (the pods roll and keep working), then switch
+    the store and the endpoints to https. Or build from scratch with TLS
+    on, within a maintenance window, when the data fits it.
+
 ## Known gaps
 
 - The store is on the same laptop as the cluster: a lost laptop loses both.
   On a cloud the store would be in another account and region.
-- No object lock (immutable backups) and no encryption at rest yet.
+- No object lock (immutable backups) yet.
+- Encryption at rest is the store's (SSE-S3): anyone with an S3 key reads
+  plain data. No client-side encryption (above, "Encryption").
+- The encryption key and CA are on the same laptop as the store; on a cloud
+  they would be in a key service.
 - The plugin Deployment is a single copy (above).
 - Restores are tested by hand (runbooks 8 and 9), not on a schedule.
 
@@ -367,3 +487,6 @@ only when the cluster has backups:
 | CRD | custom resource definition: a new kind of Kubernetes object, such as ObjectStore or Certificate |
 | sidecar | an extra container in a pod, beside the main one, sharing its disk and network |
 | mTLS | mutual TLS: both sides of a connection present certificates |
+| CA | certificate authority: signs certificates; a client trusts a server whose certificate its CA signed |
+| SSE-S3 | server-side encryption with keys the store manages: it encrypts on write, decrypts on read |
+| KEK | key-encryption key: encrypts each object's own data key, so one key protects all |

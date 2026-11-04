@@ -385,25 +385,25 @@ KEYS="$HOME/.config/datastore-dev/backup-store/s3.json"
 # (handed to curl on stdin, never printed)
 s3() {
   python3 - "$KEYS" "$@" <<'EOF'
-import json, subprocess, sys
+import json, os, subprocess, sys
 keys, identity, path = sys.argv[1:]
 c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
-r = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{path}"],
-                   input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True)
+r = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"https://localhost:8333/{path}"],
+                   input=f'user = "{c["accessKey"]}:{c["secretKey"]}"\ncacert = "{os.path.dirname(keys)}/ca.crt"', capture_output=True, text=True)
 sys.stdout.write(r.stdout)
 EOF
 }
 # inventory <identity> <bucket>: every object, "key<TAB>size<TAB>modified"
 inventory() {
   python3 - "$KEYS" "$@" <<'EOF'
-import json, re, subprocess, sys, urllib.parse
+import json, os, re, subprocess, sys, urllib.parse
 keys, identity, bucket = sys.argv[1:]
 c = next(i for i in json.load(open(keys))["identities"] if i["name"] == identity)["credentials"][0]
 token = ""
 while True:
     q = "list-type=2" + (("&continuation-token=" + urllib.parse.quote(token)) if token else "")
-    page = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"http://localhost:8333/{bucket}?{q}"],
-                          input=f'user = "{c["accessKey"]}:{c["secretKey"]}"', capture_output=True, text=True).stdout
+    page = subprocess.run(["curl", "-s", "--aws-sigv4", "aws:amz:us-east-1:s3", "-K", "-", f"https://localhost:8333/{bucket}?{q}"],
+                          input=f'user = "{c["accessKey"]}:{c["secretKey"]}"\ncacert = "{os.path.dirname(keys)}/ca.crt"', capture_output=True, text=True).stdout
     if "<ListBucketResult" not in page:
         sys.exit("listing " + bucket + " failed: " + page[:80])
     for it in re.findall(r"<Contents>(.*?)</Contents>", page, re.S):

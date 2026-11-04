@@ -3,6 +3,8 @@
 #   - ObjectStore: where and how (bucket, endpoint, key Secret, compression,
 #     retention). The cluster writes under s3://<bucket>/<cluster name>/:
 #     base/ for base backups, wals/ for the WAL archive.
+#   - Over TLS: the endpoint is https, and the store's certificate is checked
+#     against its CA (<name>-backup-ca, a public certificate: no key).
 #   - The Cluster's plugins entry (main.tf) adds the plugin's sidecar to every
 #     instance and makes it the WAL archiver: each finished WAL segment is
 #     shipped as soon as PostgreSQL closes it (archive_timeout forces one at
@@ -26,6 +28,7 @@ resource "kubernetes_manifest" "object_store" {
       configuration = {
         destinationPath = "s3://${var.backup.bucket}/"
         endpointURL     = var.backup.endpoint
+        endpointCA      = { name = kubernetes_secret_v1.backup_ca[0].metadata[0].name, key = "ca.crt" }
         s3Credentials = {
           accessKeyId     = { name = var.backup.secret, key = "ACCESS_KEY_ID" }
           secretAccessKey = { name = var.backup.secret, key = "ACCESS_SECRET_KEY" }
@@ -47,6 +50,18 @@ resource "kubernetes_manifest" "object_store" {
       }
     }
   }
+}
+
+# The store's CA certificate, which the plugin trusts for the endpoint
+resource "kubernetes_secret_v1" "backup_ca" {
+  count = var.backup == null ? 0 : 1
+
+  metadata {
+    name      = "${var.name}-backup-ca"
+    namespace = var.namespace
+    labels    = { "app.kubernetes.io/part-of" = "backups" }
+  }
+  data = { "ca.crt" = var.backup.ca }
 }
 
 resource "kubernetes_manifest" "scheduled_backup" {

@@ -12,6 +12,14 @@
 #   nothing anonymous. The keys are in var.keys_dir (made by
 #   platform/scripts/backup_store_keys.sh), mounted read-only: never in
 #   Terraform state.
+# - S3 over TLS only (https; plain http is refused): a certificate from our
+#   own CA (platform/scripts/backup_store_tls.sh), in var.keys_dir too.
+# - Encryption at rest: the key that protects every encrypted object's own
+#   key comes from var.keys_dir/security.toml (SeaweedFS reads it from
+#   /etc/seaweedfs), so it is not on the data volume beside the data.
+#   Each bucket's default encryption is a store setting, made by
+#   platform/scripts/backup_store_buckets.sh.
+# docs/BACKUPS.md, "Where the keys are".
 resource "docker_image" "seaweedfs" {
   name         = var.image
   keep_locally = true
@@ -32,6 +40,11 @@ resource "docker_container" "store" {
     "mini",
     "-dir=/data",
     "-s3.config=/etc/seaweedfs/s3.json",
+    "-s3.cert.file=/etc/seaweedfs/tls.crt",
+    "-s3.key.file=/etc/seaweedfs/tls.key",
+    # It would otherwise report usage to telemetry.seaweedfs.com once it
+    # holds 10 GiB
+    "-master.telemetry=false",
     "-bucket=${join(",", values(local.buckets))}",
   ]
 
@@ -54,8 +67,12 @@ resource "docker_container" "store" {
 
   lifecycle {
     precondition {
-      condition     = fileexists("${var.keys_dir}/s3.json")
-      error_message = "No ${var.keys_dir}/s3.json: run platform/scripts/backup_store_keys.sh first."
+      condition     = fileexists("${var.keys_dir}/s3.json") && fileexists("${var.keys_dir}/security.toml")
+      error_message = "No ${var.keys_dir}/s3.json or security.toml: run platform/scripts/backup_store_keys.sh first."
+    }
+    precondition {
+      condition     = fileexists("${var.keys_dir}/tls.crt") && fileexists("${var.keys_dir}/tls.key") && fileexists("${var.keys_dir}/ca.crt")
+      error_message = "No certificate in ${var.keys_dir}: run platform/scripts/backup_store_tls.sh first."
     }
   }
 }
