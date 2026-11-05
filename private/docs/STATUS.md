@@ -29,8 +29,9 @@ What is applied and verified:
   16, 17, 22, 23, 24, 25, 26; 5 on pg.
 
 Open:
-- `runbook_7_lock.sh expire` (from 2026-11-05 23:00 UTC), then
-  `backup_store_buckets.sh`; then delete the older manual MySQL backups.
+- `runbook_7_lock.sh expire` daily until it passes (first run 2026-11-05
+  23:02: the canaries' replaced versions wait for the lifecycle rule, up
+  to a day), then `backup_store_buckets.sh` (lock back to 7 days).
 - mysql search p95 +20% after runbook 16's restarts (829 -> 993 ms):
   recheck after hours of uptime.
 - mysql pt-osc copies are 3-4x slower than on 10-28 (297-407 s vs 107 s;
@@ -632,10 +633,19 @@ after the destroy; p95 create 8 -> 14 ms, search 810 -> 1,311 ms;
 4,278 writes, 0 failed, 0 lost; 2 searches failed during the rebuild, 0
 after (no excuse needed); writer unchanged; pxc-1's fingerprint equals
 pxc-0's; check 68/68. Runbook 22 passes on both engines.
+23:02 (11-05) `runbook_7_lock.sh expire`, first run (the user): not
+finished: both canaries' replaced versions are past their lock (22:56)
+and wait for the lifecycle rule (up to a day); nothing failed. Its summary
+said "All checked ... present and configured" with 0 checks: now prints
+"Not finished: N canary versions waiting ... run again tomorrow".
+Deleted, as agreed on 11-04: `mysql-manual-20261104-213154` and
+`-225554` (locks ended 21:32 and 22:56); their files are gone from the
+listing (old versions wait for the lifecycle rule). Left: the 2 cron
+backups (19:00, 19:15) and `mysql-manual-20261104-230639` (newest
+manual), 775 MiB each.
 
 Resume here (from 2026-11-04, stopped for low battery):
-0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).
-0b. **Same day, after their lock ends (2026-11-05 ~23:10 UTC): delete the older manual MySQL backups** (agreed with the user): `kubectl -n relational delete perconaxtradbclusterbackups.pxc.percona.com mysql-manual-20261104-213154 mysql-manual-20261104-225554` and any older runbook 8/9 ones, keeping the newest; check their files are gone (`inventory mysql mysql-backups`). They are locked until then: a delete now only adds a marker and the operator's finalizer may fail.
+0. **Daily from 2026-11-06: `relational/scripts/runbook_7_lock.sh expire`** until it passes (2026-11-05: waiting for the lifecycle rule), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days). The older manual MySQL backups were deleted 2026-11-05.
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
    the store too); expect platform 42/42, relational 68/68; then
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's

@@ -147,6 +147,7 @@ else
   # lifecycle rule, which may take a day after the lock ends (failed at 2);
   # the current one is deleted with the admin key once its lock is over and
   # nothing older is left (deleting it would bring an older one back).
+  WAITING=0
   for e in pg mysql; do
     b="${BUCKET[$e]}"
     echo; echo "-- $b: canaries --"
@@ -160,10 +161,12 @@ else
           older=$((older + 1))
           if [[ "$until" != - ]] && future "$until"; then
             echo "  $key: replaced version locked $(days_from_now "$until") more days"
+            WAITING=$((WAITING + 1))
           elif [[ "$until" != - ]] && python3 -c "import sys; sys.exit(not float(sys.argv[1]) <= -2)" "$(days_from_now "$until")"; then
             fail "Lifecycle removed $key's replaced version a day after its lock" "still there, lock ended $until"
           else
             echo "  $key: replaced version's lock ended ${until}: the lifecycle rule may take a day"
+            WAITING=$((WAITING + 1))
           fi
         else
           CUR_VID="$vid" CUR_UNTIL="$until"
@@ -179,5 +182,12 @@ else
       fi
     done
   done
+fi
+# Nothing failed but versions still wait for the store: not a pass yet
+if [[ "$MODE" == expire && "$FAIL" -eq 0 && "$WAITING" -gt 0 ]]; then
+  echo
+  echo "== Not finished: $WAITING canary versions waiting for their lock or the lifecycle rule ($PASS passed, 0 failed) =="
+  echo "Run again tomorrow: $0 expire"
+  exit 0
 fi
 summary "object lock checks"
