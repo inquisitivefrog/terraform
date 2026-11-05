@@ -49,6 +49,10 @@ resource "kubernetes_manifest" "cluster" {
           # once uploaded the store's copy is the one a restore uses.
           "binlog_expire_logs_seconds=604800",
           var.innodb_buffer_pool_size == null ? "" : "innodb_buffer_pool_size=${var.innodb_buffer_pool_size}",
+          # This file is read after the operator's node.cnf and replaces its
+          # whole wsrep_provider_options line, so the operator's pc.weight=10
+          # is repeated here.
+          var.gcache_size == null ? "" : "wsrep_provider_options=\"pc.weight=10;gcache.size=${var.gcache_size}\"",
         ])))
         resources = {
           requests = { cpu = var.cpu_request, memory = var.memory }

@@ -1,0 +1,418 @@
+# runbook_16_tune.sh mysql after (2026-11-05T18:17:29Z, kind cluster datastore-dev)
+
+== 18:17:29 0. Preconditions
+  mysql-pxc-0: gcache.size 128M, memory limit 2Gi
+  mysql-pxc-1: gcache.size 128M, memory limit 2Gi
+  mysql-pxc-2: gcache.size 128M, memory limit 2Gi
+  before: gcache.size 128M, memory limit 2Gi, 20 requests/s for 5m, 2026-11-05T18:14:44Z
+  writer mysql-pxc-0; orders-mysql app restarts so far: 59
+
+== 18:17:30 Load: 20 requests/s for 25m
+  k6 run mysql-run-20261105-181730; 60 s to settle
+
+== 18:18:31 1. Apply the change now, in a second terminal:
+    cd /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/environments/dev/clusters
+    terraform plan -out plan-clusters   # expect 1 to change: the mysql cluster
+    terraform apply plan-clusters
+  Waiting up to 10 minutes for the first member to restart
+  18:20:47 the rollout started
+  18:21:26 mysql-pxc-2 back with gcache.size 512M, memory limit 2Gi (down ~41 s in all)
+  18:22:24 mysql-pxc-1 back with gcache.size 512M, memory limit 2Gi (down ~39 s in all)
+  18:22:46 writer mysql-pxc-0 -> mysql-pxc-2
+  18:23:28 mysql-pxc-0 back with gcache.size 512M, memory limit 2Gi (down ~40 s in all)
+  18:23:29 writer mysql-pxc-2 -> mysql-pxc-0
+  Whole after 1 s
+  Rollout: 161 s from the first restart to the last member back; gcache.size 128M -> 512M; writer mysql-pxc-0 -> mysql-pxc-0; longest member down ~41 s
+
+== 18:23:59 1b. How each node rejoined (its log since the restart)
+  mysql-pxc-0: IST (76694)
+  mysql-pxc-1: IST (76257)
+  mysql-pxc-2: IST (75855)
+
+== 18:23:59 2. innodb_buffer_pool_size resized online on mysql-pxc-1 (not the writer), under the load
+  18:23:59 512M in 0 s: Completed resizing buffer pool at 261105 18:23:59.
+  18:24:00 768M in 1 s: Completed resizing buffer pool at 261105 18:24:00.
+  The configuration still says 768M:
+  a SET GLOBAL lasts until the node restarts; the same change through Terraform restarts every node
+
+== 18:24:00 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17).
+  This step judges lost writes, the app's errors and requests failing after the rollout.
+  | Job k6-mysql-run-20261105-181730: run against orders-mysql at 20 req/s for 25m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261105-181730 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=11.58ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=9.07ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=4.12ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=1.03s
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=11.11ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 29981   19.974029/s
+  |     checks_succeeded...: 100.00% 29981 out of 29981
+  |     checks_failed......: 0.00%   0 out of 29981
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 6018   4.00933/s
+  |     orders_deleted.................: 1528   1.017989/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=152.91ms min=99.58µs  med=3.31ms   max=3.97s p(90)=695.03ms p(95)=811.15ms
+  |       { expected_response:true }...: avg=152.91ms min=99.58µs  med=3.31ms   max=3.97s p(90)=695.03ms p(95)=811.15ms
+  |       { op:create }................: avg=12.43ms  min=1.72ms   med=4.58ms   max=2.33s p(90)=8.83ms   p(95)=11.58ms 
+  |       { op:delete }................: avg=10.57ms  min=1.44ms   med=3.46ms   max=2.32s p(90)=7.11ms   p(95)=9.07ms  
+  |       { op:read }..................: avg=5.85ms   min=99.58µs  med=1.4ms    max=2.79s p(90)=2.75ms   p(95)=4.12ms  
+  |       { op:search }................: avg=733ms    min=485.49ms med=692.21ms max=3.97s p(90)=938.43ms p(95)=1.03s   
+  |       { op:update }................: avg=7.65ms   min=1.83ms   med=4.26ms   max=1.99s p(90)=8.24ms   p(95)=11.11ms 
+  |     http_req_failed................: 0.00%  0 out of 29982
+  |       { op:create }................: 0.00%  0 out of 6018
+  |       { op:delete }................: 0.00%  0 out of 1528
+  |       { op:read }..................: 0.00%  0 out of 13478
+  |       { op:search }................: 0.00%  0 out of 5992
+  |       { op:update }................: 0.00%  0 out of 2965
+  |     http_reqs......................: 29982  19.974696/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 20     0.013324/s
+  |     iteration_duration.............: avg=153.17ms min=617µs    med=3.54ms   max=3.97s p(90)=695.27ms p(95)=811.35ms
+  |     iterations.....................: 29981  19.974029/s
+  |     vus............................: 9      min=0          max=39
+  |     vus_max........................: 40     min=20         max=40
+  | 
+  |     NETWORK
+  |     data_received..................: 36 MB  24 kB/s
+  |     data_sent......................: 5.4 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-11-05T18:42:32Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261105-181730: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  No app request failed
+  Writes: 10511 succeeded, 0 failed (0 after 18:23:58); 0 acknowledged writes lost
+  Reads and searches failed: 0 (0 after 18:23:58)
+  orders-mysql app restarts: 59 -> 59
+
+== 18:42:45 4. After: 3 loads of 20 requests/s for 5m
+
+== 18:42:46 Load: 20 requests/s for 5m
+  k6 run mysql-run-20261105-184246; 60 s to settle
+
+== 18:43:47 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17); this step only measures
+  | Job k6-mysql-run-20261105-184246: run against orders-mysql at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261105-184246 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=9.86ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=7.42ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2.63ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=964.53ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=8.75ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    19.996758/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1180   3.93204/s
+  |     orders_deleted.................: 295    0.98301/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=147.92ms min=655.83µs med=2.95ms   max=1.23s   p(90)=698.26ms p(95)=801.72ms
+  |       { expected_response:true }...: avg=147.92ms min=655.83µs med=2.95ms   max=1.23s   p(90)=698.26ms p(95)=801.72ms
+  |       { op:create }................: avg=5.02ms   min=2.02ms   med=4.13ms   max=85.42ms p(90)=7.87ms   p(95)=9.86ms  
+  |       { op:delete }................: avg=3.62ms   min=1.51ms   med=3.11ms   max=17.19ms p(90)=5.44ms   p(95)=7.42ms  
+  |       { op:read }..................: avg=1.51ms   min=655.83µs med=1.28ms   max=60.9ms  p(90)=1.93ms   p(95)=2.63ms  
+  |       { op:search }................: avg=720.27ms min=498.66ms med=695.77ms max=1.23s   p(90)=905.49ms p(95)=964.53ms
+  |       { op:update }................: avg=4.74ms   min=2.05ms   med=3.86ms   max=112.2ms p(90)=6.72ms   p(95)=8.75ms  
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1180
+  |       { op:delete }................: 0.00%  0 out of 295
+  |       { op:read }..................: 0.00%  0 out of 2662
+  |       { op:search }................: 0.00%  0 out of 1213
+  |       { op:update }................: 0.00%  0 out of 651
+  |     http_reqs......................: 6002   20.00009/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=148.16ms min=746.79µs med=3.14ms   max=1.23s   p(90)=698.53ms p(95)=802.06ms
+  |     iterations.....................: 6001   19.996758/s
+  |     vus............................: 1      min=0         max=9 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.3 MB 25 kB/s
+  |     data_sent......................: 1.1 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-11-05T18:47:47Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261105-184246: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  1 mysql-run-20261105-184246 992.5 9.9 0 0 3.4 43.0 2333
+
+== 18:48:01 Load: 20 requests/s for 5m
+  k6 run mysql-run-20261105-184802; 60 s to settle
+
+== 18:49:02 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17); this step only measures
+  | Job k6-mysql-run-20261105-184802: run against orders-mysql at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261105-184802 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=9.69ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=7ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2.58ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=992ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=9.26ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    19.980881/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1239   4.125364/s
+  |     orders_deleted.................: 315    1.048821/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=151.34ms min=581µs    med=3ms      max=1.28s    p(90)=718.03ms p(95)=822.92ms
+  |       { expected_response:true }...: avg=151.34ms min=581µs    med=3ms      max=1.28s    p(90)=718.03ms p(95)=822.92ms
+  |       { op:create }................: avg=5.04ms   min=1.93ms   med=4.28ms   max=150.16ms p(90)=7.5ms    p(95)=9.69ms  
+  |       { op:delete }................: avg=3.74ms   min=1.74ms   med=3.16ms   max=22.22ms  p(90)=5.51ms   p(95)=7ms     
+  |       { op:read }..................: avg=1.5ms    min=581µs    med=1.3ms    max=33.87ms  p(90)=1.98ms   p(95)=2.58ms  
+  |       { op:search }................: avg=735.95ms min=501.42ms med=716.38ms max=1.28s    p(90)=934.35ms p(95)=992ms   
+  |       { op:update }................: avg=4.73ms   min=1.76ms   med=4.07ms   max=40.02ms  p(90)=7.09ms   p(95)=9.26ms  
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1239
+  |       { op:delete }................: 0.00%  0 out of 315
+  |       { op:read }..................: 0.00%  0 out of 2657
+  |       { op:search }................: 0.00%  0 out of 1215
+  |       { op:update }................: 0.00%  0 out of 575
+  |     http_reqs......................: 6002   19.98421/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=151.59ms min=702.83µs med=3.23ms   max=1.28s    p(90)=718.3ms  p(95)=823.19ms
+  |     iterations.....................: 6001   19.980881/s
+  |     vus............................: 2      min=0         max=8 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.4 MB 25 kB/s
+  |     data_sent......................: 1.1 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-11-05T18:53:03Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261105-184802: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  2 mysql-run-20261105-184802 1020.9 9.7 0 0 3.4 43.4 2305
+
+== 18:53:17 Load: 20 requests/s for 5m
+  k6 run mysql-run-20261105-185318; 60 s to settle
+
+== 18:54:18 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17); this step only measures
+  | Job k6-mysql-run-20261105-185318: run against orders-mysql at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261105-185318 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=7.98ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=6.94ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=2.37ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=887.72ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=7.52ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    19.959057/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1215   4.041036/s
+  |     orders_deleted.................: 289    0.961201/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=139.22ms min=520.12µs med=2.9ms    max=1.29s   p(90)=656.6ms  p(95)=730.71ms
+  |       { expected_response:true }...: avg=139.22ms min=520.12µs med=2.9ms    max=1.29s   p(90)=656.6ms  p(95)=730.71ms
+  |       { op:create }................: avg=4.44ms   min=1.83ms   med=3.97ms   max=33.23ms p(90)=6.5ms    p(95)=7.98ms  
+  |       { op:delete }................: avg=3.96ms   min=1.35ms   med=2.94ms   max=93.55ms p(90)=5.6ms    p(95)=6.94ms  
+  |       { op:read }..................: avg=1.37ms   min=520.12µs med=1.21ms   max=31.22ms p(90)=1.86ms   p(95)=2.37ms  
+  |       { op:search }................: avg=675.49ms min=497.63ms med=655.12ms max=1.29s   p(90)=829.63ms p(95)=887.72ms
+  |       { op:update }................: avg=4.29ms   min=1.51ms   med=3.76ms   max=36.39ms p(90)=6.31ms   p(95)=7.52ms  
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1215
+  |       { op:delete }................: 0.00%  0 out of 289
+  |       { op:read }..................: 0.00%  0 out of 2660
+  |       { op:search }................: 0.00%  0 out of 1218
+  |       { op:update }................: 0.00%  0 out of 619
+  |     http_reqs......................: 6002   19.962383/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=139.45ms min=585.25µs med=3.09ms   max=1.29s   p(90)=656.92ms p(95)=730.96ms
+  |     iterations.....................: 6001   19.959057/s
+  |     vus............................: 2      min=0         max=9 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.4 MB 25 kB/s
+  |     data_sent......................: 1.1 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-11-05T18:58:19Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261105-185318: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  3 mysql-run-20261105-185318 912.7 8.0 0 0 3.3 44.1 2021
+
+== 18:58:33 4b. Before and after (gcache.size 128M -> 512M), the median of 3 loads each
+                           before        after   change
+  search_p95_ms             828.6        992.5     +20%
+  create_p95_ms               7.3          9.7     +33%
+  failed                        0            0        -
+  lost                          0            0        -
+  writeset_kib_s              3.4          3.4      +0%
+  ist_window_h               10.8         43.4    +302%
+  disk_reads                 2564         2305     -10%
+
+== 18:58:33 Verify: relational check_resources.sh
+  
+  == Summary: 68 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 18:58:37 Runbook 16 (mysql): passed, gcache.size 128M -> 512M
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-16-mysql-20261105-181729.txt

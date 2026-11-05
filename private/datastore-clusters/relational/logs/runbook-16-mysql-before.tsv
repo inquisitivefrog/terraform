@@ -1,0 +1,5 @@
+# gcache.size 128M, memory limit 2Gi, 20 requests/s for 5m, 2026-11-05T18:14:44Z
+run	testid	search_p95_ms	create_p95_ms	failed	lost	writeset_kib_s	ist_window_h	disk_reads
+1	mysql-run-20261105-175858	810.9	8.9	0	0	3.2	11.3	2656
+2	mysql-run-20261105-180414	834.1	7.3	0	0	3.4	10.7	2564
+3	mysql-run-20261105-180929	828.6	7.2	0	0	3.4	10.8	2335

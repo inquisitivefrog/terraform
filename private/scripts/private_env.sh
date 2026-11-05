@@ -50,6 +50,10 @@ runbook_log() {
   [[ -e "$RUNBOOK_LOG" || -e "${RUNBOOK_LOG%.txt}-FAILED.txt" ]] && RUNBOOK_LOG="${RUNBOOK_LOG%.txt}-$$.txt"
   exec > >(tee "$RUNBOOK_LOG") 2>&1
   trap '_runbook_log_end $?' EXIT
+  # No idle sleep until this script exits: a sleeping Mac freezes the Docker
+  # VM mid-run (runbook 16, 2026-11-05: two idle sleeps on battery stalled a
+  # query 172 s). Closing the lid still sleeps.
+  command -v caffeinate >/dev/null && caffeinate -is -w $$ >/dev/null 2>&1 &
   echo "# $(basename "$0") ${*:3} ($(date -u +%Y-%m-%dT%H:%M:%SZ), kind cluster ${CLUSTER:-?})"
 }
 _runbook_log_end() {

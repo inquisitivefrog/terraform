@@ -420,6 +420,110 @@ backups and logs, both PASS: pg 23:28, 572 orders deleted at
 recovered to 23:37:38 in 244 s, copied back (k6 over the search SLO only,
 0 lost); relational 68/68 after each. Runbook 9 takes no backup of its
 own (it starts from the newest, runbook 8's).
+Pushed 8401786. Runbook 16 (tune configuration) planned, agreed with the
+user, not written yet. Findings 23:50: pg shared_buffers 128 MB (default)
+in 512 Mi, orders 303 MB, a search reads 36,540 pages from outside it (OS
+cache); MySQL buffer pool 768 MB holds orders (666 MB) at 99.97% hits;
+both searches slow from the planted missing index (runbook 17);
+gcache.size 128 MB (default). Docker VM 13.6 GiB, ~10.2 used; kind nodes
+each advertise all of it (15 GiB requested in all). Plan, one change each:
+- pg shared_buffers 256 MB, memory 768 Mi (restart: rolling restart with
+  switchover; measure the rollout and write pause; before/after search
+  p95, pages read outside shared buffers, hit ratio).
+- mysql gcache.size 512 MB (restart; how long a node may be down and
+  still rejoin by IST, from the write rate; confirm with a node restart).
+- plus innodb_buffer_pool_size resized online (SET GLOBAL) vs through
+  Terraform: the reload-or-restart step.
+- script runbook_16_tune.sh before|after: 3 fixed-rate loads each; the
+  user applies between.
+23:55: the Mac is swapping; the user reboots first
+(`platform/scripts/docker_shutdown.sh`, reboot, `docker_restart.sh`).
+00:00 (11-05) restart clean: platform 42/42, relational 68/68.
+Runbook 16 written (not run): `relational/scripts/runbook_16_tune.sh
+pg|mysql before|after` (before: 3 loads of 20 requests/s for 5m, saved to
+`logs/runbook-16-<engine>-before.tsv`; after: a 15m load while the user
+applies, the rollout watched, mysql IST/SST per node and an online
+buffer-pool resize, then 3 loads, side by side). Clusters root: pg
+`memory = "768Mi"`, `shared_buffers = "256MB"` (fmt, validate; not
+applied; mysql gcache not edited yet: same root, its apply would restart
+mysql too). Found: the operator's node.cnf sets
+`wsrep_provider_options="pc.weight=10"` (every node) and our init.cnf is
+read after it, so the mysql change must be
+`pc.weight=10;gcache.size=512M`; galera.cache is preallocated in the
+datadir (1.4G of its 2Gi claim now, ~1.8G with 512M; local-path doesn't
+enforce it, a cloud volume would). Prediction for pg: seq scans of
+tables over a quarter of shared_buffers use a 256 KB ring, so the
+303 MB orders scans won't gain from 256MB. Mac disk 28 GiB free.
+00:58 (11-05) runbook 16 pg before done (`logs/runbook-16-pg-before.tsv`,
+shared_buffers 128MB, 512Mi, 3 x 20 requests/s for 5m): search p95 68.9,
+77.8, 72.4 ms (noise ~±6%, so a smaller change won't show); create p95
+4-5 ms; 0 failed, 0 lost; blocks read outside shared_buffers 27-30 M per
+load (~22,600-24,800 per search, all instances), hit ratio 37-43%. The
+search SLO passed at this rate (p95 ~70 of 300 ms), though the script's
+note says it fails by design. Script fix before the after run: a member is
+also counted down while it doesn't answer a query, not only while unready
+(an in-place restart could show ~0 s down). Chrome screenshots of
+Grafana blocked: the extension refuses with "turned off in your settings"
+although `/chrome` shows Enabled.
+01:39 (11-05) **runbook 16 pg PASS** (`logs/runbook-16-pg-20261105-010247.txt`),
+clusters root applied (pg shared_buffers 256MB, 768Mi). Rollout 01:04:12-
+01:05:37: replicas pg-2, pg-3 restarted (~27 s each), switchover pg-1 ->
+pg-3 at 01:05:08, pg-1 back; whole 16 s later. App: 2 writes failed at
+01:05:17 (~5 s), slowest request ~10 s (held through the switchover), 0
+lost, 0 failed after the cutoff, no app restarts. Medians before -> after:
+search p95 72.4 -> 59.1 ms (-18%), create p95 4.4 -> 3.0 ms, blocks read
+outside shared_buffers -72% (22,583 -> 6,284 per search), hit ratio 42.6
+-> 84.1%. The ring-buffer prediction was wrong: EXPLAIN shows a parallel
+seq scan of orders (~38,900 pages), and the hit ratio is about
+shared_buffers / table size both times (16,384 / 38,900 = 42%, 32,768 /
+38,900 = 84%): the table fills shared_buffers whatever its size. Likely
+cause: concurrent scans and parallel workers touch the same pages, which
+then leave the 256 KB ring and stay cached.
+Faults found: (1) pg-1 restarted in place with the new setting (script
+marked it done, 512Mi), then the operator replaced the pod for the new
+memory ~2 s later; the second restart was not timed. Script fixed: a
+member that goes down again (no answer, or a new pod UID) is unmarked,
+its down time summed, and the rollout ends only when all are back for
+30 s. (2) The Mac idle-slept twice on battery (pmset: 01:17:34-01:20:27
+and 01:23:54-01:27:06 UTC): a search on pg-2 ran 172.5 s, walsenders
+timed out (5 s) on the primary, and after-load 1 ran 665 s at 9
+requests/s. Its rows sit inside the other two, so the medians stand.
+Fixed: `runbook_log` (private/scripts/private_env.sh) now runs
+`caffeinate -is -w $$`, so no runbook lets the Mac idle-sleep; closing
+the lid still does. Both fixes syntax-checked, not yet run.
+Next: runbook 16 mysql (gcache.size 512M as `pc.weight=10;gcache.size=512M`).
+17:55 (11-05) runbook 16 mysql before, first try: discarded. An awk
+error (a bare `r > 0 ?` inside printf is an output redirect) left the
+three mysql columns empty, and load 1 started 14 min after
+docker_restart.sh on a cold buffer pool: 6 searches hit the app's
+maximum statement time at 17:39:22-23. Search p95 747-820 ms (the
+runbook 17 missing index). Fixed: parentheses; a short row now fails the
+load; the rollout load is 25m for mysql. Clusters root: new module
+variable `gcache_size` (writes `wsrep_provider_options="pc.weight=10;
+gcache.size=..."`), dev set to 512M (fmt, validate; not applied).
+18:14 (11-05) runbook 16 mysql before done (`logs/runbook-16-mysql-before.tsv`,
+gcache 128M, 3 x 20 requests/s for 5m): search p95 811-834 ms, create
+p95 7-9 ms, 0 failed, 0 lost; write-sets 3.2-3.4 KiB/s, so 128M already
+holds ~11 h of them (the IST window); InnoDB disk reads 2,335-2,656 per
+load (the 768M pool holds the data: the slow search is CPU on a full
+scan in memory, not I/O).
+18:58 (11-05) **runbook 16 mysql PASS** (`logs/runbook-16-mysql-20261105-181729.txt`),
+clusters root applied (gcache.size 512M). Rollout 18:20:47-18:23:28 (161
+s): SmartUpdate restarted pxc-2, pxc-1, then the writer pxc-0, ~40 s
+each; all three rejoined by IST. HAProxy moved the writer pxc-0 -> pxc-2
+(18:22:46) and back to pxc-0 one second after it returned (18:23:29):
+automatic failback, two writer moves for one planned restart (CNPG keeps
+the new primary). App: 0 failed, 0 lost (10,511 writes), slowest write
+~2.3 s, no app restarts. Online resize on pxc-1 768M -> 512M -> 768M in
+~1 s, no restart; config still 768M. Medians: IST window 10.8 -> 43.4 h
+(write-sets 3.4 KiB/s), disk reads -10%. **Open:** search p95 828.6 ->
+992.5 ms (+20%; loads 992, 1021, 913, falling), create p95 7.3 -> 9.7
+ms. Not memory (1.2-1.3 of 2 GiB; galera.cache ~50-60 MB resident), not
+disk, no thermal warnings. Prometheus 18:12 vs 18:52: rows read +4%, CPU
+per row +8%, rows read on the writer pxc-0 3.4 -> 4.9 M/s (pxc-1 3.1 ->
+2.4); app reader connections even (6-7 per node). gcache holds
+write-sets only; likely the restarts, not the setting. Check: search p95
+after hours of uptime (near 820 ms = settled).
 
 Resume here (from 2026-11-04, stopped for low battery):
 0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).
@@ -429,6 +533,9 @@ Resume here (from 2026-11-04, stopped for low battery):
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
    startup restarts are a warning).
 2. No load or backup while HandBrake, ffmpeg or yt-dlp runs.
+2b. Runbook 16 passes on both engines (11-05; pg 256MB/768Mi, mysql gcache
+   512M applied). Open: mysql search p95 +20% after the restarts; recheck
+   it after hours of uptime (near 820 ms = settled).
 3. Runbook 7: the schedule, keep 2 and the backup alerts pass (f6f9c37).
    Backup under load passes on both (11-04). TLS to the store and
    encryption at rest applied and verified (11-04). Object lock on

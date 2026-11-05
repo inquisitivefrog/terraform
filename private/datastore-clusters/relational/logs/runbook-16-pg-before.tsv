@@ -1,0 +1,5 @@
+# shared_buffers 128MB, memory limit 512Mi, 20 requests/s for 5m, 2026-11-05T00:58:15Z
+run	testid	search_p95_ms	create_p95_ms	failed	lost	blks_read	reads_per_search	hit_pct
+1	pg-run-20261105-004231	68.9	5.2	0	0	29667775	24847	36.75
+2	pg-run-20261105-004746	77.8	4.4	0	0	27118950	22562	42.60
+3	pg-run-20261105-005301	72.4	4.0	0	0	27958190	22583	42.58

@@ -29,7 +29,13 @@ module "postgres" {
   # 15 s, then a fast shutdown cuts the remaining sessions.
   smart_shutdown_timeout = 15
 
+  # Runbook 16: shared_buffers 128MB (the default) -> 256MB, a restart
+  # (CloudNativePG rolls it: replicas, then a switchover). Memory 512Mi ->
+  # 768Mi to keep the same room for connections and work_mem beside it.
+  memory = "768Mi"
+
   parameters = {
+    shared_buffers             = "256MB"
     log_min_duration_statement = "2000" # ms; the slow-query log
     # Replicas tell the primary which row versions their queries still read,
     # so vacuum keeps them and replay never cancels a reader. Without it,
@@ -73,6 +79,12 @@ module "mysql" {
   # had already failed under a bulk seed). Pinned pool, 25% headroom.
   memory                  = "2Gi"
   innodb_buffer_pool_size = "768M"
+
+  # Runbook 16: gcache 128M (the default) -> 512M, so a node down longer
+  # can still rejoin by IST (the write-sets it missed) rather than SST (a
+  # full copy). A restart of every node. The file is preallocated in the
+  # 2Gi data volume (~1.4G used before, ~1.8G after).
+  gcache_size = "512M"
 
   # Binlogs uploaded each minute; a full backup each Sunday 03:00 UTC (the
   # runbooks take more on demand); the last 2 scheduled ones kept.

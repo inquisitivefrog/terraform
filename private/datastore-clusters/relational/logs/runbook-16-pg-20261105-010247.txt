@@ -1,0 +1,403 @@
+# runbook_16_tune.sh pg after (2026-11-05T01:02:47Z, kind cluster datastore-dev)
+
+== 01:02:47 0. Preconditions
+  pg-1: shared_buffers 128MB, memory limit 512Mi
+  pg-2: shared_buffers 128MB, memory limit 512Mi
+  pg-3: shared_buffers 128MB, memory limit 512Mi
+  before: shared_buffers 128MB, memory limit 512Mi, 20 requests/s for 5m, 2026-11-05T00:58:15Z
+  writer pg-1; orders-pg app restarts so far: 26
+
+== 01:02:47 Load: 20 requests/s for 15m
+  k6 run pg-run-20261105-010247; 60 s to settle
+
+== 01:03:48 1. Apply the change now, in a second terminal:
+    cd /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/environments/dev/clusters
+    terraform plan -out plan-clusters   # expect 1 to change: the pg cluster
+    terraform apply plan-clusters
+  Waiting up to 10 minutes for the first member to restart
+  01:04:12 the rollout started
+  01:04:37 pg-2 back with shared_buffers 256MB, memory limit 768Mi (down ~27 s)
+  01:05:06 pg-3 back with shared_buffers 256MB, memory limit 768Mi (down ~28 s)
+  01:05:08 writer pg-1 -> pg-3
+  01:05:21 pg-1 back with shared_buffers 256MB, memory limit 512Mi (down ~15 s)
+  Whole after 16 s
+  Rollout: 85 s from the first restart to whole; shared_buffers 128MB -> 256MB; writer pg-1 -> pg-3; longest member down ~28 s
+
+== 01:05:37 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17).
+  This step judges lost writes, the app's errors and requests failing after the rollout.
+  | Job k6-pg-run-20261105-010247: run against orders-pg at 20 req/s for 15m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261105-010247 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=5.07ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=2.61ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=1.37ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=86.69ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=3.5ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.02%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.05%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 17922  19.912594/s
+  |     checks_succeeded...: 99.98% 17920 out of 17922
+  |     checks_failed......: 0.01%  2 out of 17922
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 3691   4.100959/s
+  |     orders_deleted.................: 878    0.975519/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=44.08ms  min=292.04µs med=1.49ms   max=10.15s   p(90)=51.94ms p(95)=56.17ms
+  |       { expected_response:true }...: avg=43ms     min=292.04µs med=1.49ms   max=10.15s   p(90)=51.93ms p(95)=56.15ms
+  |       { op:create }................: avg=112.75ms min=971.91µs med=2.18ms   max=9.77s    p(90)=3.63ms  p(95)=5.07ms 
+  |       { op:delete }................: avg=23.4ms   min=725.87µs med=1.37ms   max=9.94s    p(90)=2.2ms   p(95)=2.61ms 
+  |       { op:read }..................: avg=12.91ms  min=292.04µs med=658.16µs max=10.08s   p(90)=1.09ms  p(95)=1.37ms 
+  |       { op:search }................: avg=58.59ms  min=43.93ms  med=51.71ms  max=765.36ms p(90)=64.64ms p(95)=86.69ms
+  |       { op:update }................: avg=23.97ms  min=877.5µs  med=1.66ms   max=10.15s   p(90)=2.78ms  p(95)=3.5ms  
+  |     http_req_failed................: 0.01%  2 out of 17923
+  |       { op:create }................: 0.02%  1 out of 3692
+  |       { op:delete }................: 0.00%  0 out of 878
+  |       { op:read }..................: 0.00%  0 out of 8027
+  |       { op:search }................: 0.00%  0 out of 3525
+  |       { op:update }................: 0.05%  1 out of 1800
+  |     http_reqs......................: 17923  19.913706/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 79     0.087775/s
+  |     iteration_duration.............: avg=44.26ms  min=348.87µs med=1.65ms   max=10.15s   p(90)=52.09ms p(95)=56.37ms
+  |     iterations.....................: 17922  19.912594/s
+  |     vus............................: 1      min=0          max=95
+  |     vus_max........................: 99     min=20         max=99
+  | 
+  |     NETWORK
+  |     data_received..................: 21 MB  23 kB/s
+  |     data_sent......................: 3.1 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261105-010247: passed.
+  The app's requests failed from 01:05:17 to 01:05:17: ~5 s
+  Writes: 6368 succeeded, 2 failed (0 after 01:06:07); 0 acknowledged writes lost
+  Reads and searches failed: 0 (0 after 01:06:07)
+  orders-pg app restarts: 26 -> 26
+
+== 01:20:54 4. After: 3 loads of 20 requests/s for 5m
+
+== 01:20:54 Load: 20 requests/s for 5m
+  k6 run pg-run-20261105-012055; 60 s to settle
+
+== 01:21:55 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17); this step only measures
+  | Job k6-pg-run-20261105-012055: run against orders-pg at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261105-012055 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=2.86ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=1.88ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=821.21µs
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=55.92ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=2.21ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    9.026315/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1195   1.797442/s
+  |     orders_deleted.................: 290    0.436199/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=40.64ms  min=306.2µs  med=1.26ms   max=2m52s    p(90)=50.86ms  p(95)=52.39ms 
+  |       { expected_response:true }...: avg=40.64ms  min=306.2µs  med=1.26ms   max=2m52s    p(90)=50.86ms  p(95)=52.39ms 
+  |       { op:create }................: avg=4.45ms   min=950.29µs med=1.8ms    max=493.18ms p(90)=2.51ms   p(95)=2.86ms  
+  |       { op:delete }................: avg=4.66ms   min=777.16µs med=1.19ms   max=542.09ms p(90)=1.63ms   p(95)=1.88ms  
+  |       { op:read }..................: avg=581.18µs min=306.2µs  med=555.95µs max=32.57ms  p(90)=686.59µs p(95)=821.21µs
+  |       { op:search }................: avg=190.06ms min=44.42ms  med=50.7ms   max=2m52s    p(90)=54.31ms  p(95)=55.92ms 
+  |       { op:update }................: avg=1.7ms    min=902.25µs med=1.45ms   max=88.17ms  p(90)=1.95ms   p(95)=2.21ms  
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1195
+  |       { op:delete }................: 0.00%  0 out of 290
+  |       { op:read }..................: 0.00%  0 out of 2705
+  |       { op:search }................: 0.00%  0 out of 1235
+  |       { op:update }................: 0.00%  0 out of 576
+  |     http_reqs......................: 6002   9.027819/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=12.04ms  min=367µs    med=1.38ms   max=542.51ms p(90)=50.98ms  p(95)=52.52ms 
+  |     iterations.....................: 6001   9.026315/s
+  |     vus............................: 1      min=0         max=4 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.3 MB 11 kB/s
+  |     data_sent......................: 1.0 MB 1.6 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261105-012055: passed.
+  1 pg-run-20261105-012055 57.1 2.9 0 0 7738347 6266 84.09
+
+== 01:29:22 Load: 20 requests/s for 5m
+  k6 run pg-run-20261105-012922; 60 s to settle
+
+== 01:30:23 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17); this step only measures
+  | Job k6-pg-run-20261105-012922: run against orders-pg at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261105-012922 (port-forward: platform/scripts/grafana_restart.sh)
+  | container "k6" in pod "k6-pg-run-20261105-012922-d97r5" is waiting to start: ContainerCreating
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=3ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=1.94ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=934.71µs
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=59.79ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=2.4ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    19.999446/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1179   3.929236/s
+  |     orders_deleted.................: 310    1.033133/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=11.18ms  min=317.91µs med=1.3ms    max=101.08ms p(90)=52.79ms  p(95)=55.01ms 
+  |       { expected_response:true }...: avg=11.18ms  min=317.91µs med=1.3ms    max=101.08ms p(90)=52.79ms  p(95)=55.01ms 
+  |       { op:create }................: avg=2.07ms   min=983.91µs med=1.94ms   max=6.28ms   p(90)=2.73ms   p(95)=3ms     
+  |       { op:delete }................: avg=1.34ms   min=750.41µs med=1.28ms   max=3.99ms   p(90)=1.7ms    p(95)=1.94ms  
+  |       { op:read }..................: avg=620.82µs min=317.91µs med=583.97µs max=3.78ms   p(90)=808.24µs p(95)=934.71µs
+  |       { op:search }................: avg=52.9ms   min=45.95ms  med=52.98ms  max=101.08ms p(90)=57.61ms  p(95)=59.79ms 
+  |       { op:update }................: avg=1.65ms   min=1ms      med=1.56ms   max=6.54ms   p(90)=2.15ms   p(95)=2.4ms   
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1179
+  |       { op:delete }................: 0.00%  0 out of 310
+  |       { op:read }..................: 0.00%  0 out of 2762
+  |       { op:search }................: 0.00%  0 out of 1164
+  |       { op:update }................: 0.00%  0 out of 586
+  |     http_reqs......................: 6002   20.002779/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=11.33ms  min=384.41µs med=1.44ms   max=101.68ms p(90)=52.94ms  p(95)=55.16ms 
+  |     iterations.....................: 6001   19.999446/s
+  |     vus............................: 0      min=0         max=1 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.0 MB 23 kB/s
+  |     data_sent......................: 1.0 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261105-012922: passed.
+  2 pg-run-20261105-012922 61.4 3.0 0 0 7314795 6284 84.06
+
+== 01:34:37 Load: 20 requests/s for 5m
+  k6 run pg-run-20261105-013437; 60 s to settle
+
+== 01:35:38 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17); this step only measures
+  | Job k6-pg-run-20261105-013437: run against orders-pg at 20 req/s for 5m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261105-013437 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=3.22ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=2.03ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=915.36µs
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=57.89ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=2.48ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 6001    20.00248/s
+  |     checks_succeeded...: 100.00% 6001 out of 6001
+  |     checks_failed......: 0.00%   0 out of 6001
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 1226   4.086492/s
+  |     orders_deleted.................: 313    1.043289/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=11.21ms  min=354.12µs med=1.33ms   max=221.28ms p(90)=51.87ms  p(95)=54.06ms 
+  |       { expected_response:true }...: avg=11.21ms  min=354.12µs med=1.33ms   max=221.28ms p(90)=51.87ms  p(95)=54.06ms 
+  |       { op:create }................: avg=2.08ms   min=1.11ms   med=1.93ms   max=11.51ms  p(90)=2.75ms   p(95)=3.22ms  
+  |       { op:delete }................: avg=1.38ms   min=856.58µs med=1.32ms   max=4.22ms   p(90)=1.81ms   p(95)=2.03ms  
+  |       { op:read }..................: avg=619.69µs min=354.12µs med=580.83µs max=3.13ms   p(90)=808.65µs p(95)=915.36µs
+  |       { op:search }................: avg=52.1ms   min=44.33ms  med=51.92ms  max=221.28ms p(90)=56.28ms  p(95)=57.89ms 
+  |       { op:update }................: avg=1.65ms   min=960.54µs med=1.53ms   max=11.05ms  p(90)=2.13ms   p(95)=2.48ms  
+  |     http_req_failed................: 0.00%  0 out of 6002
+  |       { op:create }................: 0.00%  0 out of 1226
+  |       { op:delete }................: 0.00%  0 out of 313
+  |       { op:read }..................: 0.00%  0 out of 2703
+  |       { op:search }................: 0.00%  0 out of 1184
+  |       { op:update }................: 0.00%  0 out of 575
+  |     http_reqs......................: 6002   20.005813/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=11.36ms  min=425.41µs med=1.46ms   max=221.51ms p(90)=52.01ms  p(95)=54.22ms 
+  |     iterations.....................: 6001   20.00248/s
+  |     vus............................: 1      min=0         max=1 
+  |     vus_max........................: 20     min=20        max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 7.1 MB 24 kB/s
+  |     data_sent......................: 1.1 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261105-013437: passed.
+  3 pg-run-20261105-013437 59.1 3.2 0 0 11591185 9790 75.18
+
+== 01:39:52 4b. Before and after (shared_buffers 128MB -> 256MB), the median of 3 loads each
+                           before        after   change
+  search_p95_ms              72.4         59.1     -18%
+  create_p95_ms               4.4          3.0     -32%
+  failed                        0            0        -
+  lost                          0            0        -
+  blks_read              27958190      7738347     -72%
+  reads_per_search          22583         6284     -72%
+  hit_pct                   42.58        84.06     +97%
+
+== 01:39:52 Verify: relational check_resources.sh
+  
+  == Summary: 68 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 01:39:56 Runbook 16 (pg): passed, shared_buffers 128MB -> 256MB
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-16-pg-20261105-010247.txt

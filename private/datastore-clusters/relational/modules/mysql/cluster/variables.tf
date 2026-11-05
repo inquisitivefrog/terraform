@@ -67,6 +67,12 @@ variable "innodb_buffer_pool_size" {
   default     = null
 }
 
+variable "gcache_size" {
+  description = "Galera gcache size (e.g. \"512M\"): the write-sets kept for a node that rejoins by IST, preallocated as galera.cache in the data volume; null keeps Galera's 128M"
+  type        = string
+  default     = null
+}
+
 variable "exporter_image" {
   description = "prom/mysqld-exporter image for the metrics sidecar"
   type        = string
