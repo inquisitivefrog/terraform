@@ -11,7 +11,7 @@ Updated 2026-11-05. Rolling records: `aws/tfstate/docs/STATUS.md`,
 |---|---|---|
 | AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-24 night; credits $137.41). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
-| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters`: platform, relational (pg 16.15, PXC 8.0.46, ~3 M orders each), orders app, the backup store (SeaweedFS outside the cluster: TLS, encrypted at rest, object lock) and both engines' backups applied. Runbooks 1, 7, 8, 9, 12, 13, 16, 17, 23-26 pass on both engines (5 on pg). **Running**; open items and the resume list in `private/docs/STATUS.md` | $0 |
+| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters`: platform, relational (pg 16.15, PXC 8.0.46, ~3 M orders each), orders app, the backup store (SeaweedFS outside the cluster: TLS, encrypted at rest, object lock) and both engines' backups applied. Runbooks 1, 7, 8, 9, 12, 13, 16, 17, 22-26 pass on both engines (5 on pg). **Running**; open items and the resume list in `private/docs/STATUS.md` | $0 |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
 Azure: the four soft-deleted Key Vaults purged themselves by 2026-10-29.
