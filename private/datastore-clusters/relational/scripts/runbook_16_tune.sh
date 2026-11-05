@@ -38,7 +38,7 @@
 # index, runbook 17).
 # Usage: private/datastore-clusters/relational/scripts/runbook_16_tune.sh pg|mysql before|after [rate] [duration] [dev]
 # Changes the cluster (after): every member restarts; the writer moves.
-# Log: relational/logs/runbook-16-<engine>-<time>.txt (-FAILED.txt if it fails)
+# Log: relational/logs/runbook-16-<engine>-<phase>-<time>.txt (-FAILED.txt if it fails)
 
 ENGINE="${1:-}"
 PHASE="${2:-}"
@@ -53,6 +53,7 @@ RUNS=3
 BUDGET=30 # seconds of app errors allowed: a switchover, not an outage (RUNBOOKS.md 13)
 SETTLE=30 # seconds after the rollout before every request must succeed
 source "$(dirname "$0")/runbook_lib.sh"
+RUNBOOK_PHASE="$PHASE" # the after run must not delete the before run's log
 runbook_start 16 "$@"
 BEFORE_FILE="$LIB_DIR/../logs/runbook-16-$ENGINE-before.tsv"
 CLUSTERS_ROOT="$(cd "$LIB_DIR/../environments/$ENV/clusters" && pwd)"

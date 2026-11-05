@@ -1,7 +1,9 @@
 # Shared by the relational runbook scripts (runbook_<n>_*.sh); sourced, not
 # run. Each script sets ENGINE (pg|mysql) and ENV, then sources this, which
 # picks the cluster and opens the script's log.
-#   runbook_start <n> "$@"        cluster, log, MY_ROOT_PW for mysql
+#   runbook_start <n> "$@"        cluster, log, MY_ROOT_PW for mysql. A script
+#                                 run in phases sets RUNBOOK_PHASE first, so
+#                                 each phase keeps its own newest log
 #   step / die                    "== <time> <title>" / "FAILED: ..." and exit 1
 #   whole                         the cluster has all 3 members, replicating
 #   wait_whole <seconds>          until whole; prints how long it took
@@ -50,7 +52,7 @@ runbook_start() {
   shift
   use_cluster "datastore-$ENV"
   APP_PODS="app.kubernetes.io/name=orders,app.kubernetes.io/instance=orders-$ENGINE"
-  runbook_log "$LIB_DIR/../logs" "runbook-$n-$ENGINE" "$@"
+  runbook_log "$LIB_DIR/../logs" "runbook-$n-$ENGINE${RUNBOOK_PHASE:+-$RUNBOOK_PHASE}" "$@"
   [[ "$ENGINE" == mysql ]] && MY_ROOT_PW="$(k -n "$NS" get secret mysql-secrets -o jsonpath='{.data.root}' | base64 -d)"
   return 0
 }

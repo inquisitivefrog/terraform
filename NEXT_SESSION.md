@@ -1,6 +1,6 @@
 # Next session: start here
 
-Updated 2026-10-30. Rolling records: `aws/tfstate/docs/STATUS.md`,
+Updated 2026-11-05. Rolling records: `aws/tfstate/docs/STATUS.md`,
 `gcp/tfstate/docs/STATUS.md`, `azure/tfstate/docs/STATUS.md`,
 `private/docs/STATUS.md`. Command guides:
 `aws/README.aws.md`, `gcp/README.gcloud.md`, `azure/README.az.md`.
@@ -11,12 +11,11 @@ Updated 2026-10-30. Rolling records: `aws/tfstate/docs/STATUS.md`,
 |---|---|---|
 | AWS (account `650836812595`, profile `blue-elephant`, us-east-2; Free plan, credits to 2027-04-22) | Everything destroyed (swept 2026-10-24 night; credits $137.41). single_instance verified and destroyed 2026-10-22; ecommerce-k8s verified (Argo CD GitOps, 34/34) and destroyed 2026-10-23 | $0; budget `monthly-5usd` |
 | GCP (project `bluedragon-sre-vuft1e`) | tfstate applied; single_instance built and destroyed in both envs | pennies (KMS keys) |
-| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters`: platform, relational (pg 16.15, PXC 8.0.46, ~3 M orders each), orders app and the backup store (SeaweedFS, outside the cluster) applied; runbooks 1, 5, 13, 17, 23-26 pass. Backups (cert-manager, Barman Cloud plugin, PXC backup) written, not applied. **Stopped** with `docker_shutdown.sh`; resume list in `private/docs/STATUS.md` | $0 |
+| Private cloud (Docker Desktop + kind, `private/`) | `datastore-clusters`: platform, relational (pg 16.15, PXC 8.0.46, ~3 M orders each), orders app, the backup store (SeaweedFS outside the cluster: TLS, encrypted at rest, object lock) and both engines' backups applied. Runbooks 1, 7, 8, 9, 12, 13, 16, 17, 23-26 pass on both engines (5 on pg). **Running**; open items and the resume list in `private/docs/STATUS.md` | $0 |
 | Azure (subscription `bluedragon-sre`, `8d75b8ef-…`) | **Port done.** single_instance dev and prod built, verified, destroyed; tfstate layer destroyed. Subscription empty | $0 |
 
-Azure leftovers, free: four soft-deleted Key Vaults purge themselves
-2026-10-27 to 2026-10-29. The subscription can be cancelled in the portal if
-it won't be reused.
+Azure: the four soft-deleted Key Vaults purged themselves by 2026-10-29.
+The subscription can be cancelled in the portal if it won't be reused.
 
 ## Lessons worth keeping (Azure)
 
@@ -62,11 +61,14 @@ Then:
    and relational (`pg` PostgreSQL 16.13, `mysql` PXC 8.0.44) applied and
    verified 2026-10-26. Since then: the orders app and k6 load, runbooks
    1, 5, 13, 17, 23, 24, 25, 26 scripted and passing (expectations in
-   `private/datastore-clusters/test_plans/`). **Next (2026-10-31): apply
-   the backups** (`private/datastore-clusters/docs/BACKUPS.md`; steps in
-   `private/docs/STATUS.md`, "Resume here"), then script runbooks 7, 8, 9
-   (back up, restore, point in time). Dedicated database nodes deferred to the node-drain and
-   node-replacement runbooks. Open questions are listed at the end of
+   `private/datastore-clusters/test_plans/`); backups applied (TLS,
+   encrypted, object lock; `docs/BACKUPS.md`) and runbooks 7, 8, 9, 12
+   pass (2026-11-03/04); runbook 16, tune configuration, passes
+   (2026-11-05, 074a42f). **Next:** the open items at the top of
+   `private/docs/STATUS.md` (the object-lock expiry from 2026-11-05
+   23:00 UTC first), then the remaining priority runbooks, 22 (replace a
+   damaged node) and 14 (major version upgrade). Dedicated database nodes
+   deferred to the node-drain and node-replacement runbooks. Open questions are listed at the end of
    DESIGN.md. The AWS Aurora version was removed 2026-10-26 (design kept in
    `aws/tfstate/docs/STATUS.md`).
 3. **ecommerce-k8s N+2:** 3 AZs, `replicaCount: 3` with zone

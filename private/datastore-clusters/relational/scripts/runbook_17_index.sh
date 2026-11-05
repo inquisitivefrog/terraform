@@ -32,11 +32,6 @@
 # Changes the schema, then changes it back.
 # Log: relational/logs/runbook-17-<engine>-<time>.txt (-FAILED.txt if it fails)
 
-set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$DIR/../../../scripts/private_env.sh" # use_cluster, k, runbook_log
-source "$DIR/../../../scripts/checks.sh"      # prom_value
-
 PT_IMAGE="percona/percona-toolkit:3.7.1-4" # 3.7.2 (2026-10-22) is days old
 KEEP=""
 [[ "${1:-}" == --keep ]] && KEEP=1 && shift
@@ -48,37 +43,33 @@ ENGINE="${1:-}"
 RATE="${2:-20}"
 [[ "$ENGINE" == pg ]] && DURATION="${3:-4m}" || DURATION="${3:-15m}"
 ENV="${4:-dev}"
-NS="relational"
 INDEX="orders_customer_created_idx"
 INDEX_COLUMNS="customer_id, created_at, id"
+source "$(dirname "$0")/runbook_lib.sh"
+runbook_start 17 ${KEEP:+--keep} "$@"
 
-use_cluster "datastore-$ENV"
-runbook_log "$DIR/../logs" "runbook-17-$ENGINE" ${KEEP:+--keep} "$@"
-
-step() { echo; echo "== $(date -u +%H:%M:%S) $*"; }
-die() { echo "FAILED: $*"; exit 1; }
-secret() { k -n "$NS" get secret "$1" -o jsonpath="{.data.$2}" | base64 -d; }
-
-# --- PostgreSQL: as postgres over each instance's local socket ---
-pg_sql() {
+# --- PostgreSQL: as postgres over each instance's local socket. Not the
+# library's pg_sql: each -c here runs on its own, outside a transaction,
+# which CREATE and DROP INDEX CONCURRENTLY require ---
+pg_psql() {
   local pod="$1"
   shift
   k -n "$NS" exec "$pod" -c postgres -- psql -XAtq -d appdb -v ON_ERROR_STOP=1 "$@"
 }
 # t (valid), f (invalid: a failed concurrent build) or empty (none)
-pg_index_state() { pg_sql "$1" -c "SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass('public.$INDEX')"; }
+pg_index_state() { pg_psql "$1" -c "SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass('public.$INDEX')"; }
 pg_plans() {
   local pod="$1" shape sql
   for shape in "customer and status|status = 'PAID'" "customer, last 30 days|created_at >= now() - interval '30 days'"; do
     sql="EXPLAIN (ANALYZE, COSTS off) SELECT * FROM orders WHERE customer_id = $CUSTOMER AND ${shape#*|} ORDER BY created_at DESC, id DESC LIMIT 20"
     echo "  ${shape%%|*} ($pod):"
-    pg_sql "$pod" -c "$sql" | grep -E 'Scan|Execution Time' | sed 's/^/    /'
+    pg_psql "$pod" -c "$sql" | grep -E 'Scan|Execution Time' | sed 's/^/    /'
   done
 }
 pg_drop_index() {
   local attempt
   for attempt in 1 2 3; do
-    pg_sql "$PG_PRIMARY" -c "SET lock_timeout = '5s'" -c "DROP INDEX CONCURRENTLY IF EXISTS $INDEX" && return 0
+    pg_psql "$PG_PRIMARY" -c "SET lock_timeout = '5s'" -c "DROP INDEX CONCURRENTLY IF EXISTS $INDEX" && return 0
     sleep 5
   done
   return 1
@@ -90,18 +81,20 @@ pg_add_index() {
       t) return 0 ;;
       f)
         echo "  An INVALID $INDEX is left from a failed build: dropping it"
-        pg_sql "$PG_PRIMARY" -c "SET lock_timeout = '5s'" -c "DROP INDEX CONCURRENTLY IF EXISTS $INDEX"
+        pg_psql "$PG_PRIMARY" -c "SET lock_timeout = '5s'" -c "DROP INDEX CONCURRENTLY IF EXISTS $INDEX"
         ;;
     esac
     echo "  Attempt $attempt: CREATE INDEX CONCURRENTLY $INDEX ON orders ($INDEX_COLUMNS)"
-    pg_sql "$PG_PRIMARY" -c "SET lock_timeout = '5s'" -c "SET statement_timeout = 0" \
+    pg_psql "$PG_PRIMARY" -c "SET lock_timeout = '5s'" -c "SET statement_timeout = 0" \
       -c "CREATE INDEX CONCURRENTLY $INDEX ON orders ($INDEX_COLUMNS)" && return 0
     sleep 10
   done
   return 1
 }
 
-# --- MySQL: as root over each node's local socket; password on stdin ---
+# --- MySQL: as root over each node's local socket; password on stdin. Not
+# the library's my_sql: this one uses appdb and prints raw (-r), so EXPLAIN
+# ANALYZE keeps its line breaks ---
 my_node() {
   k -n "$NS" exec -i "$1" -c pxc -- sh -c \
     'read -r MYSQL_PWD; export MYSQL_PWD; exec mysql -uroot -D appdb -NBre "$0"' "$2" <<<"$MY_ROOT_PW"
@@ -200,23 +193,16 @@ EOF
 
 # --- 0. the cluster is whole before anything changes ---
 step "0. Preconditions"
+whole || die "the $ENGINE cluster is not whole (run check_resources.sh)"
 if [[ "$ENGINE" == pg ]]; then
-  PG_PRIMARY="$(k -n "$NS" get clusters.postgresql.cnpg.io pg -o jsonpath='{.status.currentPrimary}')"
-  read -r -a PG_REPLICAS <<<"$(k -n "$NS" get pods -l cnpg.io/cluster=pg,cnpg.io/instanceRole=replica -o jsonpath='{.items[*].metadata.name}')"
-  [[ -n "$PG_PRIMARY" && "${#PG_REPLICAS[@]}" -eq 2 ]] || die "pg needs a primary and 2 replicas (have '$PG_PRIMARY', ${PG_REPLICAS[*]:-none})"
-  [[ "$(pg_sql "$PG_PRIMARY" -c "SELECT count(*) FROM pg_stat_replication WHERE state = 'streaming'")" == 2 ]] ||
-    die "both replicas must be streaming"
-  CUSTOMER="$(pg_sql "$PG_PRIMARY" -c "SELECT customer_id FROM orders ORDER BY id DESC LIMIT 1")"
-  ROWS="$(pg_sql "$PG_PRIMARY" -c "SELECT reltuples::bigint FROM pg_class WHERE relname = 'orders'")"
+  PG_PRIMARY="$(pg_primary)"
+  read -r -a PG_REPLICAS <<<"$(pg_replicas)"
+  CUSTOMER="$(pg_psql "$PG_PRIMARY" -c "SELECT customer_id FROM orders ORDER BY id DESC LIMIT 1")"
+  ROWS="$(pg_psql "$PG_PRIMARY" -c "SELECT reltuples::bigint FROM pg_class WHERE relname = 'orders'")"
   STATE="$(pg_index_state "$PG_PRIMARY")"
   echo "  primary $PG_PRIMARY, replicas ${PG_REPLICAS[*]} streaming; orders ~$ROWS rows; index: ${STATE:-none}"
 else
-  MY_ROOT_PW="$(secret mysql-secrets root)"
   read -r -a MY_NODES <<<"$(k -n "$NS" get pods -l app.kubernetes.io/instance=mysql,app.kubernetes.io/component=pxc -o jsonpath='{.items[*].metadata.name}')"
-  [[ "$(k -n "$NS" get perconaxtradbclusters.pxc.percona.com mysql -o jsonpath='{.status.state} {.status.pxc.ready}')" == "ready 3" ]] ||
-    die "the PXC cluster must be ready with 3 nodes"
-  [[ "$(my_node "${MY_NODES[0]}" "SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'wsrep_cluster_size'")" == 3 ]] ||
-    die "Galera must have 3 members"
   LEFTOVERS="$(my_node "${MY_NODES[0]}" "SELECT CONCAT_WS(' ', (SELECT GROUP_CONCAT(table_name) FROM information_schema.tables
       WHERE table_schema = 'appdb' AND table_name IN ('_orders_new', '_orders_old')),
     (SELECT GROUP_CONCAT(trigger_name) FROM information_schema.triggers WHERE event_object_schema = 'appdb'))")"
@@ -225,7 +211,7 @@ else
   ROWS="$(my_node "${MY_NODES[0]}" "SELECT table_rows FROM information_schema.tables WHERE table_schema = 'appdb' AND table_name = 'orders'")"
   STATE="$(my_has_index "${MY_NODES[0]}")"
   [[ "$STATE" == 1 ]] && STATE=t || STATE=""
-  echo "  nodes ${MY_NODES[*]}, Galera 3 members; orders ~$ROWS rows; index: ${STATE:-none}"
+  echo "  nodes ${MY_NODES[*]}, Galera 3 members, all Synced; orders ~$ROWS rows; index: ${STATE:-none}"
 fi
 [[ "$CUSTOMER" =~ ^[0-9]+$ ]] || die "no orders to search (seed first: load_test.sh $ENGINE seed)"
 if [[ -n "$STATE" ]]; then
@@ -238,19 +224,8 @@ step "1. Before: the search plans (customer $CUSTOMER)"
 if [[ "$ENGINE" == pg ]]; then pg_plans "${PG_REPLICAS[0]}"; else my_plans "${MY_NODES[1]}"; fi
 
 {
-  # --- 2. load ---
-  step "2. Load during the change: $RATE requests/s for $DURATION"
-  LOAD_OUT="$(mktemp)"
-  "$DIR/load_test.sh" "$ENGINE" run "$RATE" "$DURATION" "$ENV" >"$LOAD_OUT" 2>&1 &
-  LOAD_PID=$!
-  for _ in $(seq 1 30); do
-    TESTID="$(grep -m1 -oE '^Job k6-[a-z]+-run-[0-9-]+' "$LOAD_OUT" | sed 's/^Job k6-//')"
-    [[ -n "$TESTID" ]] && break
-    sleep 1
-  done
-  [[ -n "$TESTID" ]] || die "the load did not start: $(cat "$LOAD_OUT")"
-  echo "  k6 run $TESTID; 60 s to settle"
-  sleep 60
+  # --- 2. load during the change ---
+  load_start "$RATE" "$DURATION"
 
   # --- 3. the change ---
   step "3. Add $INDEX ($INDEX_COLUMNS)"
@@ -264,25 +239,18 @@ if [[ "$ENGINE" == pg ]]; then pg_plans "${PG_REPLICAS[0]}"; else my_plans "${MY
   T1=$(date +%s)
   echo "  Done in $((T1 - T0)) s"
 
-  # --- 4. what the load saw ---
-  step "4. Waiting for the load to finish"
-  wait "$LOAD_PID"
-  sleep 10 # k6 pushes to Prometheus every 5 s
-  echo "  The background load's own output follows. Its SLO verdict is not used: searches are"
-  echo "  slow until the index exists. This step judges only failed and lost writes."
-  sed 's/^/  | /' "$LOAD_OUT"
-  JOB_END="$(k -n "$NS" get job "k6-$TESTID" -o jsonpath='{.status.completionTime}{.status.conditions[?(@.type=="Failed")].lastTransitionTime}')"
-  q() { prom_value "sum(max_over_time($1{testid=\"$TESTID\"$2}[2h]))"; }
-  WRITES_OK="$(q k6_http_reqs_total ',op=~"create|update|delete",expected_response="true"')"
-  WRITES_FAILED="$(q k6_http_reqs_total ',op=~"create|update|delete",expected_response="false"')"
-  LOST="$(q k6_orders_lost_total '')"
+  # --- 4. what the load saw: no write may fail at any point (judge_writes
+  # allows failures before a cutoff, for a failover; an index has none) ---
+  load_finish "searches are slow until the index exists.
+  This step judges only failed and lost writes."
+  WRITES_OK="$(k6_count k6_http_reqs_total "$WRITES,expected_response=\"true\"")"
+  WRITES_FAILED="$(k6_count k6_http_reqs_total "$WRITES,expected_response=\"false\"")"
+  LOST="$(k6_count k6_orders_lost_total '')"
   echo "  During the run: $WRITES_OK writes succeeded, $WRITES_FAILED failed, $LOST acknowledged writes lost"
-  echo "  The change ran $(date -u -r "$T0" +%H:%M:%S)-$(date -u -r "$T1" +%H:%M:%S); the load ended ${JOB_END:-?}"
+  echo "  The change ran $(date -u -r "$T0" +%H:%M:%S)-$(date -u -r "$T1" +%H:%M:%S); the load ended $(date -u -r "$END_EPOCH" +%H:%M:%S)"
   [[ "$WRITES_OK" -gt 0 ]] || die "no successful writes found for $TESTID in Prometheus: the check would prove nothing"
-  [[ -n "$JOB_END" && "$(date -u -j -f %Y-%m-%dT%H:%M:%SZ "$JOB_END" +%s)" -gt "$T1" ]] ||
-    die "the change outlasted the load: rerun with a longer duration"
+  [[ "$END_EPOCH" -gt "$T1" ]] || die "the change outlasted the load: rerun with a longer duration"
   [[ "$WRITES_FAILED" -eq 0 && "$LOST" -eq 0 ]] || die "writes failed or were lost during the change"
-  rm -f "$LOAD_OUT"
 }
 
 # --- 5. after ---
@@ -308,7 +276,7 @@ fi
 # --- 6. verify ---
 step "6. Verify: 150 requests/s for 5m, every SLO"
 VERIFIED=1
-"$DIR/load_test.sh" "$ENGINE" run 150 5m "$ENV" || VERIFIED=""
+"$LIB_DIR/load_test.sh" "$ENGINE" run 150 5m "$ENV" || VERIFIED=""
 echo "  Most connections waiting per app pod in the last 6 m (runbook 40 expects 0):"
 for pool in reader writer; do
   echo "    $pool: $(prom_value "max(max_over_time(hikaricp_connections_pending{namespace=\"$NS\",pod=~\"orders-$ENGINE-.*\",pool=\"$pool\"}[6m]))")"

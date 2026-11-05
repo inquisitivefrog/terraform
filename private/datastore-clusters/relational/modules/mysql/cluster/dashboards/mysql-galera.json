@@ -296,7 +296,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_wsrep_flow_control_paused_ns{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]) / 1e9",
+          "expr": "sum by (pod) (rate(mysql_global_status_wsrep_flow_control_paused_ns{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) / 1e9",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -329,7 +329,8 @@
               "group": "A"
             }
           },
-          "min": 0
+          "min": 0,
+          "max": 1
         },
         "overrides": []
       }
@@ -355,7 +356,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mysql_global_status_wsrep_local_recv_queue{namespace=\"$namespace\", pod=~\"$pod\"}",
+          "expr": "max by (pod) (mysql_global_status_wsrep_local_recv_queue{namespace=\"$namespace\", pod=~\"$pod\"})",
           "legendFormat": "{{pod}} receive",
           "refId": "A"
         },
@@ -364,7 +365,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mysql_global_status_wsrep_local_send_queue{namespace=\"$namespace\", pod=~\"$pod\"}",
+          "expr": "max by (pod) (mysql_global_status_wsrep_local_send_queue{namespace=\"$namespace\", pod=~\"$pod\"})",
           "legendFormat": "{{pod}} send",
           "refId": "B"
         }
@@ -423,7 +424,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_wsrep_local_cert_failures{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "sum by (pod) (rate(mysql_global_status_wsrep_local_cert_failures{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}} cert failures",
           "refId": "A"
         },
@@ -432,7 +433,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_wsrep_local_bf_aborts{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "sum by (pod) (rate(mysql_global_status_wsrep_local_bf_aborts{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}} BF aborts",
           "refId": "B"
         }
@@ -491,7 +492,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_wsrep_replicated{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "sum by (pod) (rate(mysql_global_status_wsrep_replicated{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}} replicated",
           "refId": "A"
         },
@@ -500,7 +501,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_wsrep_received{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "sum by (pod) (rate(mysql_global_status_wsrep_received{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}} received",
           "refId": "B"
         }
@@ -631,7 +632,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_questions{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "sum by (pod) (rate(mysql_global_status_questions{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -690,7 +691,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mysql_global_status_threads_connected{namespace=\"$namespace\", pod=~\"$pod\"}",
+          "expr": "max by (pod) (mysql_global_status_threads_connected{namespace=\"$namespace\", pod=~\"$pod\"})",
           "legendFormat": "{{pod}} connected",
           "refId": "A"
         },
@@ -699,7 +700,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mysql_global_status_threads_running{namespace=\"$namespace\", pod=~\"$pod\"}",
+          "expr": "max by (pod) (mysql_global_status_threads_running{namespace=\"$namespace\", pod=~\"$pod\"})",
           "legendFormat": "{{pod}} running",
           "refId": "B"
         },
@@ -848,7 +849,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "rate(mysql_global_status_slow_queries{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "sum by (pod) (rate(mysql_global_status_slow_queries{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -1226,7 +1227,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]) / rate(mysql_global_status_innodb_buffer_pool_read_requests{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])",
+          "expr": "1 - sum by (pod) (rate(mysql_global_status_innodb_buffer_pool_reads{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) / sum by (pod) (rate(mysql_global_status_innodb_buffer_pool_read_requests{namespace=\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -1293,7 +1294,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mysql_global_status_buffer_pool_dirty_pages{namespace=\"$namespace\", pod=~\"$pod\"}",
+          "expr": "max by (pod) (mysql_global_status_buffer_pool_dirty_pages{namespace=\"$namespace\", pod=~\"$pod\"})",
           "legendFormat": "{{pod}} dirty",
           "refId": "B"
         }
@@ -1352,7 +1353,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", container=\"pxc\"}",
+          "expr": "max by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", container=\"pxc\"})",
           "legendFormat": "{{pod}}",
           "refId": "A"
         },

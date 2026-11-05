@@ -3,32 +3,38 @@
 Rolling record for the private cloud (Docker Desktop + kind on the laptop).
 Newest first.
 
-## Current state (2026-10-30 night): stopped, backups half-applied
+## Current state (2026-11-05): running, backups applied, runbook 16 done
 
-Everything is **stopped, not destroyed** (`platform/scripts/docker_shutdown.sh`):
-the kind cluster `datastore-dev`, the backup store container, and Docker
-Desktop. `platform/scripts/docker_restart.sh` brings them back (it now starts
-the store too) and runs both checks.
+Running on the laptop (`platform/scripts/docker_shutdown.sh` stops it,
+`docker_restart.sh` brings it back and runs both checks). Platform check
+42/42, relational 68/68 (2026-11-05 ~17:38 UTC).
 
 What is applied and verified:
-- Platform: kind cluster (20 s node grace period), kube-prometheus-stack;
-  platform check 24/24 (13 cluster + monitoring, 11 backup store).
-- Backup store: SeaweedFS 4.48 container `datastore-backups`, volume
-  `datastore-backups-data`, buckets `pg-backups` and `mysql-backups`
-  (empty), keys in `~/.config/datastore-dev/backup-store/s3.json`.
-- Relational: both operators (2 copies each, spread by zone); `pg`
-  PostgreSQL 16.15 and `mysql` PXC 8.0.46, ~3,000,000 orders each; the
-  orders app 0.1.3 (768Mi) on both.
+- Platform: kind cluster `datastore-dev` (20 s node grace period),
+  kube-prometheus-stack, cert-manager v1.21.2.
+- Backup store: SeaweedFS 4.48 container `datastore-backups` (outside the
+  cluster), TLS only, SSE-S3 at rest (key in
+  `~/.config/datastore-dev/backup-store/security.toml`, never replace),
+  versioning and object lock COMPLIANCE on `pg-backups` and
+  `mysql-backups`, **1 day while testing** (back to 7 after
+  `runbook_7_lock.sh expire`, from 2026-11-05 23:00 UTC).
+- Relational: both operators (2 copies each, spread by zone).
+  `pg` PostgreSQL 16.15, primary pg-3, shared_buffers 256MB, 768Mi;
+  WAL archived and a weekly base backup (Barman Cloud plugin).
+  `mysql` PXC 8.0.46, 2Gi, buffer pool 768M, gcache 512M; weekly full
+  backup (keep 2) and the binlog collector for point-in-time recovery.
+  ~3,000,000 orders each; the orders app 0.1.3 (768Mi) on both.
 - Runbooks passing on both engines (logs in `relational/logs/`, the
-  expectations in `datastore-clusters/test_plans/`): 1, 13, 17, 23, 24, 25,
-  26 (worst case: an app pod in the lost zone); 5 on pg.
+  expectations in `datastore-clusters/test_plans/`): 1, 7, 8, 9, 12, 13,
+  16, 17, 23, 24, 25, 26; 5 on pg.
 
-Written, validated, **not applied** (backups, docs/BACKUPS.md):
-- cert-manager v1.21.2 (platform services root).
-- Barman Cloud plugin chart 0.8.1 (relational operators root).
-- Both clusters' backup settings (relational clusters root).
-- Until those applies the relational check is 52/62: the 10 backup checks
-  fail by design.
+Open:
+- `runbook_7_lock.sh expire` (from 2026-11-05 23:00 UTC), then
+  `backup_store_buckets.sh`; then delete the older manual MySQL backups.
+- mysql search p95 +20% after runbook 16's restarts (829 -> 993 ms):
+  recheck after hours of uptime.
+- Runbook 17 on `runbook_lib.sh` passes on pg (2026-11-05); mysql not
+  yet rerun since the move (~25 min: pt-online-schema-change).
 
 2026-11-02: restarted with `docker_restart.sh` (pods ready in 214 s;
 Galera 3 Synced, pg 2 streaming); disk 30 GiB free. cert-manager v1.21.2
@@ -465,7 +471,7 @@ also counted down while it doesn't answer a query, not only while unready
 (an in-place restart could show ~0 s down). Chrome screenshots of
 Grafana blocked: the extension refuses with "turned off in your settings"
 although `/chrome` shows Enabled.
-01:39 (11-05) **runbook 16 pg PASS** (`logs/runbook-16-pg-20261105-010247.txt`),
+01:39 (11-05) **runbook 16 pg PASS** (`logs/runbook-16-pg-after-20261105-010247.txt`),
 clusters root applied (pg shared_buffers 256MB, 768Mi). Rollout 01:04:12-
 01:05:37: replicas pg-2, pg-3 restarted (~27 s each), switchover pg-1 ->
 pg-3 at 01:05:08, pg-1 back; whole 16 s later. App: 2 writes failed at
@@ -507,7 +513,7 @@ p95 7-9 ms, 0 failed, 0 lost; write-sets 3.2-3.4 KiB/s, so 128M already
 holds ~11 h of them (the IST window); InnoDB disk reads 2,335-2,656 per
 load (the 768M pool holds the data: the slow search is CPU on a full
 scan in memory, not I/O).
-18:58 (11-05) **runbook 16 mysql PASS** (`logs/runbook-16-mysql-20261105-181729.txt`),
+18:58 (11-05) **runbook 16 mysql PASS** (`logs/runbook-16-mysql-after-20261105-181729.txt`),
 clusters root applied (gcache.size 512M). Rollout 18:20:47-18:23:28 (161
 s): SmartUpdate restarted pxc-2, pxc-1, then the writer pxc-0, ~40 s
 each; all three rejoined by IST. HAProxy moved the writer pxc-0 -> pxc-2
@@ -524,6 +530,27 @@ per row +8%, rows read on the writer pxc-0 3.4 -> 4.9 M/s (pxc-1 3.1 ->
 2.4); app reader connections even (6-7 per node). gcache holds
 write-sets only; likely the restarts, not the setting. Check: search p95
 after hours of uptime (near 820 ms = settled).
+Pushed 074a42f. Then (11-05 ~19:10): (1) `runbook_start` takes
+RUNBOOK_PHASE, so a script run in phases keeps each phase's newest log
+(the after run had deleted the before run's); runbook 16 sets it, and its
+two logs renamed to `runbook-16-<engine>-after-...` (a simulated before,
+after, before kept one of each). (2) Runbook 17 on `runbook_lib.sh`:
+runbook_start (cluster, log, MY_ROOT_PW), step/die, `whole` (mysql now
+also needs every node Synced), load_start/load_finish, k6_count; its own
+pg_psql (CREATE/DROP INDEX CONCURRENTLY can't run in a transaction) and
+my_node (appdb, raw output for EXPLAIN ANALYZE) stay. Helpers tested
+read-only on both engines; not run end to end. (3) MySQL dashboard: the
+14 per-node queries grouped by pod, so a restart (new pod IP, new
+`instance` label) no longer shows a node twice: 6-8 series -> 3 over the
+last 3 h; flow-control axis max 1 (was 0-10000% with no data). Planned,
+1 change (the dashboard ConfigMap); applied by the user (1 changed).
+19:23 (11-05) **runbook 17 pg PASS on the library**
+(`logs/runbook-17-pg-20261105-191343.txt`): index built CONCURRENTLY in
+4 s on ~3 M rows under 20 requests/s (1,684 writes, 0 failed, 0 lost;
+slowest request ~660 ms during the build); valid on all 3; both search
+shapes Index Scan Backward (1.5 ms, 0.1 ms; ~205 and ~73 ms as parallel
+seq scans); verify at 150 requests/s meets every SLO (search p95 3.1 ms,
+0 failed, no pool waits); index dropped again, plans back to seq scans.
 
 Resume here (from 2026-11-04, stopped for low battery):
 0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).
