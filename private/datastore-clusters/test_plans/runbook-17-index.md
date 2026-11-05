@@ -55,10 +55,48 @@ one.
 | 150 req/s after: failed | 0 of 45,002 | 0 of 45,002 |
 | Plan time without the index | ~95–125 ms (Parallel Seq Scan) | ~650 ms (Table scan, 3 M rows) |
 
-Logs: `runbook-17-pg-20261028-224134.txt`, `runbook-17-mysql-20261028-215757.txt`.
+Rerun 2026-11-05 on `runbook_lib.sh` (~2,970,000 rows), both passed:
+
+| | pg | mysql |
+|---|---|---|
+| Build | 4 s | pt-osc, **407 s** (3.8x 10-28's) |
+| Writes failed / lost during the build | 0 / 0 (1,684 writes) | 0 / 0 (6,225 writes); 6 reads and searches failed (not judged) |
+| p95 during the change | create 4.9 ms, search 53 ms | create **823 ms**, search 2.55 s (10-28: 19 ms, 863 ms) |
+| 150 req/s after: search p95 | 3.1 ms | 4.3 ms |
+| 150 req/s after: failed | 0 of 45,002 | 0 of 45,002 |
+| Plan time without the index | ~205 / 73 ms | ~890 / 740 ms |
+
+The mysql copy was CPU-bound: 6.0 of the Docker VM's 8 cores busy, each
+reader node ~1.9 cores (applying the copy's write-sets while scanning for
+searches), no flow control (pxc-2's receive queue peaked at 101). Why it
+was 3.8x slower than on 10-28 is open; see the mysql slowdown after
+runbook 16 in `private/docs/STATUS.md`.
+
+A second mysql run failed: 4 of 6,389 writes timed out waiting for the
+app's writer pool. A reader (also scanning for searches) fell ~170
+write-sets behind, and Galera flow control paused every write for up to
+half of each second; pt-osc's `--max-flow-ctl 0.5` (0.5% of time paused)
+reacted only after the backlog was queued. pt-osc now sleeps 0.05 s after
+each 0.1 s chunk (`--sleep 0.05`). Rerun 21:16, passed:
+
+| mysql, `--sleep 0.05` | failed run | this run |
+|---|---|---|
+| Copy | 290 s | 297 s |
+| Writes failed / lost | 4 / 0 of 6,389 | 0 / 0 of 6,297 |
+| Flow control paused | up to ~50% | 0% (every node) |
+| Max receive queue | ~170 | 13 |
+| Writer threads running | 25 | 8 |
+| p95 during the change | - | create 228 ms, search 1.76 s |
+| 150 req/s after: search p95 | - | 4.4 ms, 0 of 45,002 failed |
+
+The sleep cost almost nothing: the readers, not the copy, were the limit.
+
+Logs: `runbook-17-pg-20261105-203120.txt`, `runbook-17-mysql-20261105-205530.txt`
+(newest pass of each; the 407 s run's log was replaced).
 
 ## Caveats
 
-- Runbook 17 predates `runbook_lib.sh`; moving it onto the library is open.
+- On `runbook_lib.sh` since 2026-11-05 (its own pg_psql and my_node stay:
+  CONCURRENTLY can't run in a transaction; EXPLAIN ANALYZE needs raw output).
 - Without the index, mysql search misses its SLO; every other runbook
   ignores search for that reason.

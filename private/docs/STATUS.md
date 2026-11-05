@@ -33,8 +33,8 @@ Open:
   `backup_store_buckets.sh`; then delete the older manual MySQL backups.
 - mysql search p95 +20% after runbook 16's restarts (829 -> 993 ms):
   recheck after hours of uptime.
-- Runbook 17 on `runbook_lib.sh` passes on pg (2026-11-05); mysql not
-  yet rerun since the move (~25 min: pt-online-schema-change).
+- mysql pt-osc copies are 3-4x slower than on 10-28 (297-407 s vs 107 s;
+  CPU-bound): recheck with the search p95 above.
 
 2026-11-02: restarted with `docker_restart.sh` (pods ready in 214 s;
 Galera 3 Synced, pg 2 streaming); disk 30 GiB free. cert-manager v1.21.2
@@ -551,6 +551,42 @@ slowest request ~660 ms during the build); valid on all 3; both search
 shapes Index Scan Backward (1.5 ms, 0.1 ms; ~205 and ~73 ms as parallel
 seq scans); verify at 150 requests/s meets every SLO (search p95 3.1 ms,
 0 failed, no pool waits); index dropped again, plans back to seq scans.
+20:00 (11-05) **runbook 17 mysql PASS on the library**
+(`logs/runbook-17-mysql-20261105-194035.txt`): pt-online-schema-change
+copied ~2.97 M rows in 407 s (10-28: 107 s for 2.78 M); 6,225 writes, 0
+failed, 0 lost, but p95 during the copy create 823 ms, search 2.55 s
+(10-28: 19 ms, 863 ms), 6 reads/searches failed (not judged). Prometheus
+over the copy: 6.0 of 8 VM cores busy, pxc-1/2 ~1.9 cores each (applying
+the copy's write-sets and scanning for searches), pxc-0 1.5; no flow
+control; pxc-2 receive queue max 101. Not Low Power Mode (off, on AC).
+Index on all 3; verify 150 requests/s search p95 4.3 ms, 0 of 45,002
+failed, no pool waits; dropped again. test_plans: runbook-16-tune.md
+written; runbook 17's plan and the index updated.
+20:27 (11-05) runbook 17 mysql rerun by the user: **FAILED**, 4 of 6,389
+writes failed during the change (copy 290 s). The script stopped at step
+4, so **the index stays on mysql** (the next run drops it first). Cause:
+Galera flow control. pxc-1 (a reader, also doing full-scan searches) fell
+~170 write-sets behind (20:16:30-20:17:15); flow control paused writes on
+every node up to ~50% of each second (20:16:45-20:17:45); the writer's
+threads_running went 4-6 -> 25; the app's writer pools (10 per pod)
+filled and 4 creates timed out after 3 s (SQLTransientConnectionException,
+waiting up to 21); searches hit the app's statement time limit at
+20:16:13-36. pt-osc's `--max-flow-ctl 0.5` is 0.5% of time paused (source:
+max_flow_ctl/100), so it did back off; too late, the backlog was already
+queued. Fix: `--sleep 0.05` after each chunk (0.1 s chunks), so readers
+keep up; not yet run. pg rerun passed (20:40; build 3 s, 0 failed, verify
+search p95 7.7 ms). Mac disk 23 GiB free; then the user deleted the four
+old k8s UTM VMs (~47 GB): 68 GiB free (cpp.utm kept).
+21:16 (11-05) **runbook 17 mysql PASS with `--sleep 0.05`**
+(`logs/runbook-17-mysql-20261105-205530.txt`): step 0 dropped the
+leftover index; copy ~2.87 M rows in 297 s (failed run 290 s); 6,297
+writes, 0 failed, 0 lost; p95 during the change create 228 ms, search
+1.76 s (k6 thresholds crossed, not judged). Prometheus over the copy:
+flow control 0% on every node (worst minute 0%; failed run ~50%), max
+receive queue 13 (pxc-2; failed run ~170), writer threads_running max 8
+(25). Verify at 150 requests/s: search p95 4.4 ms, 0 of 45,002 failed,
+no pool waits; index dropped again. The 19:40 pass log was replaced by
+this one (newest kept).
 
 Resume here (from 2026-11-04, stopped for low battery):
 0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).

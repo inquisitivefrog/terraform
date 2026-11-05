@@ -16,7 +16,8 @@ themselves (goal, procedure, every engine) are in
 | [runbook-09-pitr.md](runbook-09-pitr.md) | 9. Point-in-time recovery | `runbook_9_pitr.sh` | no (rows deleted, then copied back; temporary cluster deleted) | 2026-11-04, both |
 | [runbook-12-store.md](runbook-12-store.md) | 12. Backup and archive storage check | `runbook_12_store.sh` | no (read-only) | 2026-11-03 (both engines in one run) |
 | [runbook-13-patch.md](runbook-13-patch.md) | 13. Security patch (minor version) | `runbook_13_patch.sh` | yes: new image, writer moves | 2026-10-30, both |
-| [runbook-17-index.md](runbook-17-index.md) | 17. Schema migration (online index) | `runbook_17_index.sh` | no (index dropped again) | 2026-10-28, both |
+| [runbook-16-tune.md](runbook-16-tune.md) | 16. Tune configuration | `runbook_16_tune.sh` | yes: the setting stays, every member restarts | 2026-11-05, both |
+| [runbook-17-index.md](runbook-17-index.md) | 17. Schema migration (online index) | `runbook_17_index.sh` | no (index dropped again) | 2026-11-05, both |
 | [runbook-23-switchover.md](runbook-23-switchover.md) | 23. Planned switchover | `runbook_23_switchover.sh` | no (writer moved back) | 2026-10-30, both |
 | [runbook-24-writer.md](runbook-24-writer.md) | 24. Writer failure | `runbook_24_writer.sh` | yes: writer usually moves | 2026-10-30, both |
 | [runbook-25-reader.md](runbook-25-reader.md) | 25. Reader failure | `runbook_25_reader.sh` | no | 2026-10-30, both |

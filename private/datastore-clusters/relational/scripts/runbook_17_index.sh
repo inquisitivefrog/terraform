@@ -156,9 +156,15 @@ spec:
             - |
               umask 077
               printf '[client]\nuser=root\npassword="%s"\n' "\$ROOT_PW" > /tmp/my.cnf
+              # --sleep: a pause after each chunk, so the readers (also
+              # serving searches) keep up with the copy's write-sets. Without
+              # it a reader fell ~170 behind before --max-flow-ctl (0.5% of
+              # time paused) could react, Galera paused every write for up
+              # to half of each second, and 4 writes timed out waiting for
+              # the app's pool (2026-11-05)
               exec pt-online-schema-change $mode \\
                 --alter "ADD INDEX $INDEX ($INDEX_COLUMNS)" \\
-                --recursion-method=none --max-flow-ctl=0.5 --chunk-time 0.1 \\
+                --recursion-method=none --max-flow-ctl=0.5 --chunk-time 0.1 --sleep 0.05 \\
                 --max-load Threads_running=50 --critical-load Threads_running=200 \\
                 --set-vars lock_wait_timeout=2 \\
                 --tries create_triggers:30:2,swap_tables:30:2,drop_triggers:30:2 \\
