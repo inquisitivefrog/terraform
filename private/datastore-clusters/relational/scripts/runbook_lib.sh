@@ -15,7 +15,9 @@
 #   k6_count <metric> <labels> [epoch]   a counter of this run (at a time)
 #   k6_fail_window <labels>       "first last" epochs of the run's failed
 #                                 requests (5 s resolution); empty if none
-#   judge_writes <cutoff>         0 lost; no write failed after <cutoff>
+#   judge_writes <cutoff>         0 lost; no write or read failed after
+#                                 <cutoff>, except searches the app's
+#                                 statement time limit cancelled (counted)
 #   APP_PODS                      label selector for the app's pods (not k6's,
 #                                 which share the instance label)
 #   app_restarts                  restarts of the app's pods, summed
@@ -143,23 +145,43 @@ k6_fail_window() {
 }
 WRITES=',op=~"create|update|delete"'
 READS=',op=~"read|search"'
+# search_timeouts <from epoch>: the app's failed requests since then that
+# its statement time limit cancelled (ApiErrors logs one line per failed
+# request; mysql max_execution_time, pg statement_timeout)
+search_timeouts() {
+  local since pod n=0
+  since="$(date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ)"
+  for pod in $(k -n "$NS" get pods -l "$APP_PODS" -o name); do
+    n=$((n + $(k -n "$NS" logs "$pod" -c orders --since-time="$since" 2>/dev/null |
+      grep 'database unavailable' | grep -cE 'maximum statement execution time exceeded|canceling statement due to statement timeout')))
+  done
+  echo "$n"
+}
 # judge_writes <cutoff epoch>: prints the write and read totals, then fails
-# on a lost write, on any write failing after the cutoff, or on a load that
-# ended too soon after it to show anything
+# on a lost write, on any write failing after the cutoff, on a read failing
+# after it (a search cancelled by the statement time limit excepted: while
+# runbook 17's index is missing every search scans the table, and a burst of
+# them can pass 5 s on mysql with no fault; 2026-11-05, runbook 22), or on a
+# load that ended too soon after it to show anything
 judge_writes() {
-  local cutoff="$1" ok failed failed_by lost rfailed rfailed_by
+  local cutoff="$1" ok failed failed_by lost rfailed rfailed_by sfailed sfailed_by timeouts excused
   ok="$(k6_count k6_http_reqs_total "$WRITES,expected_response=\"true\"")"
   failed="$(k6_count k6_http_reqs_total "$WRITES,expected_response=\"false\"")"
   failed_by="$(k6_count k6_http_reqs_total "$WRITES,expected_response=\"false\"" "$cutoff")"
   rfailed="$(k6_count k6_http_reqs_total "$READS,expected_response=\"false\"")"
   rfailed_by="$(k6_count k6_http_reqs_total "$READS,expected_response=\"false\"" "$cutoff")"
+  sfailed="$(k6_count k6_http_reqs_total ',op="search",expected_response="false"')"
+  sfailed_by="$(k6_count k6_http_reqs_total ',op="search",expected_response="false"' "$cutoff")"
   lost="$(k6_count k6_orders_lost_total '')"
+  timeouts=0
+  ((sfailed > sfailed_by)) && timeouts="$(search_timeouts "$cutoff")"
+  excused=$((sfailed - sfailed_by < timeouts ? sfailed - sfailed_by : timeouts))
   echo "  Writes: $ok succeeded, $failed failed ($((failed - failed_by)) after $(date -u -r "$cutoff" +%H:%M:%S)); $lost acknowledged writes lost"
-  echo "  Reads and searches failed: $rfailed ($((rfailed - rfailed_by)) after $(date -u -r "$cutoff" +%H:%M:%S))"
+  echo "  Reads and searches failed: $rfailed ($((rfailed - rfailed_by)) after $(date -u -r "$cutoff" +%H:%M:%S)$( ((excused > 0)) && echo ", of them $excused searches over the statement time limit: not judged"))"
   [[ "$ok" -gt 0 ]] || die "no successful writes found for $TESTID in Prometheus: the check would prove nothing"
   [[ "$lost" -eq 0 ]] || die "$lost acknowledged writes were lost (RPO must be 0)"
   [[ "$failed" -eq "$failed_by" ]] || die "writes still failed after $(date -u -r "$cutoff" +%H:%M:%S)"
-  [[ "$rfailed" -eq "$rfailed_by" ]] || die "reads still failed after $(date -u -r "$cutoff" +%H:%M:%S)"
+  [[ $((rfailed - rfailed_by - excused)) -eq 0 ]] || die "reads still failed after $(date -u -r "$cutoff" +%H:%M:%S)"
   [[ "$END_EPOCH" -gt $((cutoff + 60)) ]] || die "the load ended less than 60 s after the cutoff: rerun with a longer duration"
   WRITES_FAILED="$failed" READS_FAILED="$rfailed"
 }

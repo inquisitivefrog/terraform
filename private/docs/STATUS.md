@@ -26,7 +26,7 @@ What is applied and verified:
   ~3,000,000 orders each; the orders app 0.1.3 (768Mi) on both.
 - Runbooks passing on both engines (logs in `relational/logs/`, the
   expectations in `datastore-clusters/test_plans/`): 1, 7, 8, 9, 12, 13,
-  16, 17, 23, 24, 25, 26; 5 on pg.
+  16, 17, 22, 23, 24, 25, 26; 5 on pg.
 
 Open:
 - `runbook_7_lock.sh expire` (from 2026-11-05 23:00 UTC), then
@@ -587,6 +587,51 @@ receive queue 13 (pxc-2; failed run ~170), writer threads_running max 8
 (25). Verify at 150 requests/s: search p95 4.4 ms, 0 of 45,002 failed,
 no pool waits; index dropped again. The 19:40 pass log was replaced by
 this one (newest kept).
+21:45 (11-05) **runbook 22 (replace a damaged node) written, not run**:
+`relational/scripts/runbook_22_replace.sh pg|mysql`, plan
+`test_plans/runbook-22-replace.md`. Deletes a replica's volume and pod
+under 20 requests/s; pg clones a new instance from the primary
+(pg_basebackup), mysql joins by SST. Judges: no write failed, 0 lost,
+writer unchanged, new member's fingerprint equals the writer's; reports
+copy s/GiB and p95 during the rebuild (app histogram). Helpers tested
+read-only on both (sizes pg 1.3 GiB, mysql 2.7 GiB; fingerprints match).
+21:45 (11-05) runbook 22 pg, first run (the user): the rebuild worked
+(pg-1's volume and pod deleted 21:27:56; join pod pg_basebackup
+21:28:22-21:30:42, ~140 s for 1.3 GiB; pg-1 back on a new volume, healthy
+21:30:52), but the script waited for a new instance name: CloudNativePG
+1.30 rebuilds under the **same name** (pg-1). Fixed: a new volume under the
+same name also counts. Run stopped; to rerun.
+21:57 (11-05) **runbook 22 pg PASS** (`logs/runbook-22-pg-20261105-214642.txt`):
+pg-1's volume and pod deleted 21:47:44 under 20 requests/s; join pod
+(pg_basebackup from the primary pg-3) 39 s for 561 MiB (71 s/GiB); whole
+73 s after the destroy; p95 minute before -> rebuild: create 3 -> 5 ms,
+search 79 -> 97 ms; 4,235 writes, 0 failed, 0 lost; writer unchanged;
+pg-1's fingerprint equals pg-3's; check 68/68. The clone is 561 MiB, not
+the old 1,297: the rest was WAL (the primary keeps 721 MiB). Next: mysql.
+22:33 (11-05) runbook 22 mysql (the user, 22:22): **FAILED** on 3
+searches after the cutoff; the rebuild itself was clean: SST from pxc-2
+(not the writer), 15 s stream at 57.8 MiB/s, 67 s pod start to Synced, 89 s
+destroy to whole; 4,208 writes, 0 failed, 0 lost; p95 create 6 -> 7 ms,
+search 707 -> 926 ms. The 3 searches hit the app's 5 s
+max_execution_time at 22:28:36, 4 min after pxc-1 was back: all three
+nodes busy at once (2.5/1.8/1.7 cores, 8 threads running), every search a
+3 M-row scan (runbook 17's planted missing index); pxc-1 warm by 22:26
+(disk reads 78/s -> 4/s), reader connections even (7/7/6). An earlier
+run (22:04) was stopped: I edited the script while it ran. Another
+(22:10) was stopped in its settle; its k6 load ran on alone until 22:20.
+Agreed with the user: `judge_writes` (runbook_lib.sh, so runbooks
+22-26) no longer counts searches the statement time limit cancelled,
+counted from the app's log ("maximum statement execution time exceeded" /
+"canceling statement due to statement timeout"), at most the k6 search
+failures after the cutoff. Re-judged: the failed run passes (3 excused);
+the pg pass unchanged. To rerun mysql.
+22:53 (11-05) **runbook 22 mysql PASS** (`logs/runbook-22-mysql-20261105-224239.txt`):
+pxc-1's volume and pod deleted 22:43:41; SST from pxc-2 (not the writer),
+stream 17 s at 50.6 MiB/s, 66 s pod start to Synced (44 s/GiB); whole 91 s
+after the destroy; p95 create 8 -> 14 ms, search 810 -> 1,311 ms;
+4,278 writes, 0 failed, 0 lost; 2 searches failed during the rebuild, 0
+after (no excuse needed); writer unchanged; pxc-1's fingerprint equals
+pxc-0's; check 68/68. Runbook 22 passes on both engines.
 
 Resume here (from 2026-11-04, stopped for low battery):
 0. **Tomorrow, 2026-11-05 after 23:00 UTC: `relational/scripts/runbook_7_lock.sh expire`** (agreed with the user; daily until it passes), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days).

@@ -517,6 +517,9 @@ notes. Implementation status lives in the README of each category.
 - **Before:** headroom for the copy (disk, network); the copy source is not
   the writer where avoidable.
 - **Measure:** time to re-clone per GB; p95 during the copy.
+  Relational lab: `runbook_22_replace.sh pg|mysql` deletes a replica's
+  volume and pod under k6 load. CloudNativePG always clones from the
+  primary; Galera picks the SST donor, which may be the writer.
 
 #### 23. **Planned switchover and forced election**
 - **Goal:** move the writer deliberately (planned), or recover when the

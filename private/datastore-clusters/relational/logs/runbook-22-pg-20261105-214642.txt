@@ -1,0 +1,133 @@
+# runbook_22_replace.sh pg (2026-11-05T21:46:42Z, kind cluster datastore-dev)
+
+== 21:46:42 0. Preconditions
+  writer pg-3; the member to replace: pg-1 (node datastore-dev-worker, volume pg-1)
+  its data: 593 MiB; free on the nodes' disk: 380348 MiB
+  orders-pg app restarts so far: 30
+
+== 21:46:43 Load: 20 requests/s for 10m
+  k6 run pg-run-20261105-214643; 60 s to settle
+
+== 21:47:44 2. Destroy pg-1: its volume, then its pod
+  deleted at 21:47:44
+
+== 21:47:44 3. A new member built and caught up
+  21:47:54 pg-1:Running pg-2:Running pg-3:Running 
+  21:47:59 pg-1:Succeeded pg-2:Running pg-3:Running 
+  21:48:05 pg-1-join-mlbrm:Pending pg-2:Running pg-3:Running 
+  21:48:10 pg-1-join-mlbrm:Running pg-2:Running pg-3:Running 
+  21:48:46 pg-1:Pending pg-1-join-mlbrm:Succeeded pg-2:Running pg-3:Running 
+  21:48:51 pg-1:Running pg-1-join-mlbrm:Succeeded pg-2:Running pg-3:Running 
+  Whole with pg-1, 73 s after the destroy; pods deleted again: 0
+  the old volume is gone: pg-1 (a new one under the same name)
+  copy: join pod pg-1-join-mlbrm (pg_basebackup from the primary pg-3), 39 s
+  pg-1: streaming, quorum, replay lag 00:00:00.000775
+  pg-2: streaming, quorum, replay lag 00:00:00.000931
+  new member's data: 561 MiB (old 593 MiB); 71 s per GiB
+
+== 21:48:57 4. Latency: the minute before the destroy, then the rebuild (73 s)
+  create p95: 3 ms -> 5 ms
+  search p95: 79 ms -> 97 ms
+  read p95:   1 ms -> 1 ms
+
+== 21:48:57 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17).
+  This step judges failed and lost writes, and reads after the member was back.
+  | Job k6-pg-run-20261105-214643: run against orders-pg at 20 req/s for 10m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=postgresql&var-testid=pg-run-20261105-214643 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=3.25ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=2.7ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=1.03ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✓ 'p(95)<300' p(95)=67.17ms
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=2.99ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 12000   19.999777/s
+  |     checks_succeeded...: 100.00% 12000 out of 12000
+  |     checks_failed......: 0.00%   0 out of 12000
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 2408   4.013289/s
+  |     orders_deleted.................: 602    1.003322/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=12.02ms  min=355.62µs med=1.34ms   max=186.28ms p(90)=55.11ms  p(95)=57.73ms
+  |       { expected_response:true }...: avg=12.02ms  min=355.62µs med=1.34ms   max=186.28ms p(90)=55.11ms  p(95)=57.73ms
+  |       { op:create }................: avg=1.95ms   min=977µs    med=1.7ms    max=13.3ms   p(90)=2.71ms   p(95)=3.25ms 
+  |       { op:delete }................: avg=1.88ms   min=847µs    med=1.32ms   max=102.54ms p(90)=2.11ms   p(95)=2.7ms  
+  |       { op:read }..................: avg=676.14µs min=355.62µs med=603.62µs max=9.44ms   p(90)=906.94µs p(95)=1.03ms 
+  |       { op:search }................: avg=56.13ms  min=47ms     med=55.16ms  max=186.28ms p(90)=61.81ms  p(95)=67.17ms
+  |       { op:update }................: avg=1.81ms   min=1ms      med=1.53ms   max=64.95ms  p(90)=2.36ms   p(95)=2.99ms 
+  |     http_req_failed................: 0.00%  0 out of 12001
+  |       { op:create }................: 0.00%  0 out of 2408
+  |       { op:delete }................: 0.00%  0 out of 602
+  |       { op:read }..................: 0.00%  0 out of 5402
+  |       { op:search }................: 0.00%  0 out of 2363
+  |       { op:update }................: 0.00%  0 out of 1225
+  |     http_reqs......................: 12001  20.001444/s
+  | 
+  |     EXECUTION
+  |     iteration_duration.............: avg=12.18ms  min=424.41µs med=1.48ms   max=186.55ms p(90)=55.27ms  p(95)=57.93ms
+  |     iterations.....................: 12000  19.999777/s
+  |     vus............................: 1      min=0          max=1 
+  |     vus_max........................: 20     min=20         max=20
+  | 
+  |     NETWORK
+  |     data_received..................: 14 MB  24 kB/s
+  |     data_sent......................: 2.1 MB 3.5 kB/s
+  | 
+  | 
+  | 
+  | 
+  | Run pg-run-20261105-214643: passed.
+  Writes: 4235 succeeded, 0 failed (0 after 21:49:27); 0 acknowledged writes lost
+  Reads and searches failed: 0 (0 after 21:49:27)
+  orders-pg app restarts: 30 -> 30
+
+== 21:56:57 6. The new member pg-1 holds the writer's data
+  customers 10000 10000 -106264749353
+  orders 3041749 3055404 -83128582048
+  identical to pg-3
+
+== 21:56:58 Verify: relational check_resources.sh
+  
+  == Summary: 68 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 21:57:03 Runbook 22 (pg): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-22-pg-20261105-214642.txt

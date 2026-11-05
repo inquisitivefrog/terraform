@@ -1,0 +1,134 @@
+# runbook_22_replace.sh mysql (2026-11-05T22:42:39Z, kind cluster datastore-dev)
+
+== 22:42:39 0. Preconditions
+  writer mysql-pxc-0; the member to replace: mysql-pxc-1 (node datastore-dev-worker3, volume datadir-mysql-pxc-1)
+  its data: 1520 MiB; free on the nodes' disk: 381447 MiB
+  orders-mysql app restarts so far: 59
+
+== 22:42:40 Load: 20 requests/s for 10m
+  k6 run mysql-run-20261105-224240; 60 s to settle
+
+== 22:43:41 2. Destroy mysql-pxc-1: its volume, then its pod
+  deleted at 22:43:41
+
+== 22:43:41 3. A new member built and caught up
+  22:43:53 mysql-pxc-1 pod Running; mysql-pxc-0:Synced mysql-pxc-1:(none) mysql-pxc-2:Synced 
+  22:43:58 mysql-pxc-1 pod Pending; mysql-pxc-0:Synced mysql-pxc-1:(none) mysql-pxc-2:Synced 
+  22:44:10 mysql-pxc-1 pod Running; mysql-pxc-0:Synced mysql-pxc-1:(none) mysql-pxc-2:Synced 
+  22:44:21 mysql-pxc-1 pod Running; mysql-pxc-0:Synced mysql-pxc-1:(none) mysql-pxc-2:Donor/Desynced 
+  22:44:43 mysql-pxc-1 pod Running; mysql-pxc-0:Synced mysql-pxc-1:(none) mysql-pxc-2:Synced 
+  22:44:49 mysql-pxc-1 pod Running; mysql-pxc-0:Synced mysql-pxc-1:Synced mysql-pxc-2:Synced 
+  Whole with mysql-pxc-1, 91 s after the destroy; pods deleted again: 0
+  the old volume is gone: datadir-mysql-pxc-1 (a new one under the same name)
+  copy: SST to mysql-pxc-1 from donor mysql-pxc-2 (polled: mysql-pxc-2), 66 s from the pod's start to Synced
+  SST stream: Avg:[50.6MiB/s] Elapsed:0:00:17
+  new member's data: 1519 MiB (old 1520 MiB); 44 s per GiB
+
+== 22:45:13 4. Latency: the minute before the destroy, then the rebuild (91 s)
+  create p95: 8 ms -> 14 ms
+  search p95: 810 ms -> 1311 ms
+  read p95:   3 ms -> 6 ms
+
+== 22:45:13 Waiting for the load to finish
+  The background load's own output follows. Its SLO verdict is not used: search fails by design (runbook 17).
+  This step judges failed and lost writes, and reads after the member was back.
+  | Job k6-mysql-run-20261105-224240: run against orders-mysql at 20 req/s for 10m
+  | Grafana: http://localhost:3000/d/relational-orders-load?var-engine=mysql&var-testid=mysql-run-20261105-224240 (port-forward: platform/scripts/grafana_restart.sh)
+  | 
+  | 
+  |   █ THRESHOLDS 
+  | 
+  |     http_req_duration{op:create}
+  |     ✓ 'p(95)<200' p(95)=36.13ms
+  | 
+  |     http_req_duration{op:delete}
+  |     ✓ 'p(95)<200' p(95)=18.96ms
+  | 
+  |     http_req_duration{op:read}
+  |     ✓ 'p(95)<100' p(95)=8.42ms
+  | 
+  |     http_req_duration{op:search}
+  |     ✗ 'p(95)<300' p(95)=1.73s
+  | 
+  |     http_req_duration{op:update}
+  |     ✓ 'p(95)<200' p(95)=30.89ms
+  | 
+  |     http_req_failed{op:create}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:delete}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:read}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     http_req_failed{op:search}
+  |     ✓ 'rate<0.01' rate=0.08%
+  | 
+  |     http_req_failed{op:update}
+  |     ✓ 'rate<0.01' rate=0.00%
+  | 
+  |     orders_lost
+  |     ✓ 'count==0' count=0
+  | 
+  | 
+  |   █ TOTAL RESULTS 
+  | 
+  |     checks_total.......: 11995  19.955084/s
+  |     checks_succeeded...: 99.98% 11993 out of 11995
+  |     checks_failed......: 0.01%  2 out of 11995
+  | 
+  | 
+  |     CUSTOM
+  |     orders_created.................: 2441   4.060889/s
+  |     orders_deleted.................: 597    0.993179/s
+  |     orders_lost....................: 0      0/s
+  | 
+  |     HTTP
+  |     http_req_duration..............: avg=220.05ms min=564.25µs med=4.3ms  max=7.98s    p(90)=1.01s   p(95)=1.2s   
+  |       { expected_response:true }...: avg=218.9ms  min=564.25µs med=4.3ms  max=7.09s    p(90)=1.01s   p(95)=1.2s   
+  |       { op:create }................: avg=14.26ms  min=2.01ms   med=5.83ms max=932.02ms p(90)=16.34ms p(95)=36.13ms
+  |       { op:delete }................: avg=9.25ms   min=1.47ms   med=4.59ms max=462.18ms p(90)=12.11ms p(95)=18.96ms
+  |       { op:read }..................: avg=4.64ms   min=564.25µs med=1.61ms max=460.18ms p(90)=4.52ms  p(95)=8.42ms 
+  |       { op:search }................: avg=1.08s    min=518.64ms med=1.02s  max=7.98s    p(90)=1.47s   p(95)=1.73s  
+  |       { op:update }................: avg=13.52ms  min=2.01ms   med=5.57ms max=732.06ms p(90)=15.1ms  p(95)=30.89ms
+  |     http_req_failed................: 0.01%  2 out of 11996
+  |       { op:create }................: 0.00%  0 out of 2441
+  |       { op:delete }................: 0.00%  0 out of 597
+  |       { op:read }..................: 0.00%  0 out of 5361
+  |       { op:search }................: 0.08%  2 out of 2356
+  |       { op:update }................: 0.00%  0 out of 1240
+  |     http_reqs......................: 11996  19.956748/s
+  | 
+  |     EXECUTION
+  |     dropped_iterations.............: 6      0.009982/s
+  |     iteration_duration.............: avg=220.42ms min=643.16µs med=4.58ms max=7.98s    p(90)=1.01s   p(95)=1.2s   
+  |     iterations.....................: 11995  19.955084/s
+  |     vus............................: 2      min=0          max=22
+  |     vus_max........................: 25     min=20         max=25
+  | 
+  |     NETWORK
+  |     data_received..................: 15 MB  24 kB/s
+  |     data_sent......................: 2.1 MB 3.6 kB/s
+  | 
+  | 
+  | 
+  | time="2026-11-05T22:52:43Z" level=error msg="thresholds on metrics 'http_req_duration{op:search}' have been crossed"
+  | 
+  | Run mysql-run-20261105-224240: FAILED (a threshold was crossed, a write was lost, or k6 could not run).
+  Writes: 4278 succeeded, 0 failed (0 after 22:45:42); 0 acknowledged writes lost
+  Reads and searches failed: 2 (0 after 22:45:42)
+  orders-mysql app restarts: 59 -> 59
+
+== 22:52:57 6. The new member mysql-pxc-1 holds the writer's data
+  customers 10000 29998 21375010239903
+  orders 3067138 9264327 6589173807205061
+  identical to mysql-pxc-0
+
+== 22:53:02 Verify: relational check_resources.sh
+  
+  == Summary: 68 passed, 0 failed ==
+  All checked relational resources present and configured.
+
+== 22:53:08 Runbook 22 (mysql): passed
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-22-mysql-20261105-224239.txt

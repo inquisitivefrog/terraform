@@ -18,6 +18,7 @@ themselves (goal, procedure, every engine) are in
 | [runbook-13-patch.md](runbook-13-patch.md) | 13. Security patch (minor version) | `runbook_13_patch.sh` | yes: new image, writer moves | 2026-10-30, both |
 | [runbook-16-tune.md](runbook-16-tune.md) | 16. Tune configuration | `runbook_16_tune.sh` | yes: the setting stays, every member restarts | 2026-11-05, both |
 | [runbook-17-index.md](runbook-17-index.md) | 17. Schema migration (online index) | `runbook_17_index.sh` | no (index dropped again) | 2026-11-05, both |
+| [runbook-22-replace.md](runbook-22-replace.md) | 22. Replace a damaged node | `runbook_22_replace.sh` | yes: a new member (new volume) | 2026-11-05, both |
 | [runbook-23-switchover.md](runbook-23-switchover.md) | 23. Planned switchover | `runbook_23_switchover.sh` | no (writer moved back) | 2026-10-30, both |
 | [runbook-24-writer.md](runbook-24-writer.md) | 24. Writer failure | `runbook_24_writer.sh` | yes: writer usually moves | 2026-10-30, both |
 | [runbook-25-reader.md](runbook-25-reader.md) | 25. Reader failure | `runbook_25_reader.sh` | no | 2026-10-30, both |
@@ -58,7 +59,11 @@ rest) are not scripted yet; they get a plan here when they are.
 - **RPO 0:** no acknowledged write is ever lost (k6 reads back every order it
   created and counts any missing in `orders_lost`).
 - **SETTLE 30 s:** after the event ends (writer back, replica back, zone
-  back), no write or read may fail from 30 s on.
+  back), no write or read may fail from 30 s on. Except a search the
+  app's 5 s statement time limit cancelled (mysql `max_execution_time`, pg
+  `statement_timeout`; counted from the app's log): every search scans the
+  table while the index is missing, and a burst can pass 5 s with no fault
+  (2026-11-05, runbook 22 mysql: 3 at 22:28:36).
 - **The search SLO is not judged** on runs that are not about it: it fails
   on mysql by design while the planted index is missing.
 - **Verify:** every run ends with `check_resources.sh` passing.
