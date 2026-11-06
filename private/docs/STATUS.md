@@ -29,6 +29,11 @@ What is applied and verified:
 
 Open:
 - About 2026-11-10: `runbook_12_store.sh` should show pg retention working.
+- MySQL binlogs in the store are never deleted (the PXC collector has no
+  retention): 267 files, 1,159 MiB on 2026-11-06, about 0.5 GiB a day under
+  test loads. Add an age limit (e.g. a lifecycle expiry on the binlog
+  prefix, longer than the 7-day lock and the oldest full backup kept) and a
+  runbook 12 check for it.
 
 2026-11-02: restarted with `docker_restart.sh` (pods ready in 214 s;
 Galera 3 Synced, pg 2 streaming); disk 30 GiB free. cert-manager v1.21.2
