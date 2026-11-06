@@ -642,7 +642,7 @@ listing (old versions wait for the lifecycle rule). Left: the 2 cron
 backups (19:00, 19:15) and `mysql-manual-20261104-230639` (newest
 manual), 775 MiB each.
 
-23:19 (11-06) runbook 12 (the user, `logs/runbook-12-20261106-231940.txt`,
+23:19 (11-06) runbook 12 (the user, `logs/runbook-12-20261106-232256.txt`, rerun 23:22 same result,
 replaces the 11-04 log): 17 passed, 0 failed. 12 pg base backups, oldest
 20261103T184539 (3 days, so retention has nothing to remove yet); WAL
 continuous, 76 segments; warnings as before: 9 WAL files older than the

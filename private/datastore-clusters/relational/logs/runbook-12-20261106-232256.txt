@@ -1,10 +1,10 @@
-# runbook_12_store.sh  (2026-11-06T23:19:40Z, kind cluster datastore-dev)
-== Runbook 12: backup and archive storage (2026-11-06T23:19:40Z) ==
+# runbook_12_store.sh  (2026-11-06T23:22:56Z, kind cluster datastore-dev)
+== Runbook 12: backup and archive storage (2026-11-06T23:22:56Z) ==
 
 -- the store (datastore-backups) --
   PASS  Running: true
-  store total: 8052 MiB on disk; the Mac's free disk: 43 GiB
-  growth since 20261104-224538: 1057 MiB
+  store total: 8053 MiB on disk; the Mac's free disk: 43 GiB
+  growth since 20261106-231940: 1 MiB
   PASS  Free disk for the store to grow (at least 10 GiB and twice its size): 43 GiB free
   bucket pg-backups: 116 objects, 2529 MiB
   PASS  pg-backups immutable (object lock): COMPLIANCE 7 days
@@ -12,7 +12,7 @@
   PASS  mysql-backups immutable (object lock): COMPLIANCE 7 days
 
 -- PostgreSQL (s3://pg-backups/pg/) --
-  PASS  Archiving current (every segment before the one being written, no failure since): 0000001000000000000000C1 archived 18414 s ago, writing 0000001000000000000000C1
+  PASS  Archiving current (every segment before the one being written, no failure since): 0000001000000000000000C1 archived 18610 s ago, writing 0000001000000000000000C1
   base backup 20261103T184539: done, 185 MiB, first WAL 0000000E0000000000000076
   base backup 20261103T191253: done, 185 MiB, first WAL 0000000E0000000000000076
   base backup 20261103T213153: done, 185 MiB, first WAL 0000000E000000000000007D
@@ -49,4 +49,4 @@
 
 == Summary: 17 passed, 0 failed ==
 All checked backup storage checks present and configured.
-Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-12-20261106-231940.txt
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-12-20261106-232256.txt
