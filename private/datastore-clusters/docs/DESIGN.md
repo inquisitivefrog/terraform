@@ -176,7 +176,7 @@ The range: directory, relational, NoSQL (wide-column, document, key-value),
 time-series, graph, search/index, large volume (object storage,
 analytics), vector, in-memory; streaming logs (Kafka) as a near relative.
 Each differs in data model, HA model and hosting needs (table in the
-README).
+[PLATFORM.md](PLATFORM.md)).
 
 **Conclusions:**
 - Every engine multiplies the runbooks and on-call knowledge, so add one only

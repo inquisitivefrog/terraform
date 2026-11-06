@@ -637,6 +637,16 @@ listing (old versions wait for the lifecycle rule). Left: the 2 cron
 backups (19:00, 19:15) and `mysql-manual-20261104-230639` (newest
 manual), 775 MiB each.
 
+23:19 (11-06) runbook 12 (the user, `logs/runbook-12-20261106-231940.txt`,
+replaces the 11-04 log): 17 passed, 0 failed. 12 pg base backups, oldest
+20261103T184539 (3 days, so retention has nothing to remove yet); WAL
+continuous, 76 segments; warnings as before: 9 WAL files older than the
+oldest base backup, binlog collector restarts after the Docker restart.
+Retention check still due about 2026-11-10.
+23:40 (11-06) `datastore-clusters/README.md` cut to a short list (purpose,
+datastores, the 14 scripted runbooks in plain terms, docs); its detail
+(layout, categories, rules, platform build and teardown) moved to
+`datastore-clusters/docs/PLATFORM.md`, relational status brought up to date.
 23:17 (11-06) **runbook 7 object lock expire PASS** (the user,
 `logs/runbook-7-lock-expire-20261106-231652.txt`): 4/4, both canaries'
 replaced versions removed by the lifecycle rule, both canaries deletable
