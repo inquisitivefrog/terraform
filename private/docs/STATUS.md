@@ -3,7 +3,7 @@
 Rolling record for the private cloud (Docker Desktop + kind on the laptop).
 Newest first.
 
-## Current state (2026-11-06): running, backups applied, runbook 16 done
+## Current state (2026-11-06): running, backups applied and locked 7 days
 
 Running on the laptop (`platform/scripts/docker_shutdown.sh` stops it,
 `docker_restart.sh` brings it back and runs both checks). Platform check
@@ -16,8 +16,7 @@ What is applied and verified:
   cluster), TLS only, SSE-S3 at rest (key in
   `~/.config/datastore-dev/backup-store/security.toml`, never replace),
   versioning and object lock COMPLIANCE on `pg-backups` and
-  `mysql-backups`, **1 day while testing** (back to 7 after
-  `runbook_7_lock.sh expire`, from 2026-11-05 23:00 UTC).
+  `mysql-backups`, 7 days (the 1-day test passed 2026-11-06).
 - Relational: both operators (2 copies each, spread by zone).
   `pg` PostgreSQL 16.15, primary pg-3, shared_buffers 256MB, 768Mi;
   WAL archived and a weekly base backup (Barman Cloud plugin).
@@ -29,9 +28,7 @@ What is applied and verified:
   16, 17, 22, 23, 24, 25, 26; 5 on pg.
 
 Open:
-- `runbook_7_lock.sh expire` daily until it passes (first run 2026-11-05
-  23:02: the canaries' replaced versions wait for the lifecycle rule, up
-  to a day), then `backup_store_buckets.sh` (lock back to 7 days).
+- About 2026-11-10: `runbook_12_store.sh` should show pg retention working.
 
 2026-11-02: restarted with `docker_restart.sh` (pods ready in 214 s;
 Galera 3 Synced, pg 2 streaming); disk 30 GiB free. cert-manager v1.21.2
@@ -640,6 +637,12 @@ listing (old versions wait for the lifecycle rule). Left: the 2 cron
 backups (19:00, 19:15) and `mysql-manual-20261104-230639` (newest
 manual), 775 MiB each.
 
+23:17 (11-06) **runbook 7 object lock expire PASS** (the user,
+`logs/runbook-7-lock-expire-20261106-231652.txt`): 4/4, both canaries'
+replaced versions removed by the lifecycle rule, both canaries deletable
+(204). Then `backup_store_buckets.sh` (the user): pg-backups and
+mysql-backups AES256, versioning, COMPLIANCE 7 days, lifecycle
+old-versions. Object lock done.
 18:14 (11-06) **mysql slowdown resolved: the Mac, not mysql.** The Mac had
 rebooted (Docker started, `docker_restart.sh`: 68/68). qBittorrent and the
 VPN off, HandBrake idle. 2-min warm-up, then `load_test.sh mysql run 20 5m`
@@ -667,7 +670,7 @@ the M4's efficiency cores (a single search gets a performance core and
 is not slower). Stopped for the night; recheck 2026-11-06 (below).
 
 Resume here (from 2026-11-04, stopped for low battery):
-0. **Daily from 2026-11-06: `relational/scripts/runbook_7_lock.sh expire`** until it passes (2026-11-05: waiting for the lifecycle rule), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days). The older manual MySQL backups were deleted 2026-11-05.
+0. Object lock: done (11-06, 7 days on both buckets).
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
    the store too); expect platform 42/42, relational 68/68; then
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
@@ -678,9 +681,8 @@ Resume here (from 2026-11-04, stopped for low battery):
    per row as before 16). For comparable numbers, nothing else busy.
 3. Runbook 7: the schedule, keep 2 and the backup alerts pass (f6f9c37).
    Backup under load passes on both (11-04). TLS to the store and
-   encryption at rest applied and verified (11-04). Object lock on
-   (1 day while testing): `runbook_7_lock.sh expire` from 11-05 23:00 UTC,
-   then `backup_store_buckets.sh` for 7 days. Then runbooks 8 and 9.
+   encryption at rest applied and verified (11-04). Object lock: the 1-day
+   test passed (expire 11-06), 7 days since. Runbooks 8 and 9 pass.
 4. About 2026-11-10: runbook 12 should show pg retention working (the
    11-03 base backups and the 8 pre-backup WAL files gone).
 5. Later: runbook 14 (MySQL 8.0 end of life), runbook 17 onto

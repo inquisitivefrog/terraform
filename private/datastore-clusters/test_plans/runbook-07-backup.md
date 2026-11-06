@@ -176,4 +176,8 @@ and a backup of each engine:
 
 Expected (lab, 2026-11-04, 1 day): check 38/38; backups pg 31 s, mysql
 41 s, both locked until the next day; platform 42/42, relational 68/68.
-Expire: to run from 2026-11-05 23:00 UTC.
+Expire: 2026-11-05 23:02 not finished (replaced versions past their lock
+at 22:56, waiting for the lifecycle rule); **2026-11-06 23:16 pass**, 4/4:
+both replaced versions removed by the store, both canaries deletable
+(204), within a day of the lock ending. Then `backup_store_buckets.sh`:
+both buckets COMPLIANCE 7 days.

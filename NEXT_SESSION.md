@@ -65,9 +65,8 @@ Then:
    encrypted, object lock; `docs/BACKUPS.md`) and runbooks 7, 8, 9, 12
    pass (2026-11-03/04); runbook 16, tune configuration, passes
    (2026-11-05, 074a42f). **Next:** the open items at the top of
-   `private/docs/STATUS.md` (the object-lock expiry from 2026-11-05
-   23:00 UTC first), then the remaining priority runbooks, 22 (replace a
-   damaged node) and 14 (major version upgrade). Dedicated database nodes
+   `private/docs/STATUS.md` (object lock done 11-06, 7 days; runbook 22
+   passes), then runbook 14 (major version upgrade). Dedicated database nodes
    deferred to the node-drain and node-replacement runbooks. Open questions are listed at the end of
    DESIGN.md. The AWS Aurora version was removed 2026-10-26 (design kept in
    `aws/tfstate/docs/STATUS.md`).

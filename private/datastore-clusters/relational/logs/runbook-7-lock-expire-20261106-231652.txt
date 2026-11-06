@@ -1,0 +1,14 @@
+# runbook_7_lock.sh expire (2026-11-06T23:16:52Z, kind cluster datastore-dev)
+== Runbook 7: object lock, expire (2026-11-06T23:16:52Z) ==
+
+-- pg-backups: canaries --
+  PASS  Lifecycle: lock-canary/pg-20261104T225642's replaced version gone: removed by the store
+  PASS  Lock over: lock-canary/pg-20261104T225642 deletable (admin key): 204
+
+-- mysql-backups: canaries --
+  PASS  Lifecycle: lock-canary/mysql-20261104T225643's replaced version gone: removed by the store
+  PASS  Lock over: lock-canary/mysql-20261104T225643 deletable (admin key): 204
+
+== Summary: 4 passed, 0 failed ==
+All checked object lock checks present and configured.
+Log: /Users/tim/Documents/workspace/sre/terraform/private/datastore-clusters/relational/logs/runbook-7-lock-expire-20261106-231652.txt
