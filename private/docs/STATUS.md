@@ -3,7 +3,7 @@
 Rolling record for the private cloud (Docker Desktop + kind on the laptop).
 Newest first.
 
-## Current state (2026-11-05): running, backups applied, runbook 16 done
+## Current state (2026-11-06): running, backups applied, runbook 16 done
 
 Running on the laptop (`platform/scripts/docker_shutdown.sh` stops it,
 `docker_restart.sh` brings it back and runs both checks). Platform check
@@ -32,10 +32,6 @@ Open:
 - `runbook_7_lock.sh expire` daily until it passes (first run 2026-11-05
   23:02: the canaries' replaced versions wait for the lifecycle rule, up
   to a day), then `backup_store_buckets.sh` (lock back to 7 days).
-- mysql search p95 +20% after runbook 16's restarts (829 -> 993 ms):
-  recheck after hours of uptime.
-- mysql pt-osc copies are 3-4x slower than on 10-28 (297-407 s vs 107 s;
-  CPU-bound): recheck with the search p95 above.
 
 2026-11-02: restarted with `docker_restart.sh` (pods ready in 214 s;
 Galera 3 Synced, pg 2 streaming); disk 30 GiB free. cert-manager v1.21.2
@@ -644,16 +640,42 @@ listing (old versions wait for the lifecycle rule). Left: the 2 cron
 backups (19:00, 19:15) and `mysql-manual-20261104-230639` (newest
 manual), 775 MiB each.
 
+18:14 (11-06) **mysql slowdown resolved: the Mac, not mysql.** The Mac had
+rebooted (Docker started, `docker_restart.sh`: 68/68). qBittorrent and the
+VPN off, HandBrake idle. 2-min warm-up, then `load_test.sh mysql run 20 5m`
+(mysql-run-20261106-180836): search p95 806 ms (829 before runbook 16,
+1,290 last night), 0 of 6,002 failed, 0 lost (`-FAILED` only on the search
+SLO). mysql 2.65 cores at 12.21 M rows/s = 0.217 cores per M rows/s
+(before 16: 0.219; last night: 0.305). The reboot also cleared whatever
+else had built up over the day, so the two causes are not separated.
+pt-osc copies not rerun; likely the same. Rule added (resume step 2): no
+load while torrents or the VPN run, and expect slower numbers late in a
+day of loads.
+23:40 (11-05) mysql slowdown check (open item from runbook 16), read
+only plus one 5-min load (`load_test.sh mysql run 20 5m`, testid
+mysql-run-20261105-232314; log `-FAILED` only on the search SLO): search
+p95 1,290 ms (k6; app histogram 1.34 s), 0 failed, 0 lost. Idle, one
+search (EXPLAIN ANALYZE per node) 641-696 ms for 3.07 M rows, as on 10-28
+(673/644 ms for 3.02 M). Under load all three periods (before 16, after
+16, now) read ~12 M rows/s, but mysql CPU rose 2.62 -> 2.81 -> 3.64 cores:
+~35% more CPU per row, on every node alike, including pxc-1 rebuilt at
+22:43. Not CPU limits (none on the pods), not other pods (~0.5 cores
+throughout), no macOS thermal warnings. On the Mac: the VM 112%,
+pia-openvpn 26%, Finder 13%, WindowServer 12%, qbittorrent 8%; load
+average 2.3/3.8/3.7. Suspect: host contention pushing VM threads onto
+the M4's efficiency cores (a single search gets a performance core and
+is not slower). Stopped for the night; recheck 2026-11-06 (below).
+
 Resume here (from 2026-11-04, stopped for low battery):
 0. **Daily from 2026-11-06: `relational/scripts/runbook_7_lock.sh expire`** until it passes (2026-11-05: waiting for the lifecycle rule), then `platform/scripts/backup_store_buckets.sh` (lock back to 7 days). The older manual MySQL backups were deleted 2026-11-05.
 1. If the laptop powered off: `platform/scripts/docker_restart.sh` (starts
    the store too); expect platform 42/42, relational 68/68; then
    `relational/scripts/runbook_12_store.sh` (15 passed; the binlog collector's
    startup restarts are a warning).
-2. No load or backup while HandBrake, ffmpeg or yt-dlp runs.
-2b. Runbook 16 passes on both engines (11-05; pg 256MB/768Mi, mysql gcache
-   512M applied). Open: mysql search p95 +20% after the restarts; recheck
-   it after hours of uptime (near 820 ms = settled).
+2. No load or backup while HandBrake, ffmpeg or yt-dlp runs, nor while
+   qBittorrent or the VPN is busy (11-05: +35% CPU per row, p95 +55%).
+2b. mysql slowdown after runbook 16 was the Mac (11-06: 806 ms, same CPU
+   per row as before 16). For comparable numbers, nothing else busy.
 3. Runbook 7: the schedule, keep 2 and the backup alerts pass (f6f9c37).
    Backup under load passes on both (11-04). TLS to the store and
    encryption at rest applied and verified (11-04). Object lock on

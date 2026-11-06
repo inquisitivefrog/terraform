@@ -61,7 +61,7 @@ InnoDB disk reads.
 | Rollout | 85 s; replicas ~27 s each; switchover pg-1 -> pg-3 | 161 s; each node ~40 s; all IST |
 | Writer moves | 1 (switchover) | 2: pxc-0 -> pxc-2, then back when pxc-0 returned (HAProxy fails back) |
 | App during the rollout | 2 writes failed (~5 s), 0 lost | 0 failed, 0 lost; slowest write ~2.3 s |
-| Search p95 | 72.4 -> 59.1 ms (-18%) | 828.6 -> 992.5 ms (+20%, open) |
+| Search p95 | 72.4 -> 59.1 ms (-18%) | 828.6 -> 992.5 ms (+20%); 806 ms on 11-06 (the host, not gcache) |
 | Cache | hit ratio 42.6% -> 84.1%; blocks read outside shared_buffers per search -72% | IST window 10.8 -> 43.4 h at 3.4 KiB/s of write-sets |
 | Online resize (mysql) | - | 768M -> 512M -> 768M in ~1 s, no restart |
 
@@ -71,6 +71,11 @@ keep the table cached despite the 256 KB ring buffer meant for large
 scans. The mysql search slowdown is not memory or disk (CPU per row +8%,
 more of the scanning on the writer); it fell over the three loads (992,
 1,021, 913 ms) and is likely the restarts, not gcache.
+Settled 2026-11-06: it was the Mac. By that night search p95 was 1,290 ms
+at the same rows read (~12 M/s) with 35% more CPU per row on every node;
+after a reboot, with torrents and the VPN off, it was 806 ms at 0.217
+cores per M rows/s (0.219 before the change). Compare loads only with the
+Mac otherwise idle.
 
 Logs: `runbook-16-pg-after-20261105-010247.txt`,
 `runbook-16-mysql-after-20261105-181729.txt`, and the two `-before.tsv`
