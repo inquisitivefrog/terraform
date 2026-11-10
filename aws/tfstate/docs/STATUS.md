@@ -38,14 +38,13 @@ change log, and update "Current state" and "Open items" when they change.
 - **Your home IP changes:** check `curl -4 ifconfig.me` against
   `my_laptop_cidr_block` before plan/apply or kubectl.
 
-## Current state (2026-10-24, night): everything destroyed
+## Current state (2026-11-10): everything destroyed
 
-Account `650836812595` (us-east-2) is empty (swept after the final
-ecommerce-k8s teardown): no EKS, EC2, NAT, EIPs, load balancers, target
-groups, VPCs, security groups, ENIs, EBS, S3 buckets, log groups, or IAM
-roles and policies from this repo. Left: the `monthly-5usd` budget
-(CLI-created) and 21 customer KMS keys in PendingDeletion (free); the
-ecommerce keys go on 2026-10-30.
+Nothing from this repo is deployed. `ecommerce-k8s` was rebuilt for an
+interview on 2026-11-10 (37/37) and destroyed the same day; the sweep after
+found only the default VPC, the organization's roles and the `monthly-5usd`
+budget. Customer KMS keys in PendingDeletion (free): 8 from earlier builds
+(due 2026-11-11 and 2026-11-21) and today's 2 (due 2026-11-17).
 
 | Layer | dev | prod |
 |---|---|---|
@@ -53,7 +52,7 @@ ecommerce keys go on 2026-10-30.
 | `tfstate/environments` | **destroyed** 2026-10-22 (CMK PendingDeletion) | **destroyed** 2026-10-22 (CMK PendingDeletion) |
 | EC2 key pair `blue-elephant` | imported 2026-10-22 from `~/.ssh/aws_ssh.pub` (shared by dev and prod) | |
 | `single_instance` | applied, verified 24/24, **destroyed** 2026-10-22 | applied, verified, **destroyed** 2026-10-22 |
-| `ecommerce-k8s` | applied, verified and destroyed twice 2026-10-23 (second run: scanner fixes, Argo CD GitOps, 34/34). upgrade set and zero-gap rollouts verified (37/37), then **destroyed** 2026-10-24 | — |
+| `ecommerce-k8s` | applied, verified and destroyed twice 2026-10-23 (second run: scanner fixes, Argo CD GitOps, 34/34). upgrade set and zero-gap rollouts verified (37/37), then destroyed 2026-10-24. rebuilt 2026-11-10, verified 37/37, **destroyed** 2026-11-10 | — |
 
 Rebuild from step 1 of the build order (`aws/README.aws.md`, "Build and
 tear-down order").
@@ -104,6 +103,56 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-11-10: ecommerce-k8s destroyed after the interview; account empty
+
+Destroyed by the user in reverse order, each with a saved plan:
+- `stage2-k8s`: 5 destroyed. Checked after: no load balancers, target
+  groups, controller security groups or ELB network interfaces left (the
+  3 Argo CD CRDs it keeps went with the cluster).
+- `stage1-infra`: 68 destroyed. Node group 9m17s (drain and terminate),
+  cluster 2m04s, NAT gateway 1m11s.
+- `terraform-state`: 6 destroyed (`force_destroy` emptied the versioned
+  bucket). State empty in all three.
+
+Account sweep (us-east-2): no EKS clusters, instances, volumes, network
+interfaces, NAT gateways, Elastic IPs, load balancers, target groups,
+buckets, log groups or customer IAM policies; only the default VPC. KMS
+keys `fa290f74…` (cluster) and `b03711f3…` (state) are PendingDeletion,
+due 2026-11-17.
+
+### 2026-11-10: ecommerce-k8s rebuilt for an interview; 37/37
+
+Why: an interview today. Before the build the account was empty: no
+resources from this repo, $0 spent since 2026-10-24, Free plan ACTIVE with
+$135.98 credits (to 2027-04-22), no Free Tier usage. The laptop was on the
+home IP `23.93.161.67`, which both tfvars already allow.
+
+Applied by the user, from `aws/ecommerce-k8s/`, with no code changes:
+- `terraform-state`: 6 added (AWS provider 6.70.0 on this root's local
+  lock file; the stages are on 6.69.1).
+- `stage1-infra`: 68 added. NAT gateway 1m55s, EKS 1.36 cluster 7m45s,
+  node group 1m47s (4 x `t3.small`, 2 per zone), Pod Identity agent 25s.
+- `stage2-k8s`: **5** added, not 4 as expected: the
+  `kubernetes_labels.default_ns_readiness_gate` label added with the
+  zero-gap rollouts on 2026-10-24 is a fifth resource. Controller v3.6.1
+  26s, Argo CD 10.11.1 chart (v3.5.6) 1m05s, argocd-apps 3s, Ingress 4s.
+- `scripts/check_resources.sh`: **37 passed, 0 failed** on the first run.
+  Argo CD synced `main` at `40566d0`; app and Argo CD UI answer 200 from
+  this laptop.
+
+Found: saved plan files named `p`, `d` or `tfstate` are not git-ignored
+(only `tfplan`, `*.tfplan` and the names listed under Build order are). A
+plan named `tfstate` was left untracked in `ecommerce-k8s/terraform-state/`;
+use `-out tfplan`.
+
+Changed after the interview (not applied yet): the destroy plan showed
+`upgrade_policy.support_type = "EXTENDED"`, the AWS default. A cluster
+still running when its version leaves standard support then bills $0.60/h
+for the control plane instead of $0.10/h. `modules/eks/main.tf` now sets
+`support_type = "STANDARD"` (EKS auto-upgrades instead). The next stage1
+plan should show it on the new cluster; nothing else changes.
+`single_instance/modules/eks` still uses the default.
 
 ### 2026-10-30: README.AWS.md merged into aws/README.aws.md
 
