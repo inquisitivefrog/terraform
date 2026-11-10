@@ -32,6 +32,12 @@ resource "aws_eks_cluster" "this" {
     authentication_mode                         = "API"
     bootstrap_cluster_creator_admin_permissions = false
   }
+  upgrade_policy {
+    # AWS defaults to EXTENDED: when the version's 14 months of standard
+    # support end, the control plane moves to extended support at $0.60/h
+    # instead of $0.10/h. STANDARD makes EKS auto-upgrade it instead.
+    support_type = "STANDARD"
+  }
   tags = {
     "terraform-aws-modules" = "eks"
   }
