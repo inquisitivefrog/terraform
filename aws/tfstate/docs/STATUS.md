@@ -104,6 +104,15 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 
 ## Change log
 
+### 2026-11-10: saved plans named `tfstate` are now git-ignored
+
+Follow-up to the plan-file finding below. `.gitignore` adds `tfstate` (a
+plan saved with `-out tfstate`) and `!tfstate/` so directories with that
+name, like `aws/tfstate/`, stay tracked. `tfplan` was already caught by
+`*plan`. `p` and `d` are not ignored; don't use them. Checked with
+`git check-ignore`: both plan names ignored, `aws/tfstate/` and the
+STATUS files are not, and no tracked file became ignored.
+
 ### 2026-11-10: ecommerce-k8s destroyed after the interview; account empty
 
 Destroyed by the user in reverse order, each with a saved plan:

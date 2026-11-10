@@ -33,6 +33,10 @@ target/
 
 # Saved Terraform plan files (binary, may contain sensitive values)
 plan-*
+# `-out tfstate` (tfplan is caught by *plan). The ! line keeps directories
+# named tfstate, such as aws/tfstate/, tracked.
+tfstate
+!tfstate/
 bootstrap-dev
 bootstrap-prod
 bucket-dev
