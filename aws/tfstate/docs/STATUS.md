@@ -4,8 +4,9 @@ Rolling record of how this repo looked when the rebuild started, what has
 changed since, and what is deployed. Add new entries at the top of the
 change log, and update "Current state" and "Open items" when they change.
 
-- Account: `650836812595` (Free plan, $120 credits until 2027-04-22) since
-  2026-10-22; before that `084375569056`
+- Account: `650836812595` (Free plan since 2026-10-22, $100 credits at
+  start plus credits earned for activities; $134.50 left on 2026-11-16;
+  expire 2027-04-22 16:06 UTC); before that `084375569056`
 - IAM user / CLI profile: `blue-elephant` (pinned in every provider, backend
   and script; providers also set `allowed_account_ids`)
 - Region: `us-east-2` for dev, prod and ecommerce-k8s. An SCP from the
@@ -103,6 +104,26 @@ are git-ignored. Provider lock files are git-ignored and machine-local; if
 `init` reports a checksum mismatch, delete `.terraform.lock.hcl` and re-run init.
 
 ## Change log
+
+### 2026-11-16: budget `monthly-5usd` now counts usage before credits
+
+The budget showed $0.00 spent while Cost Explorer showed $1.48 for
+November. It had `IncludeCredit: true` (the default), so credits were
+subtracted first and the $5 alert could never fire while on the Free
+plan. That is how grid-meter's separate Free plan account ran to $0
+unwarned and was closed on 2026-11-02 (its own account, not this repo's).
+Fixed with `aws budgets update-budget --profile blue-elephant ...
+"CostTypes":{"IncludeCredit":false}`; `describe-budget` now shows
+`False 1.478`. Both email alerts (actual and forecast over 100%) kept.
+`aws/scripts/budget.json` sets the same, so a re-created budget matches.
+
+### 2026-11-16: credits checked; account line updated
+
+`aws freetier get-account-plan-state --region us-east-1`: plan FREE,
+ACTIVE, $134.50 left, expires 2027-04-22 16:06 UTC. The 2026-11-10
+interview rebuild used about $1.48 ($135.98 before). The account line at
+the top still said "$120 credits"; the 2026-10-22 welcome email says $100 at
+start (the balance is higher because activities earn more). Now shows both.
 
 ### 2026-11-10: saved plans named `tfstate` are now git-ignored
 
@@ -999,7 +1020,8 @@ ecommerce-k8s and the upcoming `aws/datastore-clusters` tree.
 - **Budget:** `monthly-5usd`, created with the CLI (not Terraform yet; import
   it once this account has a state backend). $5/month cost budget. Emails
   `allinonegulp@gmail.com` when actual spend or the month's forecast goes
-  over $5.
+  over $5. Counts usage before credits (`IncludeCredit: false`, since
+  2026-11-16), so it alerts while credits still pay.
 - **Prefix renamed `bluedragon` → `blue-elephant`** in all live config
   (not history): state buckets `blue-elephant-tfstate-admin-{dev,prod}`,
   `blue-elephant-dev-bucket-*`, `blue-elephant-log-bucket-*`, Project tag

@@ -2,5 +2,6 @@
   "BudgetName": "monthly-5usd",
   "BudgetLimit": { "Amount": "5", "Unit": "USD" },
   "TimeUnit": "MONTHLY",
-  "BudgetType": "COST"
+  "BudgetType": "COST",
+  "CostTypes": { "IncludeCredit": false }
 }
